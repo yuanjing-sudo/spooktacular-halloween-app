@@ -612,6 +612,9 @@ final class MineManager: ObservableObject {
     )
     /// Interactive (minable) blocks only: ores, beams, lava.
     @Published var blocks: [MNBlock] = []
+    /// Destroyed-block tally, maintained incrementally so the renderer
+    /// never scans the roster to learn what changed.
+    var destroyedCount = 0
     /// Merged static rock cells, grouped by material 0/1/2 (coordinator
     /// flattens each group into ONE node). Never changes after gen.
     @Published var rockGroups: [Set<MNCell>] = [Set(), Set(), Set()]
@@ -1103,6 +1106,7 @@ final class MineManager: ObservableObject {
         }
         // Stable order keeps node matching predictable.
         blocks.sort { $0.position.x < $1.position.x }
+        destroyedCount = 0
         rockGroups = data.rock
         torches = data.torches.map { SCNVector3($0.x, $0.y, $0.z) }
         registerStaticClosets()
@@ -1876,6 +1880,7 @@ final class MineManager: ObservableObject {
         b.isDestroyed = true
         blocks[idx] = b
         damageTick += 1
+        destroyedCount += 1
         player.blocksMined += 1
         let name = b.type.displayName
         // Tycoon loop: ore rides in the backpack, value accrues unsold.
@@ -2003,6 +2008,7 @@ final class MineManager: ObservableObject {
         b.isDestroyed = true
         blocks[idx] = b
         damageTick += 1
+        destroyedCount += 1
         player.blocksMined += 1
         if player.blocksMined - lastBombAward >= 20, bombs < 9 {
             lastBombAward = player.blocksMined
@@ -2815,7 +2821,9 @@ struct MineSceneView: UIViewRepresentable {
         }
 
         func rebuild() {
-            let destroyed = manager.blocks.filter { $0.isDestroyed }.count
+            // Zero-scan structure hash: the destroyed tally is maintained
+            // incrementally, so this never filters the whole roster.
+            let destroyed = manager.destroyedCount
             let structHash = (destroyed << 16) ^ (manager.blocks.count << 4)
             // Streaming cell: crossing an 8-unit boundary re-streams.
             let streamX = Int(floor(manager.player.position.x / 8))

@@ -707,6 +707,17 @@ class TunnelMazeManager: ObservableObject {
     private var lastExpDist: Float = 0
     private var knownCompletedExpeditions = Set<String>()
     private var lastComboCine = 0
+    // A* hunt cache: smoothed waypoints per monster, repathed when the
+    // target cell moves or the plan ages out.
+    private struct CachedPath {
+        var waypoints: [AStarPathfinder.Node]
+        var targetX: Int
+        var targetZ: Int
+        var age: Int
+    }
+    private var pathCache: [UUID: CachedPath] = [:]
+    private let pathMaxAge = 6
+    private let pathCap = 24
 
     // MARK: - Private Properties
     private var audioPlayer: AVAudioPlayer?
@@ -738,6 +749,8 @@ class TunnelMazeManager: ObservableObject {
         setupHaptics()
         generateWorld()
         generateInitialNotifications()
+        // Don't replay old expedition cinematics on load.
+        knownCompletedExpeditions = expeditionBoard.completed
         // Expedition rewards land straight in score + wallet.
         expeditionBoard.onReward = { [weak self] score, gold in
             guard let self = self else { return }
@@ -748,8 +761,7 @@ class TunnelMazeManager: ObservableObject {
             self.checkLevelUp()
         }
         // Region discovery pays score + gold and feeds expeditions.
-        regionDirector.onDiscover = { [weak self] region in
-            guard let self = self else { return }
+        regionDirector.onDiscover = { [weak self] region in            guard let self = self else { return }
             self.score += region.bonusScore
             self.player.gold += region.bonusScore / 2
             self.addNotification("🗺️ New region: \(region.emoji) \(region.name)! +\(region.bonusScore) pts")
@@ -859,6 +871,35 @@ class TunnelMazeManager: ObservableObject {
                 stack.append((pick.3, pick.4, pick.5))
             } else {
                 stack.removeLast()
+            }
+        }
+
+        // Braid: open ~15% of dead ends into loops. Kinder hunts, more
+        // escape routes, closer to the fork-heavy endless feel.
+        for x in stride(from: 1, to: gx, by: 2) {
+            for y in 0..<gy {
+                for z in stride(from: 1, to: gz, by: 2) {
+                    guard grid[x][y][z] else { continue }
+                    var openCount = 0
+                    for (dx, dy, dz) in [(2, 0, 0), (-2, 0, 0), (0, 0, 2), (0, 0, -2), (0, 1, 0), (0, -1, 0)] {
+                        let nx = x + dx, ny = y + dy, nz = z + dz
+                        if nx >= 0 && nx < gx && ny >= 0 && ny < gy && nz >= 0 && nz < gz && grid[nx][ny][nz] {
+                            openCount += 1
+                        }
+                    }
+                    guard openCount == 1, Double.random(in: 0...1) < 0.15 else { continue }
+                    var walls: [(Int, Int, Int, Int, Int, Int)] = []
+                    for (dx, dy, dz) in [(2, 0, 0), (-2, 0, 0), (0, 0, 2), (0, 0, -2)] {
+                        let nx = x + dx, ny = y + dy, nz = z + dz
+                        if nx >= 0 && nx < gx && ny >= 0 && ny < gy && nz >= 0 && nz < gz && !grid[nx][ny][nz] {
+                            walls.append((dx, dy, dz, nx, ny, nz))
+                        }
+                    }
+                    if let w = walls.randomElement() {
+                        grid[x + w.0 / 2][y + w.1][z + w.2 / 2] = true
+                        grid[w.3][w.4][w.5] = true
+                    }
+                }
             }
         }
 
@@ -2330,26 +2371,61 @@ class TunnelMazeManager: ObservableObject {
     /// (caller falls back to steering). Node budget caps the hunt cost.
     @discardableResult
     func chaseViaStar(monster: inout Monster) -> Bool {
-        let from = AStarPathfinder.Node(
-            x: Int((monster.position.x / 2).rounded()),
-            z: Int((monster.position.z / 2).rounded())
-        )
-        let goal = AStarPathfinder.Node(
-            x: Int((player.position.x / 2).rounded()),
-            z: Int((player.position.z / 2).rounded())
-        )
+        let goal = mazeCell(player.position)
+        // Reuse a cached path while the target cell holds and it is fresh.
+        if let entry = pathCache[monster.id],
+           entry.targetX == goal.x, entry.targetZ == goal.z,
+           entry.age < pathMaxAge, !entry.waypoints.isEmpty {
+            return followWaypoints(monster: &monster, entry: entry)
+        }
+        // Fresh hunt: capped A*, smoothed, minus the starting cell.
         guard let path = AStarPathfinder.findPath(
-            start: from, goal: goal,
+            start: mazeCell(monster.position), goal: goal,
             walkable: mazeWalkable, maxIter: 200
         ), path.count > 1 else {
+            pathCache.removeValue(forKey: monster.id)
             return false
         }
-        let next = path[1]
-        let tx = Float(next.x) * 2, tz = Float(next.z) * 2
-        let dx = tx - monster.position.x, dz = tz - monster.position.z
+        let smooth = AStarPathfinder.smooth(path, walkable: mazeWalkable)
+        let wps = smooth.count > 1 ? Array(smooth.dropFirst()) : Array(path.dropFirst())
+        let entry = CachedPath(waypoints: wps, targetX: goal.x, targetZ: goal.z, age: 0)
+        pathCache[monster.id] = entry
+        if pathCache.count > pathCap, let k = pathCache.keys.randomElement() {
+            pathCache.removeValue(forKey: k)
+        }
+        return followWaypoints(monster: &monster, entry: entry)
+    }
+
+    /// Grid cell (2-unit) for a world position.
+    private func mazeCell(_ pos: SCNVector3) -> AStarPathfinder.Node {
+        AStarPathfinder.Node(
+            x: Int((pos.x / 2).rounded()),
+            z: Int((pos.z / 2).rounded())
+        )
+    }
+
+    /// Step toward the first unreached waypoint with arrive easing
+    /// (decelerate into the point) for fluid, non-jerky hunts.
+    private func followWaypoints(monster: inout Monster, entry: CachedPath) -> Bool {
+        var e = entry
+        while let first = e.waypoints.first {
+            let dx = Float(first.x) * 2 - monster.position.x
+            let dz = Float(first.z) * 2 - monster.position.z
+            if dx * dx + dz * dz > 2.25 { break }
+            e.waypoints.removeFirst()
+        }
+        guard let next = e.waypoints.first else {
+            pathCache.removeValue(forKey: monster.id)
+            return false
+        }
+        e.age += 1
+        pathCache[monster.id] = e
+        let dx = Float(next.x) * 2 - monster.position.x
+        let dz = Float(next.z) * 2 - monster.position.z
         let d = max(0.01, sqrt(dx * dx + dz * dz))
-        monster.position.x += dx / d * monster.speed * 0.1
-        monster.position.z += dz / d * monster.speed * 0.1
+        let ease = min(1, d / 2.5)
+        monster.position.x += dx / d * monster.speed * 0.1 * ease
+        monster.position.z += dz / d * monster.speed * 0.1 * ease
         return true
     }
 
