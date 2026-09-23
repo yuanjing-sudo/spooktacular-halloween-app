@@ -2019,7 +2019,7 @@ final class MineManager: ObservableObject {
         return true
     }
 
-    private func checkLevelUp() {
+    func checkLevelUp() {
         let lv = player.experience / 100 + 1
         if lv > player.level {
             player.level = lv
@@ -3448,6 +3448,8 @@ struct MinePickPanel: View {
     @State private var showFire = false
     @State private var showHub = false
     @State private var showForest = false
+    @State private var showDaily = false
+    @State private var showWelcome = !SpookyStore.onboardingDone
 
     var body: some View {
         NavigationView {
@@ -3676,6 +3678,13 @@ struct MinePickPanel: View {
                             .tint(.green)
                     }
                     HStack {
+                        Button("📅 Daily Hub") { showDaily = true }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(.orange)
+                        Spacer()
+                    }
+                    HStack {
                         Text("\(manager.frameMonitor.grade) • \(Int(manager.frameMonitor.fps)) FPS • ⏱️ \(manager.statTracker.playClock)")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
@@ -3786,6 +3795,14 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showForest) {
                 MineForestShowcaseView()
+            }
+            .sheet(isPresented: $showDaily) {
+                MineDailyHubView(manager: manager)
+            }
+            .sheet(isPresented: $showWelcome) {
+                MineWelcomeCard {
+                    showWelcome = false
+                }
             }
         }
     }

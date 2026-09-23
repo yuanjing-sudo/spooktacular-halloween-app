@@ -422,7 +422,7 @@ struct MineQuestDoneCinematic: View {
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
                     stamped = true
-                    SpookyHaptics.play(.success)
+                    SpookyHaptics.play(.reward)
                 }
             }
         }
