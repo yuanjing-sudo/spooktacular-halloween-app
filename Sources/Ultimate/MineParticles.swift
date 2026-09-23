@@ -302,7 +302,8 @@ struct MineParticleField: View {
             Canvas { context, size in
                 let t = timeline.date.timeIntervalSinceReferenceDate * speed
                 let w = Double(size.width), h = Double(size.height)
-                for i in 0..<preset.count {
+                let n = MineMotionGate.count(preset.count)
+                for i in 0..<n {
                     let p = mote(i: i, t: t, w: w, h: h)
                     context.opacity = p.opacity
                     context.fill(

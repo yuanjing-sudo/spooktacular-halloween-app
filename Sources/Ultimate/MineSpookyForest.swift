@@ -707,8 +707,8 @@ struct MineFloorAir: View {
             Canvas { context, size in
                 let t = timeline.date.timeIntervalSinceReferenceDate
                 let w = Double(size.width), h = Double(size.height)
-                // Leaves.
-                for i in 0..<14 {
+                // Leaves (gated count under Reduce Motion).
+                for i in 0..<MineMotionGate.count(14) {
                     let life = fmod(t * 0.22 + Double(i) * 0.31, 1.0)
                     let x = fmod(Double(i) * 167.3 + sin(t * 0.8 + Double(i)) * 26, w)
                     let y = life * h
@@ -718,8 +718,8 @@ struct MineFloorAir: View {
                         with: .color(sunset ? .orange : .green)
                     )
                 }
-                // Fireflies (brighter at midnight).
-                for i in 0..<12 {
+                // Fireflies (brighter at midnight, fewer under Reduce Motion).
+                for i in 0..<MineMotionGate.count(12) {
                     let f1 = fmod(Double(i) * 12.9898, 1.0)
                     let f2 = fmod(Double(i) * 78.233, 1.0)
                     let x = fmod(f1 * w + sin(t * 0.6 + Double(i)) * 30, w)

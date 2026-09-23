@@ -824,7 +824,8 @@ struct MineAmbientHaunt: View {
         TimelineView(.animation) { timeline in
             Canvas { context, size in
                 let t = timeline.date.timeIntervalSinceReferenceDate
-                for i in 0..<moteCount {
+                let n = MineMotionGate.count(moteCount)
+                for i in 0..<n {
                     let speed = 0.12 + Double(i % 5) * 0.05
                     let x = fmod(Double(i) * 197.3 + t * 12 * speed, Double(size.width))
                     let y = fmod(Double(i) * 131.7 - t * 9 * speed, Double(size.height))

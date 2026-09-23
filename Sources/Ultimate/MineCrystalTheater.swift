@@ -433,7 +433,9 @@ struct MineCaveShimmer: View {
         TimelineView(.animation) { timeline in
             Canvas { context, size in
                 let t = timeline.date.timeIntervalSinceReferenceDate
-                for i in 0..<moteCount {
+                // Reduced-motion gate: fewer motes, same magic.
+                let n = MineMotionGate.count(moteCount)
+                for i in 0..<n {
                     let px = fmod(Double(i) * 211.7 + t * 6, Double(size.width))
                     var py = fmod(Double(i) * 157.3 - t * 4, Double(size.height))
                     if py < 0 { py += Double(size.height) }

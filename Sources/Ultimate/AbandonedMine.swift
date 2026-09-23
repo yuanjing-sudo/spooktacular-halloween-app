@@ -3629,6 +3629,9 @@ struct MinePickPanel: View {
     @State private var showFire = false
     @State private var showHub = false
     @State private var showForest = false
+    @State private var showEngine = false
+    @State private var showChoreo = false
+    @State private var showLoop = false
     @State private var showSystems = false
     @State private var showNet = false
     @State private var showGameFX = false
@@ -3871,6 +3874,21 @@ struct MinePickPanel: View {
                             .tint(.green)
                     }
                     HStack {
+                        Button("🎚️ Motion") { showEngine = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🎼 Choreo") { showChoreo = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🕰️ Loops") { showLoop = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                    }
+                    HStack {
                         Button("🔬 Systems Lab") { showSystems = true }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -4003,6 +4021,15 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showForest) {
                 MineForestShowcaseView()
+            }
+            .sheet(isPresented: $showEngine) {
+                MineMotionEngineShowcaseView()
+            }
+            .sheet(isPresented: $showChoreo) {
+                MineChoreographyShowcaseView()
+            }
+            .sheet(isPresented: $showLoop) {
+                MineLoopShowcaseView()
             }
             .sheet(isPresented: $showSystems) {
                 MineAlgorithmsShowcaseView()
