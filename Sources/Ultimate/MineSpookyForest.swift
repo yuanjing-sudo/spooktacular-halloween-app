@@ -205,8 +205,10 @@ struct MineMidnightSky: View {
                 startPoint: .top, endPoint: .bottom
             )
             MazeStars(count: 70, seed: 9)
+            MineForestShootingStars()
             MinePhaseMoon(phase: phase)
                 .offset(x: 80, y: -90)
+            MineOwlFlyby()
             // Thin night clouds crossing the moon.
             ForEach(0..<2, id: \.self) { i in
                 Ellipse()
@@ -975,6 +977,8 @@ struct MineSpookyForestView: View {
                 MineForestFog()
                     .offset(y: 120)
                 MineFloorAir(sunset: sky.sky == .sunset)
+                // Wind rolls through every few seconds.
+                MineWindGust()
                 // HD ghosts drifting through.
                 MineGhostHD(kind: .wraith, size: 96)
                     .offset(x: ghostX(0.13, width: geo.size.width), y: -60)
@@ -1103,6 +1107,155 @@ struct MineSpookyForestView: View {
 }
 
 // ============================================================
+// MARK: - 8b. Night extras (shooting stars, owl flyby, wind)
+// ============================================================
+
+/// Shooting stars for midnight: bright heads with fading tails.
+struct MineForestShootingStars: View {
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let w = Double(size.width), h = Double(size.height)
+                for i in 0..<3 {
+                    let cycle = 9.0
+                    let life = fmod(t + Double(i) * 3.7, cycle) / cycle
+                    // Visible only in the first 12% of each cycle.
+                    guard life < 0.12 else { continue }
+                    let k = life / 0.12
+                    let sx = w * (0.15 + 0.3 * Double(i)) + k * 130
+                    let sy = h * 0.12 + k * 62
+                    context.opacity = (1 - k) * 0.95
+                    // Tail.
+                    var tail = Path()
+                    tail.move(to: CGPoint(x: sx, y: sy))
+                    tail.addLine(to: CGPoint(x: sx - 52 * (1 - k * 0.4), y: sy - 24 * (1 - k * 0.4)))
+                    context.stroke(tail, with: .color(.white), lineWidth: 2)
+                    // Head + glow.
+                    context.fill(
+                        Circle().path(in: CGRect(x: sx - 2.5, y: sy - 2.5, width: 5, height: 5)),
+                        with: .color(.white)
+                    )
+                    context.fill(
+                        Circle().path(in: CGRect(x: sx - 7, y: sy - 7, width: 14, height: 14)),
+                        with: .color(.white.opacity(0.3))
+                    )
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Owl flyby: a silent silhouette gliding across the sky on slow wings.
+struct MineOwlFlyby: View {
+    @State private var cross = false
+
+    var body: some View {
+        HStack(spacing: -6) {
+            // Left wing.
+            Ellipse()
+                .fill(Color.black.opacity(0.85))
+                .frame(width: 44, height: 14)
+                .rotationEffect(.degrees(cross ? -18 : 18))
+                .animation(
+                    .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                    value: cross
+                )
+            // Body.
+            Ellipse()
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 22, height: 30)
+            // Right wing.
+            Ellipse()
+                .fill(Color.black.opacity(0.85))
+                .frame(width: 44, height: 14)
+                .rotationEffect(.degrees(cross ? 18 : -18))
+                .animation(
+                    .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                    value: cross
+                )
+        }
+        .overlay(
+            // Glowing eyes on the dark body.
+            HStack(spacing: 7) {
+                Circle().fill(Color.yellow).frame(width: 4, height: 4)
+                    .shadow(color: .yellow, radius: 3)
+                Circle().fill(Color.yellow).frame(width: 4, height: 4)
+                    .shadow(color: .yellow, radius: 3)
+            }
+        )
+        .offset(x: cross ? 260 : -260, y: -110)
+        .opacity(cross ? 1 : 0)
+        .animation(.easeInOut(duration: 7), value: cross)
+        .onAppear { schedule() }
+    }
+
+    private func schedule() {
+        cross = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 7.2) { [self] in
+            cross = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 6...12)) { [self] in
+                schedule()
+            }
+        }
+    }
+}
+
+/// Wind gust overlay: fast horizontal streaks + a burst of leaves.
+/// Rolls through every ~9 seconds; pure signal, no gameplay effect.
+struct MineWindGust: View {
+    @State private var gust = false
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<7, id: \.self) { i in
+                Capsule()
+                    .fill(Color.white.opacity(0.22))
+                    .frame(width: 90 - CGFloat(i) * 8, height: 3)
+                    .offset(
+                        x: gust ? 320 : -320,
+                        y: CGFloat(i * 44 - 110)
+                    )
+                    .blur(radius: 2)
+                    .opacity(gust ? 0.9 : 0)
+                    .animation(
+                        .easeOut(duration: 1.4).delay(Double(i) * 0.07),
+                        value: gust
+                    )
+            }
+            ForEach(0..<8, id: \.self) { i in
+                Text(["🍂", "🍃"][i % 2])
+                    .font(.body)
+                    .offset(
+                        x: gust ? CGFloat(200 - i * 40) : CGFloat(-220 + i * 12),
+                        y: CGFloat(i * 30 - 100) + (gust ? -30 : 30)
+                    )
+                    .opacity(gust ? 1 : 0)
+                    .rotationEffect(.degrees(gust ? Double(i) * 45 : 0))
+                    .animation(
+                        .easeOut(duration: 1.5).delay(Double(i) * 0.05),
+                        value: gust
+                    )
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear { cycle() }
+    }
+
+    private func cycle() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double.random(in: 7...11)) { [self] in
+            gust = true
+            SpookyHaptics.play(.light)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [self] in
+                gust = false
+                cycle()
+            }
+        }
+    }
+}
+
+// ============================================================
 // MARK: - 9. Forest showcase
 // ============================================================
 
@@ -1129,6 +1282,8 @@ struct MineForestShowcaseView: View {
                         guideRow("👻", "HD ghosts", "Vector-crisp at any size. Tap one to make it wail.")
                         guideRow("🌇→🌙", "Auto skies", "Pink sunset, then lightning, then crescent-cycling midnight. You don't pick. Time picks.")
                         guideRow("⛈️", "Lightning", "Every changeover lands with bolts, white-out and thunder.")
+                        guideRow("🌠", "Night extras", "Shooting stars, owl flybys and wind gusts after dark.")
+                        guideRow("💨", "Wind", "Gusts roll through every few seconds, leaves and all.")
                     }
                     .padding(.bottom, 20)
                 }
