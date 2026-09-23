@@ -26,6 +26,7 @@ enum MineLoreRule {
     case level(Int)
     case gold(Int)
     case critters(Int)
+    case seals(Int)
 }
 
 struct MineLoreFragment: Identifiable {
@@ -462,13 +463,27 @@ enum MineLoreCatalog {
             source: "Margin of the margin",
             rule: .rebirths(3)
         ),
+        MineLoreFragment(
+            id: "echo-61",
+            title: "First Seal Broken",
+            text: "Paid the minerals, watched the runes go dark, walked into a glittering room that was waiting specifically for me. Seals aren't locks. They're invitations with a cover charge.",
+            source: "Your own hand, still dusty",
+            rule: .seals(1)
+        ),
+        MineLoreFragment(
+            id: "echo-62",
+            title: "Master of Keys",
+            text: "Five seals broken. Doors open when I walk past now, out of respect. Or loose hinges. Either way: open.",
+            source: "Carved above the fifth door",
+            rule: .seals(5)
+        ),
     ]
 
     /// Fragments unlocked by a snapshot of manager state.
     static func unlocked(
         sectors: Int, deepestY: Float, ores: [String: Int],
         closets: Int, caves: Int, pets: Int, rebirths: Int,
-        level: Int, gold: Int, critters: Int
+        level: Int, gold: Int, critters: Int, seals: Int = 0
     ) -> [MineLoreFragment] {
         all.filter { f in
             switch f.rule {
@@ -483,6 +498,7 @@ enum MineLoreCatalog {
             case .level(let n): return level >= n
             case .gold(let n): return gold >= n
             case .critters(let n): return critters >= n
+            case .seals(let n): return seals >= n
             }
         }
     }
@@ -550,7 +566,8 @@ struct MineLoreView: View {
             rebirths: manager.player.rebirths,
             level: manager.player.level,
             gold: manager.player.gold,
-            critters: manager.critters.filter({ $0.greeted }).count
+            critters: manager.critters.filter({ $0.greeted }).count,
+            seals: manager.mineCaves.filter({ !$0.isLocked && !$0.unlockCost.isEmpty }).count
         )
     }
 
@@ -571,6 +588,7 @@ struct MineLoreView: View {
         case .level(let n): return "Reach rank \(n)."
         case .gold(let n): return "Hold \(n)🪙."
         case .critters(let n): return "Befriend \(n) critters."
+        case .seals(let n): return "Break \(n) cave seals."
         }
     }
 }

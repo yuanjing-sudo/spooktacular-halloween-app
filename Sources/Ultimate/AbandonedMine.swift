@@ -472,6 +472,7 @@ enum MNCrystalShape: String, CaseIterable {
 }
 
 /// A tracked crystal cave: harvest every growth for a completion bonus.
+/// Some caves are sealed: redeem minerals to break the lock first.
 struct MNCrystalCave: Identifiable {
     let id = UUID()
     var center: SCNVector3
@@ -479,6 +480,8 @@ struct MNCrystalCave: Identifiable {
     var cells: Set<MNCell>
     var announced: Bool = false
     var harvested: Bool = false
+    var isLocked: Bool = false
+    var unlockCost: [String: Int] = [:]
 }
 
 /// Closet cache kinds: snacks, tools, treasure — and cobweb fakes.
@@ -701,6 +704,7 @@ final class MineManager: ObservableObject {
 
     /// Crystal cave pockets (center, radius). Kept in one list so air,
     /// ore and closet placement all agree on where the caves are.
+    /// Fourteen pockets across both levels, deep and far.
     static func crystalCaves() -> [(SCNVector3, Float)] {
         [
             (SCNVector3(32, -3, 0), 6),
@@ -708,7 +712,29 @@ final class MineManager: ObservableObject {
             (SCNVector3(0, -3, -40), 7),
             (SCNVector3(-20, 2, 30), 5),
             (SCNVector3(44, 2, -32), 5),
+            (SCNVector3(-44, 2, -20), 5),
+            (SCNVector3(0, -4, 44), 6),
+            (SCNVector3(0, -4, -8), 5),            (SCNVector3(48, -4, 20), 6),
+            (SCNVector3(-52, 2, 40), 5),
+            (SCNVector3(12, 2, -52), 5),
+            (SCNVector3(-36, -4, -36), 6),
+            (SCNVector3(24, -3, -12), 4),
+            (SCNVector3(8, -5, 54), 5),
         ]
+    }
+
+    /// Seal price by depth: shallow iron, deep gold, magma diamonds.
+    static func sealCost(centerY: Float) -> [String: Int] {
+        if centerY >= 0 { return ["Iron Ore": 8, "Coal Ore": 15] }
+        if centerY >= -3 { return ["Gold Ore": 6, "Iron Ore": 10] }
+        if centerY >= -4.5 { return ["Emerald Ore": 4, "Gold Ore": 6] }
+        return ["Diamond Ore": 3, "Ruby Ore": 3]
+    }
+
+    /// Every third pocket is sealed (deterministic by index).
+    static func caveSeal(index: Int, center: SCNVector3) -> (locked: Bool, cost: [String: Int]) {
+        guard index % 3 == 2 else { return (false, [:]) }
+        return (true, sealCost(centerY: center.y))
     }
 
     static func inCrystalCave(_ p: SCNVector3) -> Bool {
@@ -958,8 +984,10 @@ final class MineManager: ObservableObject {
 
     /// Registry for the pre-generated crystal caves: cluster wall growths
     /// around each pocket, majority vote decides the cave's shape.
+    /// Every third pocket is sealed (minerals redeem it).
     private func registerStaticCaves() {
-        for (center, r) in Self.crystalCaves() {
+        for (index, pocket) in Self.crystalCaves().enumerated() {
+            let (center, r) = pocket
             var cells = Set<MNCell>()
             var votes: [MNCrystalShape: Int] = [:]
             for b in blocks where !b.isDestroyed {
@@ -978,7 +1006,9 @@ final class MineManager: ObservableObject {
             }
             guard !cells.isEmpty else { continue }
             let shape = votes.max(by: { $0.value < $1.value })?.key ?? .cube
-            mineCaves.append(MNCrystalCave(center: center, shape: shape, cells: cells))
+            let seal = Self.caveSeal(index: index, center: center)
+            mineCaves.append(MNCrystalCave(center: center, shape: shape, cells: cells,
+                                           isLocked: seal.locked, unlockCost: seal.cost))
         }
     }
 
@@ -1744,6 +1774,40 @@ final class MineManager: ObservableObject {
         statTracker.recordCave()
     }
 
+    /// The sealed cave (if any) containing a cell.
+    func lockedCaveContaining(cell: MNCell) -> MNCrystalCave? {
+        mineCaves.first(where: { $0.isLocked && $0.cells.contains(cell) })
+    }
+
+    /// Human-readable seal price: "8× Iron Ore + 15× Coal Ore".
+    func sealSummary(_ cave: MNCrystalCave) -> String {
+        cave.unlockCost
+            .sorted(by: { $0.key < $1.key })
+            .map { "\($0.value)× \($0.key)" }
+            .joined(separator: " + ")
+    }
+
+    /// Redeem minerals to break a cave seal. Minerals leave the backpack.
+    /// Returns false (with guidance) when the purse is short.
+    @discardableResult
+    func unlockCave(_ id: UUID) -> Bool {
+        guard let ci = mineCaves.firstIndex(where: { $0.id == id && $0.isLocked }) else { return false }
+        for (ore, need) in mineCaves[ci].unlockCost {
+            guard player.ores[ore, default: 0] >= need else {
+                notify("🔒 Need \(need)× \(ore) (have \(player.ores[ore, default: 0])). Keep digging!")
+                return false
+            }
+        }
+        for (ore, need) in mineCaves[ci].unlockCost {
+            player.ores[ore, default: 0] -= need
+        }
+        mineCaves[ci].isLocked = false
+        questBoard.record(.caveUnlocked)
+        statTracker.recordCaveOpened()
+        notify("\(mineCaves[ci].shape.emoji) Seal broken! The \(mineCaves[ci].shape.rawValue) cave stands open — mine it clean!")
+        return true
+    }
+
     /// Pops a closet crate: snacks pay gold, tool caches grant a bomb,
     /// treasure caches burst gold + XP, fakes are cobwebs. Returns nil so
     /// the generic "mined" message doesn't double up.
@@ -1844,6 +1908,13 @@ final class MineManager: ObservableObject {
         let b = blocks[idx]
         if b.type.isUnbreakable {
             notify(b.type == .lava ? "🔥 Molten! Best keep your distance." : "⬛ Bedrock is unbreakable!")
+            return
+        }
+        // Sealed caves bounce picks — redeem minerals to open them.
+        let hitCell = Self.cellForPos(blocks[idx].position)
+        if [.crystalCube, .crystalSpike, .crystalOrb].contains(b.type),
+           let sealed = lockedCaveContaining(cell: hitCell) {
+            notify("🔒 Sealed \(sealed.shape.rawValue) cave! Redeem \(sealSummary(sealed)) in the 🔒 Caves panel.")
             return
         }
         // Tier gate: harder gems need better picks.
@@ -2091,9 +2162,17 @@ final class MineManager: ObservableObject {
                                           health: shape.blockType.toughness,
                                           maxHealth: shape.blockType.toughness, isDestroyed: false))
                 }
+                // Two in five frontier caves arrive sealed (minerals redeem).
+                let sealed = Int.random(in: 1...100) <= 40
+                let cost = sealed ? Self.sealCost(centerY: Self.cellCenter(foothold).y) : [:]
                 mineCaves.append(MNCrystalCave(center: Self.cellCenter(foothold), shape: shape,
-                                               cells: cells, announced: true))
-                notify("\(shape.emoji) The rock groans… a new \(shape.rawValue) crystal cave cracked open nearby!")
+                                               cells: cells, announced: true,
+                                               isLocked: sealed, unlockCost: cost))
+                if sealed {
+                    notify("🔒 The rock groans… a SEALED \(shape.rawValue) cave cracked open nearby! Redeem minerals to open it.")
+                } else {
+                    notify("\(shape.emoji) The rock groans… a new \(shape.rawValue) crystal cave cracked open nearby!")
+                }
             }
         }
 
@@ -3274,6 +3353,9 @@ struct MinePickPanel: View {
     @State private var showSettings = false
     @State private var showLore = false
     @State private var showMap = false
+    @State private var showCaves = false
+    @State private var showGhosts = false
+    @State private var showCrystals = false
 
     var body: some View {
         NavigationView {
@@ -3391,6 +3473,22 @@ struct MinePickPanel: View {
                             .controlSize(.small)
                     }
                     HStack {
+                        Button("🔒 Caves (\(manager.mineCaves.filter({ $0.isLocked }).count) sealed)") { showCaves = true }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(.purple)
+                        Spacer()
+                    }
+                    HStack {
+                        Button("👻 Ghosts") { showGhosts = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("💎 Crystals") { showCrystals = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
                         Text("\(manager.frameMonitor.grade) • \(Int(manager.frameMonitor.fps)) FPS • ⏱️ \(manager.statTracker.playClock)")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
@@ -3432,6 +3530,15 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showMap) {
                 MineMapView(manager: manager)
+            }
+            .sheet(isPresented: $showCaves) {
+                MineLockedCavePanel(manager: manager)
+            }
+            .sheet(isPresented: $showGhosts) {
+                MineGhostShowcaseView()
+            }
+            .sheet(isPresented: $showCrystals) {
+                MineCrystalShowcaseView()
             }
         }
     }

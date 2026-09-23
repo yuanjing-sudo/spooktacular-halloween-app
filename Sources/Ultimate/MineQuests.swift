@@ -25,6 +25,7 @@ enum MineQuestEvent {
     case sectorMapped(count: Int)
     case closetOpened
     case caveHarvested
+    case caveUnlocked
     case petHatched
     case pickForged
     case packUpgraded
@@ -45,6 +46,7 @@ enum MineQuestTrigger {
     case mapSectors(Int)
     case openClosets(Int)
     case harvestCaves(Int)
+    case unlockCaves(Int)
     case hatchPets(Int)
     case forgePicks(Int)
     case upgradePacks(Int)
@@ -65,6 +67,7 @@ enum MineQuestTrigger {
         case .mapSectors(let n): return "Map \(n) sectors"
         case .openClosets(let n): return "Open \(n) closets"
         case .harvestCaves(let n): return "Harvest \(n) crystal caves"
+        case .unlockCaves(let n): return n == 1 ? "Break a cave seal" : "Break \(n) cave seals"
         case .hatchPets(let n): return "Hatch \(n) pets"
         case .forgePicks(let n): return "Forge \(n) pick upgrades"
         case .upgradePacks(let n): return "Upgrade backpack \(n)×"
@@ -638,6 +641,24 @@ enum MineQuestCatalog {
             rewardGold: 2500, rewardXP: 1500,
             tip: "Drill damage carries to whacks. Bombs soften packs first."
         ),
+        MineQuest(
+            id: "seal-breaker",
+            title: "Seal Breaker",
+            detail: "Redeem minerals to open your first sealed cave. The seal counts your minerals. Bring minerals.",
+            icon: "🔓",
+            trigger: .unlockCaves(1),
+            rewardGold: 400, rewardXP: 250,
+            tip: "Sealed caves shimmer gray. Costs live in the 🔒 Caves panel."
+        ),
+        MineQuest(
+            id: "master-key",
+            title: "Master Key",
+            detail: "Break 5 cave seals. Doors open when you walk past now, out of respect.",
+            icon: "🗝️",
+            trigger: .unlockCaves(5),
+            rewardGold: 1200, rewardXP: 800,
+            tip: "Every third pocket is sealed; frontier sectors seal two in five."
+        ),
     ]
 }
 
@@ -694,6 +715,7 @@ final class MineQuestBoard: ObservableObject {
         case .mapSectors(let n): return n
         case .openClosets(let n): return n
         case .harvestCaves(let n): return n
+        case .unlockCaves(let n): return n
         case .hatchPets(let n): return n
         case .forgePicks(let n): return n
         case .upgradePacks(let n): return n
@@ -786,6 +808,8 @@ final class MineQuestBoard: ObservableObject {
         case (.openClosets, .closetOpened):
             return cap(from + 1)
         case (.harvestCaves, .caveHarvested):
+            return cap(from + 1)
+        case (.unlockCaves, .caveUnlocked):
             return cap(from + 1)
         case (.hatchPets, .petHatched):
             return cap(from + 1)

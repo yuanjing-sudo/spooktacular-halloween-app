@@ -360,6 +360,7 @@ final class MineStatTracker: ObservableObject {
     @Published private(set) var distanceWalked: Double = 0
     @Published private(set) var closetsOpened: Int = 0
     @Published private(set) var cavesHarvested: Int = 0
+    @Published private(set) var cavesOpened: Int = 0
     @Published private(set) var giftsReceived: Int = 0
     @Published private(set) var crittersMet: Int = 0
     @Published private(set) var bombsThrown: Int = 0
@@ -400,6 +401,7 @@ final class MineStatTracker: ObservableObject {
 
     func recordCloset() { closetsOpened += 1 }
     func recordCave() { cavesHarvested += 1 }
+    func recordCaveOpened() { cavesOpened += 1 }
     func recordGift() { giftsReceived += 1 }
     func recordCritter() { crittersMet += 1 }
     func recordBomb() { bombsThrown += 1 }
@@ -417,6 +419,7 @@ final class MineStatTracker: ObservableObject {
         distanceWalked = 0
         closetsOpened = 0
         cavesHarvested = 0
+        cavesOpened = 0
         giftsReceived = 0
         crittersMet = 0
         bombsThrown = 0
@@ -648,6 +651,7 @@ struct MinePerfPanel: View {
                     statRow("🚶 Distance", "\(Int(stats.distanceWalked))m")
                     statRow("🚪 Closets opened", "\(stats.closetsOpened)")
                     statRow("🔮 Caves harvested", "\(stats.cavesHarvested)")
+                    statRow("🔓 Seals broken", "\(stats.cavesOpened)")
                     statRow("🎁 Gifts", "\(stats.giftsReceived)")
                     statRow("📦 Critters met", "\(stats.crittersMet)")
                     statRow("🧨 Bombs thrown", "\(stats.bombsThrown)")
