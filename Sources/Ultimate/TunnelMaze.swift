@@ -595,7 +595,10 @@ class TunnelMazeManager: ObservableObject {
     private var deltaTime: Float = 0
     private var lastUpdateTime: TimeInterval = 0
     private var worldSeed: Int = 42
-    private var mazeSize: Int = 88
+    // Roblox-style endless dig: long + wide haulage, never die down here.
+    private var mazeSize: Int = 160
+    private let mineGodMode = true
+    private let mazeBound: Float = 220
     @Published var isGenerating = false
     @Published var genProgress = 0.0
     private var genTimer: Timer?
@@ -720,9 +723,9 @@ class TunnelMazeManager: ObservableObject {
                         let tunnel = Tunnel(
                             position: SCNVector3(Float(x * 2), Float(y * 2), Float(z * 2)),
                             direction: .north,
-                            length: 2,
-                            width: 2,
-                            height: 2,
+                            length: 6,
+                            width: 4,
+                            height: 3,
                             branches: [],
                             rooms: [],
                             isExplored: false,
@@ -734,6 +737,43 @@ class TunnelMazeManager: ObservableObject {
                     }
                 }
             }
+        }
+        generateEndlessHaulage()
+    }
+
+    /// Roblox-style endless mining tunnels: 3 long parallel haulage spines
+    /// (N-S, x = -24/0/24, z = -200...200) with E-W crosscuts every 24 units
+    /// plus short side drifts. Wide (4) and tall (3) so the player never
+    /// feels squeezed. Depth scales danger/treasure so the far ends pay off.
+    func generateEndlessHaulage() {
+        func haulageTunnel(x: Float, z: Float, crosscut: Bool) {
+            let depthPay = min(3.0, abs(z) / 70.0)
+            tunnels.append(Tunnel(
+                position: SCNVector3(x, 2, z),
+                direction: crosscut ? .east : .north,
+                length: 8,
+                width: 4,
+                height: 3,
+                branches: [],
+                rooms: [],
+                isExplored: false,
+                dangerLevel: Float(min(1.0, 0.25 + depthPay * 0.25)),
+                treasureCount: Int.random(in: 1...3) + Int(depthPay),
+                monsterCount: Int.random(in: 0...2)
+            ))
+        }
+        for z in stride(from: -200.0, through: 200.0, by: 4.0) {
+            haulageTunnel(x: 0, z: Float(z), crosscut: false)
+            haulageTunnel(x: -24, z: Float(z), crosscut: false)
+            haulageTunnel(x: 24, z: Float(z), crosscut: false)
+        }
+        for z in stride(from: -192.0, through: 192.0, by: 24.0) {
+            for x in stride(from: -24.0, through: 24.0, by: 4.0) {
+                haulageTunnel(x: Float(x), z: Float(z), crosscut: true)
+            }
+            // Side drift pockets off each crosscut (ore nooks).
+            haulageTunnel(x: -32, z: Float(z) + 6, crosscut: false)
+            haulageTunnel(x: 32, z: Float(z) - 6, crosscut: false)
         }
     }
 
@@ -1108,11 +1148,11 @@ class TunnelMazeManager: ObservableObject {
     }
 
     func placeAbandonedItems() {
-        // Place abandoned pickaxes and items inside the maze bounds
-        for _ in 0..<20 {
-            let x = Float(Int.random(in: 0...86))
-            let z = Float(Int.random(in: 0...86))
-            let y = Float(Int.random(in: 0...3))
+        // Place abandoned pickaxes and items across the endless maze
+        for _ in 0..<40 {
+            let x = Float.random(in: -40...200)
+            let z = Float.random(in: -200...200)
+            let y = Float.random(in: 0...6)
 
             let itemTypes: [BlockType] = [.abandonedPickaxe, .abandonedHelmet, .abandonedChestplate, .rustedMetal, .brokenGear, .oldLantern]
             let itemType = itemTypes.randomElement()!
@@ -1166,7 +1206,7 @@ class TunnelMazeManager: ObservableObject {
     // MARK: - Game Update
 
     func updateGame() {
-        guard !isPaused && !isGameOver else { return }
+        guard !isPaused else { return }
 
         deltaTime = 0.5
         gameTime += deltaTime
@@ -1194,7 +1234,8 @@ class TunnelMazeManager: ObservableObject {
     }
 
     func updatePlayerStats() {
-        // Stamina
+        // God-mode mine: hunger/thirst only slow you, never kill you.
+        // Health floor is 1 and regenerates — the player stays in the tunnel.
         if player.isSprinting && !player.isSneaking {
             player.stamina -= 0.5 * deltaTime * 60
             if player.stamina <= 0 {
@@ -1207,27 +1248,21 @@ class TunnelMazeManager: ObservableObject {
 
         // Hunger
         if gameTime.truncatingRemainder(dividingBy: 60) == 0 {
-            player.hunger -= 0.3
-            if player.hunger <= 0 {
-                player.health -= 1
-                if player.health <= 0 {
-                    player.isAlive = false
-                    gameOver()
-                }
-            }
+            player.hunger = max(5, player.hunger - 0.3)
         }
 
         // Thirst
         if gameTime.truncatingRemainder(dividingBy: 45) == 0 {
-            player.thirst -= 0.2
-            if player.thirst <= 0 {
-                player.health -= 1
-                if player.health <= 0 {
-                    player.isAlive = false
-                    gameOver()
-                }
-            }
+            player.thirst = max(5, player.thirst - 0.2)
         }
+
+        // Steady regen + hard floor: cannot die down here.
+        player.isAlive = true
+        isGameOver = false
+        if player.health < player.maxHealth {
+            player.health = min(player.maxHealth, max(1, player.health + 0.5))
+        }
+        if player.health <= 0 { player.health = 1 }
     }
 
     func updateMonsters() {
@@ -1258,11 +1293,11 @@ class TunnelMazeManager: ObservableObject {
                     monster.state = .chasing
                     monster.isAggressive = true
                 } else if Float.random(in: 0...1) < 0.02 {
-                    // Move to random position
+                    // Move to random position (endless-maze bounds)
                     monster.position = SCNVector3(
-                        Float.random(in: 0...86),
-                        Float.random(in: 0...5),
-                        Float.random(in: 0...86)
+                        Float.random(in: -40...200),
+                        Float.random(in: 0...8),
+                        Float.random(in: -200...200)
                     )
                     monster.state = .idle
                 }
@@ -1287,17 +1322,16 @@ class TunnelMazeManager: ObservableObject {
 
             case .attacking:
                 if monster.currentCooldown <= 0 {
-                    // Attack player
-                    player.health -= monster.damage
+                    // Non-lethal mine hit: chip damage, floor at 1 HP, never die.
+                    if player.health > 1 {
+                        let chip = min(monster.damage, max(0, player.health - 1))
+                        player.health -= chip
+                    }
+                    player.isAlive = true
                     monster.currentCooldown = monster.attackCooldown
-                    addNotification("💢 \(monster.name) attacked! -\(Int(monster.damage)) health")
+                    addNotification("🛡️ \(monster.name) hit you! Protected — \(Int(player.health)) HP left")
                     triggerHaptic(.heavy)
                     createDamageEffect()
-
-                    if player.health <= 0 {
-                        player.isAlive = false
-                        gameOver()
-                    }
                 }
                 monster.state = .chasing
 
@@ -1636,14 +1670,16 @@ class TunnelMazeManager: ObservableObject {
     /// Joystick driving: dx = right+, dy = down+. Camera-relative, clamped
     /// to the maze bounds. Called ~20x/sec while the stick is held.
     func movePlayer(dx: Float, dy: Float) {
-        guard player.isAlive && !isPaused && !isGameOver else { return }
+        // God-mode mine: never gate on alive/game-over; revive on the spot.
+        if mineGodMode { player.isAlive = true; isGameOver = false }
+        guard !isPaused else { return }
         let yaw = player.rotation.y
         let fx = -sin(yaw), fz = -cos(yaw)
         let rx = cos(yaw), rz = -sin(yaw)
         let fwd = -dy, strafe = dx
         let speed: Float = player.isSprinting ? 0.4 : 0.2
-        player.position.x = min(88, max(-2, player.position.x + (fx * fwd + rx * strafe) * speed))
-        player.position.z = min(88, max(-2, player.position.z + (fz * fwd + rz * strafe) * speed))
+        player.position.x = min(mazeBound, max(-60, player.position.x + (fx * fwd + rx * strafe) * speed))
+        player.position.z = min(mazeBound, max(-210, player.position.z + (fz * fwd + rz * strafe) * speed))
         player.isMoving = (abs(dx) + abs(dy)) > 0.15
     }
 
@@ -1708,38 +1744,29 @@ class TunnelMazeManager: ObservableObject {
     }
 
     func gameOver() {
-        isGameOver = true
-        addNotification("💀 Game Over!")
-        addNotification("📊 Final Score: \(score)")
-        addNotification("⚔️ Monsters Killed: \(player.killCount)")
-        addNotification("💎 Treasures Found: \(player.treasureFound)")
-        addNotification("📏 Distance Traveled: \(Int(player.distanceTraveled))m")
-        addNotification("⭐ Final Level: \(player.level)")
+        // Disabled in the endless mine: hits never end the run and the
+        // player is never yanked back to the entrance.
+        player.isAlive = true
+        isGameOver = false
+        if player.health <= 0 { player.health = 1 }
+        addNotification("🛡️ God-mode: the depths can't claim you. Keep digging!")
     }
 
     func resetGame() {
+        // Soft reset: revive in place — keep position, loot and progress.
         player.health = player.maxHealth
         player.hunger = player.maxHunger
         player.thirst = player.maxThirst
         player.stamina = player.maxStamina
         player.isAlive = true
-        player.position = SCNVector3(0, 2, 0)
-        player.inventory.removeAll()
-        player.killCount = 0
-        player.treasureFound = 0
-        player.distanceTraveled = 0
+        // NOTE: position / inventory / kills / treasures intentionally kept.
 
-        monsters.removeAll()
-        treasures.removeAll()
         particles.removeAll()
-        notifications.removeAll()
 
-        generateWorld()
         isGameOver = false
         isVictory = false
-        score = 0
 
-        addNotification("🔄 Game Reset")
+        addNotification("🛡️ Revived right where you stand — no trip back to the entrance.")
     }
 
     func saveGame() {
@@ -2511,24 +2538,31 @@ struct TunnelMazeView: View {
                 .padding(.bottom, 190)
             }
 
-            // Loading screen while the mega-maze digs itself.
-            if manager.isGenerating {
-                VStack(spacing: 12) {
-                    Text("⛏️").font(.system(size: 60))
-                    Text("Digging the mega-maze…")
-                        .font(.headline).foregroundColor(.white)
-                    ProgressView(value: manager.genProgress, total: 1.0)
-                        .progressViewStyle(LinearProgressViewStyle(tint: .orange))
-                        .frame(width: 200)
-                    Text("\(Int(manager.genProgress * 100))%")
-                        .font(.caption).foregroundColor(.white.opacity(0.8))
+            // Instant-play: generation streams in behind the scene, so the
+            // player never waits on a "Digging the mega-maze" wall.
+            // A slim non-blocking pill shows progress without eating taps.
+            if manager.isGenerating && manager.genProgress < 1.0 {
+                VStack {
+                    HStack(spacing: 8) {
+                        ProgressView(value: manager.genProgress, total: 1.0)
+                            .progressViewStyle(LinearProgressViewStyle(tint: .orange))
+                            .frame(width: 120)
+                        Text("Expanding tunnels \(Int(manager.genProgress * 100))%")
+                            .font(.caption2.bold()).foregroundColor(.white.opacity(0.9))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.55)).cornerRadius(12)
+                    .padding(.top, 54)
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black.opacity(0.85))
+                .allowsHitTesting(false)
             }
 
-            // Game Over Overlay
-            if manager.isGameOver {
+            // Game Over is disabled in god-mode mine (kept for reference).
+
+            // Game Over Overlay (disabled: god-mode mine never ends the run).
+            if manager.isGameOver && false {
                 MazeGameOverView(manager: manager)
             }
         }

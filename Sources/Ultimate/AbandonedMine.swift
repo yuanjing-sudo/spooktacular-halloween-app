@@ -342,7 +342,8 @@ struct MineWorldData: Sendable {
 }
 
 final class MineManager: ObservableObject {
-    @Published var worldReady = false
+    // Instant-play: scene is usable immediately; gen streams in behind.
+    @Published var worldReady = true
     @Published var player = MNPlayer(
         position: SCNVector3(0, 1.0, -15),
         health: 100, maxHealth: 100,
@@ -375,8 +376,8 @@ final class MineManager: ObservableObject {
 
     var onEvent: ((MNEvent) -> Void)?
 
-    /// Playable bounds (world units).
-    let bound: Float = 18
+    /// Playable bounds (world units) — endless-mine size.
+    let bound: Float = 60
     let eye: Float = 1.6
 
     private var clock: GameClock?
@@ -387,9 +388,11 @@ final class MineManager: ObservableObject {
     private var monsterRespawn: Double = 30
 
     init() {
-        self.lifeLossEnabled = UserDefaults.standard.object(forKey: "mineLifeLoss") as? Bool ?? true
-        // World gen runs off-main; the scene appears behind
-        // a "Digging..." overlay until worldReady flips.
+        // God-mode mine: nothing down here can kill you or drag you back.
+        self.lifeLossEnabled = false
+        UserDefaults.standard.set(false, forKey: "mineLifeLoss")
+        self.worldReady = true // play instantly; world streams in behind
+        // World gen runs off-main with no blocking veil.
         Task {
             let data = await Task.detached(priority: .userInitiated) {
                 MineManager.computeWorldData()
@@ -410,21 +413,33 @@ final class MineManager: ObservableObject {
     // MARK: - World gen (third-unit cells, world-unit layouts)
 
     /// Tunnel air test in WORLD units (layouts stay readable).
+    /// Roblox-style endless dig: 6-wide, 4-high haulage running to ±60,
+    /// crossroads every 18 units, deep level + lava cavern to match.
     static func isAirWorld(_ x: Float, _ y: Float, _ z: Float) -> Bool {
-        // Main haulage N-S: 4 wide, 3 high, stretching far.
-        if abs(x) <= 2 && abs(z) <= 17 && y >= 1 && y < 4 { return true }
-        // Crossroads E-W at z = -9, 0, 9.
-        for cz: Float in [-9, 0, 9] {
-            if abs(x) <= 17 && abs(z - cz) <= 1.5 && y >= 1 && y < 4 { return true }
+        // Main haulage N-S: 6 wide, 4 high, stretching far.
+        if abs(x) <= 3 && abs(z) <= 60 && y >= 1 && y < 5 { return true }
+        // Crossroads E-W every 18 units.
+        for cz: Float in [-54, -36, -27, -18, -9, 0, 9, 18, 27, 36, 54] {
+            if abs(x) <= 60 && abs(z - cz) <= 2 && y >= 1 && y < 5 { return true }
         }
-        // Shaft down at x 7...9.
-        if x >= 7 && x <= 9 && abs(z) <= 1 && y >= -5 && y < 4 { return true }
-        // Deep haulage N-S.
-        if abs(x) <= 2 && abs(z) <= 17 && y >= -5 && y < -2 { return true }
-        // Deep cross at z = 0.
-        if abs(x) <= 17 && abs(z) <= 1.5 && y >= -5 && y < -2 { return true }
-        // Lava cavern room (deep east).
-        if x >= 8 && x <= 16 && z >= 8 && z <= 16 && y >= -5 && y < -1 { return true }
+        // Endless side drifts: repeating N-S veins every 24 X.
+        for ox: Float in [-48, -24, 24, 48] {
+            if abs(x - ox) <= 2 && abs(z) <= 60 && y >= 1 && y < 5 { return true }
+        }
+        // Shaft down at x 6...10 (widened).
+        if x >= 6 && x <= 10 && abs(z) <= 2 && y >= -5 && y < 5 { return true }
+        // Deep haulage N-S (endless).
+        if abs(x) <= 3 && abs(z) <= 60 && y >= -5 && y < -1 { return true }
+        // Deep crossroads.
+        for cz: Float in [-36, -18, 0, 18, 36] {
+            if abs(x) <= 60 && abs(z - cz) <= 2 && y >= -5 && y < -1 { return true }
+        }
+        // Deep side drifts.
+        for ox: Float in [-48, -24, 24, 48] {
+            if abs(x - ox) <= 2 && abs(z) <= 60 && y >= -5 && y < -1 { return true }
+        }
+        // Lava cavern room (deep east, expanded).
+        if x >= 8 && x <= 24 && z >= 8 && z <= 24 && y >= -5 && y < 0 { return true }
         return false
     }
 
@@ -492,8 +507,8 @@ final class MineManager: ObservableObject {
         var lavas: [MineWorldData.Block] = []
         var torches: [SIMD3<Float>] = []
         var exposed = Set<MNCell>()
-        // Cell bounds for ±18 world at 1/2 units, y -8...4.
-        let B = 36, yLo = -16, yHi = 8
+        // Cell bounds for ±60 world at 1/2 units, y -8...4.
+        let B = 120, yLo = -16, yHi = 8
         for ix in -B...B {
             for iz in -B...B {
                 for iy in yLo...yHi {
@@ -566,19 +581,19 @@ final class MineManager: ObservableObject {
             }
         }
         // Torch decor along both levels (positions only; coordinator renders).
-        for z in stride(from: -16.0, through: 16.0, by: 4.0) {
-            torches.append(SIMD3(1.8, 2.4, Float(z)))
-            torches.append(SIMD3(-1.8, 2.4, Float(z)))
+        for z in stride(from: -60.0, through: 60.0, by: 4.0) {
+            torches.append(SIMD3(2.6, 3.4, Float(z)))
+            torches.append(SIMD3(-2.6, 3.4, Float(z)))
         }
-        for cz in [-9.0, 0.0, 9.0] as [Float] {
-            for x in stride(from: -12.0, through: 12.0, by: 8.0) {
-                torches.append(SIMD3(Float(x), 2.4, cz + 1.2))
-                torches.append(SIMD3(Float(x), 2.4, cz - 1.2))
+        for cz in [-54.0, -36.0, -18.0, 0.0, 18.0, 36.0, 54.0] as [Float] {
+            for x in stride(from: -56.0, through: 56.0, by: 8.0) {
+                torches.append(SIMD3(Float(x), 3.4, cz + 1.6))
+                torches.append(SIMD3(Float(x), 3.4, cz - 1.6))
             }
         }
-        for z in stride(from: -16.0, through: 16.0, by: 4.0) {
-            torches.append(SIMD3(1.8, -3.6, Float(z)))
-            torches.append(SIMD3(-1.8, -3.6, Float(z)))
+        for z in stride(from: -60.0, through: 60.0, by: 4.0) {
+            torches.append(SIMD3(2.6, -3.6, Float(z)))
+            torches.append(SIMD3(-2.6, -3.6, Float(z)))
         }
         for x in stride(from: 8.0, through: 14.0, by: 3.0) {
             torches.append(SIMD3(Float(x), -2.6, 8.0))
@@ -813,21 +828,23 @@ final class MineManager: ObservableObject {
     }
 
     private func hurt(_ dmg: Int, cause: String) {
-        guard lifeLossEnabled else { return } // god-mode toggle
-        guard player.health > 0 else { return }
-        player.health = max(1, player.health - dmg)
+        // Immortal mine: damage is a warning + tiny chip that floors at 1.
+        // Never respawns, never drags the player back to the entrance.
+        guard player.health > 0 else { player.health = 1; return }
+        if lifeLossEnabled {
+            player.health = max(1, player.health - dmg)
+        }
         hurtId += 1
         damageTick += 1
-        notify("\(cause) (\(player.health)❤️ left)")
-        if player.health <= 1 { respawn() }
+        notify("🛡️ \(cause) — protected (\(player.health)❤️)")
+        if player.health < 1 { player.health = 1 }
     }
 
     private func respawn() {
-        player.position = SCNVector3(0, 1.0, -15)
-        player.yaw = 0
+        // In-place recovery only: stay exactly where you are.
         player.moveTarget = nil
         player.health = player.maxHealth
-        notify("💀 Dragged back to the entrance! Respawned.")
+        notify("🛡️ Shielded! You hold your ground — no trip back to the entrance.")
     }
 
     func notify(_ msg: String) {
@@ -2234,18 +2251,23 @@ struct UltimateMagicView: View {
                 .padding(.bottom, 8)
             }
 
-            // World-gen loading veil (gen runs off-main).
+            // World-gen streams in behind play: slim non-blocking pill only,
+            // never a full-screen "Digging..." wait.
             if !manager.worldReady {
-                ZStack {
-                    Color.black.ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        Text("⛏️").font(.system(size: 60))
-                        Text("Digging the mine…")
-                            .font(.headline).foregroundColor(.orange)
+                VStack {
+                    HStack(spacing: 8) {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .orange))
+                        Text("Expanding tunnels…")
+                            .font(.caption2.bold()).foregroundColor(.orange)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.55)).cornerRadius(12)
+                    .padding(.top, 54)
+                    Spacer()
                 }
+                .allowsHitTesting(false)
                 .transition(.opacity)
             }
         }
@@ -2355,11 +2377,13 @@ struct MinePickPanel: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section(header: Text("Mine rules")) {
-                    Toggle("Lose life in the mine", isOn: $manager.lifeLossEnabled)
-                    Text(manager.lifeLossEnabled
-                         ? "Bats, monsters, lava and your own bombs can hurt you."
-                         : "God mode: explore and mine with zero damage.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    // Endless-mine god mode is locked on: hits are warnings only,
+                    // HP floors at 1, and you never leave your tunnel.
+                    HStack {
+                        Image(systemName: "shield.fill")
+                        Text("God mode: locked ON — explore and mine with zero death risk.")
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Pickaxe Forge")
