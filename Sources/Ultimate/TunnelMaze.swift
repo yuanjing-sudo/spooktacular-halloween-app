@@ -701,8 +701,12 @@ class TunnelMazeManager: ObservableObject {
     @Published var expeditionBoard = MazeExpeditionBoard()
     @Published var regionDirector = MazeRegionDirector()
     @Published var bondLedger = BoxyBondLedger()
+    // Cinematic queue for big maze moments.
+    @Published var cinema = MazeCinematicDirector()
     private var lastExpScore = 0
     private var lastExpDist: Float = 0
+    private var knownCompletedExpeditions = Set<String>()
+    private var lastComboCine = 0
 
     // MARK: - Private Properties
     private var audioPlayer: AVAudioPlayer?
@@ -750,6 +754,10 @@ class TunnelMazeManager: ObservableObject {
             self.player.gold += region.bonusScore / 2
             self.addNotification("🗺️ New region: \(region.emoji) \(region.name)! +\(region.bonusScore) pts")
             self.expeditionBoard.record(.regionMapped(count: self.regionDirector.mappedCount))
+            self.cinema.play(.regionFound(name: "\(region.emoji) \(region.name)"))
+            if self.regionDirector.mappedCount >= MazeRegionAtlas.all.count {
+                self.cinema.play(.grandTour)
+            }
         }
     }
 
@@ -1224,6 +1232,9 @@ class TunnelMazeManager: ObservableObject {
         triggerHaptic(.medium)
         expeditionBoard.record(.boxyMet)
         bondLedger.recordEncounter(species: type.displayName)
+        if type == .goldenWisp {
+            cinema.play(.shinyMet(name: "✨ Golden Wisp"))
+        }
     }
 
     private func maybeSpawnBoxyAnimal() {
@@ -1709,6 +1720,23 @@ class TunnelMazeManager: ObservableObject {
         let dd = Int(player.distanceTraveled - lastExpDist)
         if dd > 0 { expeditionBoard.record(.distanceBanked(meters: dd)) }
         lastExpDist = player.distanceTraveled
+        // Freshly completed expeditions get the full cinematic.
+        let fresh = expeditionBoard.completed.subtracting(knownCompletedExpeditions)
+        if let first = expeditionBoard.active.first(where: { fresh.contains($0.id) })
+            ?? MazeExpeditionCatalog.all.first(where: { fresh.contains($0.id) }) {
+            cinema.play(.expeditionDone(title: "\(first.icon) \(first.title)", score: first.rewardScore))
+        }
+        knownCompletedExpeditions = expeditionBoard.completed
+        // Combo milestones: 10 / 25 / 50, re-armed when the combo falls.
+        let combo = player.comboCounter
+        if combo < lastComboCine {
+            lastComboCine = combo >= 50 ? 50 : (combo >= 25 ? 25 : (combo >= 10 ? 10 : 0))
+        } else {
+            for threshold in [10, 25, 50] where combo >= threshold && lastComboCine < threshold {
+                lastComboCine = threshold
+                cinema.play(.comboMilestone(n: threshold))
+            }
+        }
     }
 
     /// Bonded boxy friends (Lv.3+) occasionally share gems with nearby pals.
@@ -1758,6 +1786,7 @@ class TunnelMazeManager: ObservableObject {
         let newLevel = bondLedger.level(for: species)
         if newLevel > level {
             addNotification("💖 \(species) is now Lv.\(newLevel) \(BoxyBondRank.title(level: newLevel))!")
+            cinema.play(.bondUp(species: species, level: newLevel))
         } else {
             addNotification("🍬 Fed \(species)! Bond growing.")
         }
@@ -2150,6 +2179,9 @@ class TunnelMazeManager: ObservableObject {
             createParticles(at: position, count: 30, emoji: "⭐")
             triggerHaptic(.medium)
             expeditionBoard.record(.monsterSlain)
+            if monster.isBoss {
+                cinema.play(.bossDown(name: monster.name))
+            }
             if monster.type.isBoxy {
                 bondLedger.recordLoss(species: monster.type.displayName)
                 addNotification("💔 The cubes will remember that. Bond halved.")
@@ -2176,6 +2208,9 @@ class TunnelMazeManager: ObservableObject {
             player.gold += Int.random(in: 5...20)
             addNotification("⚔️ Defeated \(monster.name)! +\(monster.experience) experience")
             expeditionBoard.record(.monsterSlain)
+            if monster.isBoss {
+                cinema.play(.bossDown(name: monster.name))
+            }
             if monster.type.isBoxy {
                 bondLedger.recordLoss(species: monster.type.displayName)
             }
@@ -3186,6 +3221,9 @@ struct TunnelMazeView: View {
             if manager.isGameOver && false {
                 MazeGameOverView(manager: manager)
             }
+            // Cinematic moments play over the maze.
+            MazeCinematicHost(director: manager.cinema)
+                .allowsHitTesting(manager.cinema.hasPending)
         }
         .onChange(of: joy) { v in
             let active = v.dx != 0 || v.dy != 0
@@ -3213,7 +3251,13 @@ struct TunnelMazeView: View {
                 regions: manager.regionDirector,
                 bonds: manager.bondLedger,
                 gold: manager.player.gold,
-                feed: { species in manager.feedNearbyBoxy(species: species) }
+                feed: { species in manager.feedNearbyBoxy(species: species) },
+                score: manager.score,
+                onClaimDaily: { amount in
+                    manager.player.gold += amount
+                    manager.score += amount / 2
+                    manager.addNotification("📅 Maze daily claimed! +\(amount)🪙!")
+                }
             )
         }
         .preferredColorScheme(.dark)

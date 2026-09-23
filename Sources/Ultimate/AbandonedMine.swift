@@ -3444,6 +3444,7 @@ struct MinePickPanel: View {
     @State private var showShop = false
     @State private var showSwap = false
     @State private var showArcade = false
+    @State private var showMenu = false
     @State private var showWater = false
     @State private var showFire = false
     @State private var showHub = false
@@ -3658,6 +3659,12 @@ struct MinePickPanel: View {
                             .controlSize(.small)
                     }
                     HStack {
+                        Button("🎪 Arcade Menu") { showMenu = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                    }
+                    HStack {
                         Button("💧 Water") { showWater = true }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -3783,6 +3790,9 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showArcade) {
                 MineArcadeShowcaseView()
+            }
+            .sheet(isPresented: $showMenu) {
+                MineArcadeOverhaulShowcaseView()
             }
             .sheet(isPresented: $showWater) {
                 MineWaterShowcaseView()

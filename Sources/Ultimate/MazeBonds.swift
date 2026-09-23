@@ -285,9 +285,13 @@ struct MazeJournalView: View {
     @ObservedObject var bonds: BoxyBondLedger
     var gold: Int
     var feed: (String) -> Void
+    var score: Int = 0
+    var onClaimDaily: (Int) -> Void = { _ in }
     @State private var showBestiary = false
     @State private var showMotion = false
     @State private var showSky = false
+    @State private var showDaily = false
+    @State private var showCine = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -337,6 +341,32 @@ struct MazeJournalView: View {
                         .cornerRadius(12)
                     }
                     .padding(.horizontal, 12)
+                    Button(action: { showDaily = true }) {
+                        HStack {
+                            Image(systemName: "calendar.circle.fill")
+                            Text("Daily Hub — streaks + focus")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.orange.opacity(0.6))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 12)
+                    Button(action: { showCine = true }) {
+                        HStack {
+                            Image(systemName: "film.fill")
+                            Text("Maze Cinematics — 7 moments")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.pink.opacity(0.6))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 12)
                 }
                 .padding(.vertical, 12)
             }
@@ -356,6 +386,19 @@ struct MazeJournalView: View {
             }
             .sheet(isPresented: $showSky) {
                 MazeSkyShowcaseView()
+            }
+            .sheet(isPresented: $showDaily) {
+                MazeDailyHubView(
+                    expeditions: expeditions,
+                    regions: regions,
+                    bonds: bonds,
+                    score: score,
+                    gold: gold,
+                    onClaimReward: onClaimDaily
+                )
+            }
+            .sheet(isPresented: $showCine) {
+                MazeCinematicShowcaseView()
             }
         }
         .preferredColorScheme(.dark)

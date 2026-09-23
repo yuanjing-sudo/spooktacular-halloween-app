@@ -4977,6 +4977,7 @@ struct UltimateMiniGameView: View {
     @State private var selectedGame: MiniGame?
     @State private var showGameDetail = false
     @State private var searchText = ""
+    @StateObject private var dailyBoard = ArcadeDailyBoard()
 
     let miniGames: [MiniGame] = [
         MiniGame(name: "Memory Match", description: "Match the spooky cards", type: .memoryMatch, difficulty: .medium, rewards: QuestReward(experience: 25, gold: 15, items: [], rareItems: [], unlockables: []), highScore: 0, timesPlayed: 0),
@@ -5020,17 +5021,35 @@ struct UltimateMiniGameView: View {
                     .cornerRadius(10)
                     .padding(.horizontal)
 
+                    ArcadeMarquee(
+                        game: ArcadeDailyBoard.featuredGame(from: miniGames),
+                        onPlay: { game in
+                            selectedGame = game
+                            showGameDetail = true
+                        }
+                    )
+                    ArcadeDailyRow(
+                        board: dailyBoard,
+                        challenge: ArcadeDailyBoard.challenge(),
+                        gameName: miniGames.first(where: { $0.type == ArcadeDailyBoard.challenge().gameType })?.name ?? "Arcade"
+                    )
+
                     ScrollView {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))], spacing: 16) {
                             ForEach(filteredGames) { game in
-                                UltimateMiniGameCard(game: game)
+                                ArcadeShowcaseCard(
+                                    game: game,
+                                    isDaily: game.type == ArcadeDailyBoard.challenge().gameType,
+                                    dailyBest: dailyBoard.bestToday(game.type)
+                                )
                                     .onTapGesture {
                                         selectedGame = game
                                         showGameDetail = true
                                     }
                                     .onLongPressGesture {
                                         let score = manager.playMiniGame(game)
-                                        manager.addNotification("🎮 Played \(game.name)! Score: \(score)")
+                                        let record = dailyBoard.recordPlay(game.type, score: score)
+                                        manager.addNotification("🎮 Played \(game.name)! Score: \(score)\(record ? " — NEW DAILY BEST! 🏆" : "")")
                                     }
                             }
                         }
