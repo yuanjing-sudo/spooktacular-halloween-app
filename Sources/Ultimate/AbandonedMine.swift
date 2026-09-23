@@ -3447,6 +3447,7 @@ struct MinePickPanel: View {
     @State private var showWater = false
     @State private var showFire = false
     @State private var showHub = false
+    @State private var showForest = false
 
     var body: some View {
         NavigationView {
@@ -3669,6 +3670,10 @@ struct MinePickPanel: View {
                             .controlSize(.small)
                             .tint(.pink)
                         Spacer()
+                        Button("🌲 Forest") { showForest = true }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(.green)
                     }
                     HStack {
                         Text("\(manager.frameMonitor.grade) • \(Int(manager.frameMonitor.fps)) FPS • ⏱️ \(manager.statTracker.playClock)")
@@ -3778,6 +3783,9 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showHub) {
                 MineGraphicsHubView()
+            }
+            .sheet(isPresented: $showForest) {
+                MineForestShowcaseView()
             }
         }
     }
