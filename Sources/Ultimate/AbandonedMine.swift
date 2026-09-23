@@ -169,7 +169,7 @@ enum MNBlockType: String, CaseIterable {
 // MARK: - Pickaxe tiers (coal unlocks)
 
 enum MNPickTier: Int, CaseIterable, Codable {
-    case wooden = 0, stone, iron, golden, diamond
+    case wooden = 0, stone, iron, golden, diamond, crystal, drill
 
     var name: String {
         switch self {
@@ -178,6 +178,8 @@ enum MNPickTier: Int, CaseIterable, Codable {
         case .iron: return "Iron Pick"
         case .golden: return "Golden Pick"
         case .diamond: return "Diamond Pick"
+        case .crystal: return "Crystal Pick"
+        case .drill: return "Void Drill"
         }
     }
 
@@ -188,6 +190,8 @@ enum MNPickTier: Int, CaseIterable, Codable {
         case .iron: return "⛏️"
         case .golden: return "🌟⛏️"
         case .diamond: return "💎⛏️"
+        case .crystal: return "🔮⛏️"
+        case .drill: return "🌀⛏️"
         }
     }
 
@@ -199,6 +203,8 @@ enum MNPickTier: Int, CaseIterable, Codable {
         case .iron: return 2.5
         case .golden: return 3
         case .diamond: return 4.5
+        case .crystal: return 6
+        case .drill: return 8.5
         }
     }
 
@@ -210,6 +216,8 @@ enum MNPickTier: Int, CaseIterable, Codable {
         case .iron: return 20
         case .golden: return 35
         case .diamond: return 60
+        case .crystal: return 100
+        case .drill: return 160
         }
     }
 
@@ -221,6 +229,8 @@ enum MNPickTier: Int, CaseIterable, Codable {
         case .iron: return "Redstone, Emerald"
         case .golden: return "Ruby"
         case .diamond: return "Diamond, Opal"
+        case .crystal: return "Crystals, faster everything"
+        case .drill: return "Magma Core at full speed"
         }
     }
 }
@@ -330,6 +340,99 @@ struct MNBoxyCritter: Identifiable {
     var greeted: Bool = false
 }
 
+// MARK: - Mining-Sim tycoon (layers, backpack, pets, rebirth)
+
+/// Vertical biomes, Mining-Sim style: the deeper the layer, the harder
+/// the rock and the richer the payout. Nothing here can kill — depth is
+/// pure profit incentive under god-mode.
+enum MNDepthLayer: String, CaseIterable {
+    case meadow, dirt, stone, deepstone, crystal, magma
+
+    var emoji: String {
+        switch self {
+        case .meadow: return "🌿"
+        case .dirt: return "🟫"
+        case .stone: return "🪨"
+        case .deepstone: return "⬛"
+        case .crystal: return "🔮"
+        case .magma: return "🔥"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .meadow: return "Sunlit Tops"
+        case .dirt: return "Dirt Tunnels"
+        case .stone: return "Stone Depths"
+        case .deepstone: return "Deepstone"
+        case .crystal: return "Crystal Hollows"
+        case .magma: return "Magma Core"
+        }
+    }
+
+    /// Reward multiplier on ore value + XP at this depth.
+    var rewardMultiplier: Double {
+        switch self {
+        case .meadow: return 1.0
+        case .dirt: return 1.2
+        case .stone: return 1.5
+        case .deepstone: return 2.0
+        case .crystal: return 3.0
+        case .magma: return 5.0
+        }
+    }
+
+    /// Extra toughness added to every block at this depth.
+    var hardnessBonus: Float {
+        switch self {
+        case .meadow: return 0
+        case .dirt: return 0
+        case .stone: return 1
+        case .deepstone: return 2
+        case .crystal: return 3
+        case .magma: return 5
+        }
+    }
+
+    static func at(y: Float) -> MNDepthLayer {
+        if y >= 3 { return .meadow }
+        if y >= 1 { return .dirt }
+        if y >= -1 { return .stone }
+        if y >= -3 { return .deepstone }
+        if y >= -4.5 { return .crystal }
+        return .magma
+    }
+}
+
+/// Hatchable pets: speed pets dig faster, luck pets double ore drops,
+/// gold pets fatten every sale. Equip up to 3 at once.
+struct MNPet: Identifiable {
+    let id = UUID()
+    var species: String
+    var emoji: String
+    var rarity: String // Common / Rare / Epic / Legendary
+    var boostKind: String // Speed / Luck / Gold
+    var boostValue: Double // e.g. 0.25 = +25%
+    var isEquipped: Bool = false
+
+    static func hatch(number: Int) -> MNPet {
+        let species = [
+            ("Mole", "🦔"), ("Bat", "🦇"), ("Axolotl", "🦎"),
+            ("Fox", "🦊"), ("Wisp", "✨"), ("Dragon", "🐉"),
+        ].randomElement()!
+        let r = Int.random(in: 1...100)
+        let rarity: String
+        let value: Double
+        if r <= 2 { rarity = "Legendary"; value = 1.0 }
+        else if r <= 10 { rarity = "Epic"; value = 0.5 }
+        else if r <= 30 { rarity = "Rare"; value = 0.25 }
+        else { rarity = "Common"; value = 0.1 }
+        let kinds = ["Speed", "Luck", "Gold"]
+        return MNPet(species: species.0, emoji: species.1, rarity: rarity,
+                     boostKind: kinds[(number + r) % kinds.count], boostValue: value)
+    }
+}
+
 // MARK: - Player / events
 
 struct MNPlayer {
@@ -348,6 +451,18 @@ struct MNPlayer {
     var pitch: Float = 0
     /// Tap-to-walk destination (world units), nil when idle/D-pad driving.
     var moveTarget: SCNVector3? = nil
+    // --- Mining-Sim tycoon state (all defaulted so old inits compile) ---
+    var backpackCapacity: Int = 50
+    var backpackTier: Int = 0
+    var sellValue: Int = 0 // unsold ore value riding in the backpack
+    var pets: [MNPet] = []
+    var rebirths: Int = 0
+    var deepestY: Float = 99
+    var sectorsFound: Set<String> = []
+
+    /// Ore units currently in the backpack.
+    var backpackUsed: Int { ores.values.reduce(0, +) }
+    var backpackFull: Bool { backpackUsed >= backpackCapacity }
 }
 
 /// Events forwarded to the Ultimate manager (gold / XP / score).
@@ -874,6 +989,7 @@ final class MineManager: ObservableObject {
             moving = false
         }
         if moving != isMoving { isMoving = moving }
+        if moving { trackExploration() } // sectors + deepest depth
         if !moving && player.moveTarget == nil && strafeInput == 0 && walkInput == 0 {
             moveClock?.invalidate()
             moveClock = nil
@@ -1348,14 +1464,12 @@ final class MineManager: ObservableObject {
         AWSound.shared.boom()
         // Blocks: no tier gate — bombs blast anything but bedrock/lava.
         var loot: [String: Int] = [:]
-        var gold = 0
         for i in blocks.indices where !blocks[i].isDestroyed && !blocks[i].type.isUnbreakable {
             let bp = blocks[i].position
             let dx = bp.x - pos.x, dy = bp.y - pos.y, dz = bp.z - pos.z
             if sqrt(dx * dx + dy * dy + dz * dz) < R {
-                if let (name, g, _) = breakBlock(i) {
+                if let (name, _, _) = breakBlock(i) {
                     loot[name, default: 0] += 1
-                    gold += g
                 }
             }
         }
@@ -1382,7 +1496,7 @@ final class MineManager: ObservableObject {
             hurt(8, cause: "💥 Own blast! Careful!")
         }
         let summary = loot.map { "\($0.value)x \($0.key)" }.joined(separator: ", ")
-        notify(summary.isEmpty ? "💥 Ka-boom! (solid rock)" : "💥 Ka-boom! \(summary) +\(gold)🪙")
+        notify(summary.isEmpty ? "💥 Ka-boom! (solid rock)" : "💥 Ka-boom! \(summary) → 🎒 backpack (\(player.backpackUsed)/\(player.backpackCapacity))")
     }
 
     /// Destroys a block with full drops/stats/events. Returns loot or nil.
@@ -1400,19 +1514,34 @@ final class MineManager: ObservableObject {
         damageTick += 1
         player.blocksMined += 1
         let name = b.type.displayName
-        player.ores[name, default: 0] += 1
-        let g = b.type.goldValue, xp = b.type.xpReward
-        if g > 0 {
-            player.gold += g
+        // Tycoon loop: ore rides in the backpack, value accrues unsold.
+        // Luck pets can double the drop; depth multiplies value + XP.
+        let layer = MNDepthLayer.at(y: b.position.y)
+        var n = 1
+        var lucky = false
+        if Double.random(in: 0...1) < luckChance { n = 2; lucky = true }
+        player.ores[name, default: 0] += n
+        // Coal is pick-forge currency, never sold: it rides along but
+        // accrues no sale value (still takes backpack space — upgrade!).
+        let unit = (name == "Coal Ore") ? 0 : Int(Double(b.type.goldValue) * layer.rewardMultiplier)
+        player.sellValue += unit * n
+        let xp = Int(Double(b.type.xpReward) * layer.rewardMultiplier * rebirthMult)
+        if b.type.goldValue > 0 || b.type.xpReward > 0 {
             player.experience += xp
             checkLevelUp()
-            onEvent?(.minedOre(name, 1))
+            onEvent?(.minedOre(name, n))
         }
         if player.blocksMined - lastBombAward >= 20, bombs < 9 {
             lastBombAward = player.blocksMined
             bombs += 1
         }
-        return (name, g, xp)
+        let luckyTag = lucky ? "🍀 Lucky double! " : ""
+        if b.type.goldValue > 0 || b.type.xpReward > 0 {
+            var msg = "⛏️ \(luckyTag)\(name) x\(n)! +\(xp) XP → 🎒 (\(player.backpackUsed)/\(player.backpackCapacity))"
+            if player.backpackFull { msg += " FULL — go sell!" }
+            notify(msg)
+        }
+        return (name, unit * n, xp)
     }
 
     /// Pops a closet crate: snacks pay gold, tool caches grant a bomb,
@@ -1507,15 +1636,19 @@ final class MineManager: ObservableObject {
             notify("🔒 \(b.type.displayName) needs a \(b.type.requiredTier.name)! (\(player.pickTier.name) bounces off)")
             return
         }
+        // Full backpack: ore blocks bounce off until you sell (closets
+        // always open — they're bonuses, not backpack fill).
+        if player.backpackFull && b.type != .closetCrate {
+            notify("🎒 Backpack full (\(player.backpackCapacity))! Hit 💰 to sell — the surface cart pays +25%.")
+            return
+        }
         let before = bombs
-        blocks[idx].damage += player.pickTier.damage
+        // Speed pets + rebirth power up every swing; deep rock is tougher.
+        blocks[idx].damage += player.pickTier.damage * Float(speedMult * rebirthMult)
         if Int.random(in: 1...10) == 1 { blocks[idx].damage += 1 } // lucky crack
-        if blocks[idx].damage >= b.type.toughness {
-            if let (name, g, _) = breakBlock(idx) {
-                var msg = "⛏️ \(name)! +\(g)🪙"
-                if bombs > before { msg += " 🧨 +1 bomb!" }
-                notify(msg)
-            }
+        if blocks[idx].damage >= effectiveToughness(b.type, atY: blocks[idx].position.y) {
+            _ = breakBlock(idx)
+            if bombs > before { notify("🧨 +1 bomb!") }
         } else {
             damageTick += 1
         }
@@ -1547,6 +1680,140 @@ final class MineManager: ObservableObject {
             onEvent?(.leveledUp(lv))
             notify("⬆️ Miner rank \(lv)! Health restored!")
         }
+    }
+
+    // MARK: - Mining-Sim tycoon (backpack, sell, pets, rebirth, sectors)
+
+    /// Permanent +15% power per rebirth (damage, sale value, XP).
+    var rebirthMult: Double { 1.0 + Double(player.rebirths) * 0.15 }
+
+    var speedMult: Double {
+        1.0 + player.pets.filter { $0.isEquipped && $0.boostKind == "Speed" }
+            .reduce(0.0) { $0 + $1.boostValue }
+    }
+
+    var luckChance: Double {
+        min(0.5, player.pets.filter { $0.isEquipped && $0.boostKind == "Luck" }
+            .reduce(0.0) { $0 + $1.boostValue })
+    }
+
+    var petGoldMult: Double {
+        1.0 + player.pets.filter { $0.isEquipped && $0.boostKind == "Gold" }
+            .reduce(0.0) { $0 + $1.boostValue }
+    }
+
+    var currentLayer: MNDepthLayer { MNDepthLayer.at(y: player.position.y) }
+
+    /// The surface sell cart (by the entrance): selling here pays +25%.
+    var sellPad: SCNVector3 { SCNVector3(0, 1.0, -15) }
+
+    var isAtSellPad: Bool {
+        let dx = player.position.x - sellPad.x, dz = player.position.z - sellPad.z
+        return sqrt(dx * dx + dz * dz) < 6
+    }
+
+    func effectiveToughness(_ type: MNBlockType, atY y: Float) -> Float {
+        type.toughness + MNDepthLayer.at(y: y).hardnessBonus
+    }
+
+    /// Cash in the backpack. Surface cart pays +25%.
+    func sellBackpack() {
+        guard player.backpackUsed > 0 else {
+            notify("🎒 Backpack is empty — go dig something shiny!")
+            return
+        }
+        let bonus = isAtSellPad ? 1.25 : 1.0
+        let payout = Int(Double(player.sellValue) * bonus * petGoldMult * rebirthMult)
+        let units = player.backpackUsed
+        // Coal stays banked for the pick forge — everything else sells.
+        let coal = player.ores["Coal Ore", default: 0]
+        player.gold += payout
+        player.ores = coal > 0 ? ["Coal Ore": coal] : [:]
+        player.sellValue = 0
+        if isAtSellPad {
+            notify("💰 Sold \(units) ores at the surface cart! +\(payout)🪙 (surface bonus!)")
+        } else {
+            notify("💰 Sold \(units) ores! +\(payout)🪙 (tip: the surface cart pays +25%)")
+        }
+    }
+
+    /// Bigger backpack, stay down longer. Gold cost grows quadratically.
+    var backpackCost: Int { 250 * (player.backpackTier + 1) * (player.backpackTier + 1) }
+
+    @discardableResult
+    func upgradeBackpack() -> Bool {
+        guard player.gold >= backpackCost else {
+            notify("🎒 Need \(backpackCost)🪙 for a bigger pack (have \(player.gold))!")
+            return false
+        }
+        player.gold -= backpackCost
+        player.backpackTier += 1
+        player.backpackCapacity += 50
+        notify("🎒 Backpack Mk.\(player.backpackTier + 1)! Capacity \(player.backpackCapacity).")
+        return true
+    }
+
+    /// Hatch a mystery egg. Duplicates are fine — more pets, more stacking.
+    var petEggCost: Int { 400 * (player.pets.count + 1) }
+
+    func hatchPet() {
+        guard player.gold >= petEggCost else {
+            notify("🥚 Need \(petEggCost)🪙 to hatch an egg (have \(player.gold))!")
+            return
+        }
+        player.gold -= petEggCost
+        var pet = MNPet.hatch(number: player.pets.count)
+        // Auto-equip while there is room.
+        if player.pets.filter({ $0.isEquipped }).count < 3 { pet.isEquipped = true }
+        player.pets.append(pet)
+        notify("\(pet.emoji) Hatched \(pet.rarity) \(pet.species)! +\(Int(pet.boostValue * 100))% \(pet.boostKind).")
+    }
+
+    func togglePetEquip(_ id: UUID) {
+        guard let i = player.pets.firstIndex(where: { $0.id == id }) else { return }
+        if !player.pets[i].isEquipped && player.pets.filter({ $0.isEquipped }).count >= 3 {
+            notify("🐾 Only 3 pets can ride along — unequip one first!")
+            return
+        }
+        player.pets[i].isEquipped.toggle()
+    }
+
+    /// Rebirth: reach the Magma Core at rank 15+, reset the grind for a
+    /// permanent +15% everything. You stay exactly where you stand.
+    var canRebirth: Bool { player.level >= 15 && player.deepestY <= -4.5 }
+
+    func doRebirth() {
+        guard canRebirth else {
+            notify("💫 Rebirth needs rank 15 + a trip to the Magma Core (Lv.\(player.level), depth \(Int(player.deepestY))).")
+            return
+        }
+        player.rebirths += 1
+        player.gold = 0
+        player.ores = [:]
+        player.sellValue = 0
+        player.experience = 0
+        player.level = 1
+        player.pickTier = .wooden
+        player.backpackTier = 0
+        player.backpackCapacity = 50
+        player.pets = []
+        player.health = player.maxHealth
+        notify("💫 REBIRTH #\(player.rebirths)! Permanent +\(Int(rebirthMult * 100 - 100))% power. The mine remembers you.")
+    }
+
+    /// Maze half of the loop: 9 named sectors pay discovery bonuses, and
+    /// the deepest depth is tracked for rebirth. Called while moving.
+    func trackExploration() {
+        if player.position.y < player.deepestY { player.deepestY = player.position.y }
+        let col = min(2, max(0, Int((player.position.x + 60) / 40)))
+        let row = min(2, max(0, Int((player.position.z + 60) / 40)))
+        let key = "\(col),\(row)"
+        guard !player.sectorsFound.contains(key) else { return }
+        player.sectorsFound.insert(key)
+        let cols = ["West", "Central", "East"], rows = ["North", "Heart", "South"]
+        let bonus = Int(150 * rebirthMult)
+        player.gold += bonus
+        notify("🗺️ New sector mapped: \(rows[row])-\(cols[col]) Dig! +\(bonus)🪙 (\(player.sectorsFound.count)/9)")
     }
 }
 
@@ -2429,8 +2696,10 @@ struct UltimateMagicView: View {
                 HStack(spacing: 8) {
                     VStack(spacing: 0) {
                         Text("🦇 Abandoned Mine").font(.subheadline.bold()).foregroundColor(.white)
-                        Text("Lv.\(manager.player.level) • 💰\(manager.player.gold) • 💎\(manager.player.ores.values.reduce(0, +)) • 👾\(manager.player.monstersSlain)")
+                        Text("Lv.\(manager.player.level) • 💰\(manager.player.gold) • 🎒\(manager.player.backpackUsed)/\(manager.player.backpackCapacity) • 👾\(manager.player.monstersSlain)")
                             .font(.system(size: 9)).foregroundColor(.white.opacity(0.85))
+                        Text("\(manager.currentLayer.emoji) \(manager.currentLayer.title)\(manager.player.rebirths > 0 ? " • 💫\(manager.player.rebirths)" : "")")
+                            .font(.system(size: 9)).foregroundColor(.yellow.opacity(0.95))
                         if manager.lavaWarning {
                             Text("🔥 LAVA — MOVE!").font(.system(size: 9).bold()).foregroundColor(.red)
                         }
@@ -2453,6 +2722,14 @@ struct UltimateMagicView: View {
                         Text("📖").font(.title3)
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(Color.purple.opacity(0.8)).cornerRadius(8)
+                    }
+                    Button(action: { manager.sellBackpack() }) {
+                        VStack(spacing: 0) {
+                            Text("💰").font(.title3)
+                            Text("\(manager.player.sellValue)").font(.system(size: 8).bold()).foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.green.opacity(manager.player.backpackUsed > 0 ? 0.85 : 0.4)).cornerRadius(8)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -2663,6 +2940,52 @@ struct MinePickPanel: View {
                 Section(header: Text("Gem guide")) {
                     Text("Coal: any pick • Iron/Gold/Lapis: Stone+ • Redstone/Emerald: Iron+ • Ruby: Golden+ • Diamond/Opal: Diamond")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                Section(header: Text("🎒 Backpack (\(manager.player.backpackUsed)/\(manager.player.backpackCapacity))")) {
+                    Text("Unsold value: \(manager.player.sellValue)🪙 — sell at the 💰 cart. Surface entrance pays +25%\(manager.isAtSellPad ? " (YOU'RE THERE!)" : "").")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Button("Sell backpack") { manager.sellBackpack() }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(.green)
+                        Spacer()
+                        Button("+50 slots (\(manager.backpackCost)🪙)") { _ = manager.upgradeBackpack() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+                Section(header: Text("🐾 Pets (\(manager.player.pets.filter({ $0.isEquipped }).count)/3 riding)")) {
+                    Button("Hatch mystery egg (\(manager.petEggCost)🪙)") { manager.hatchPet() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    ForEach(manager.player.pets) { pet in
+                        HStack {
+                            Text(pet.emoji).font(.title2)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(pet.species) • \(pet.rarity)").bold().font(.subheadline)
+                                Text("+\(Int(pet.boostValue * 100))% \(pet.boostKind)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button(pet.isEquipped ? "Riding" : "Ride") { manager.togglePetEquip(pet.id) }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .tint(pet.isEquipped ? .green : .orange)
+                        }
+                    }
+                }
+                Section(header: Text("💫 Rebirth (\(manager.player.rebirths)x)")) {
+                    Text(manager.canRebirth
+                         ? "Ready! Reset gold/ores/picks/pets for permanent +15% everything (now +\(Int(manager.rebirthMult * 100 - 100))%). You stay where you stand."
+                         : "Needs rank 15 + a trip to the 🔥 Magma Core (Lv.\(manager.player.level), deepest \(Int(manager.player.deepestY))). Each rebirth = +15% forever.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if manager.canRebirth {
+                        Button("REBIRTH") { manager.doRebirth() }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(.purple)
+                    }
                 }
                 Section(header: Text("Mine rules")) {
                     // Endless-mine god mode is locked on: hits are warnings only,
