@@ -5185,8 +5185,7 @@ struct UltimateMiniGameDetailView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text(miniGameIcon(game.type))
-                        .font(.system(size: 80))
+                    MineGameDetailArt(type: game.type)
 
                     Text(game.name)
                         .font(.largeTitle.bold())

@@ -32,6 +32,8 @@ enum MNBlockType: String, CaseIterable {
     // Roblox-expansion: minable crystal growths (square / triangle /
     // sphere) + openable closet crates (some are fakes).
     case crystalCube, crystalSpike, crystalOrb, closetCrate
+    // Frostfall biome: winter ores for the cold pockets.
+    case frostOre, glacierCrystal, snowstone
 
     var isOre: Bool {
         switch self {
@@ -55,6 +57,9 @@ enum MNBlockType: String, CaseIterable {
         case .crystalCube, .crystalSpike: return .stone
         case .crystalOrb: return .iron
         case .closetCrate: return .wooden
+        case .frostOre: return .stone
+        case .glacierCrystal: return .iron
+        case .snowstone: return .wooden
         default: return .wooden
         }
     }
@@ -75,6 +80,9 @@ enum MNBlockType: String, CaseIterable {
         case .crystalSpike: return 4
         case .crystalOrb: return 5
         case .closetCrate: return 1
+        case .frostOre: return 3
+        case .glacierCrystal: return 5
+        case .snowstone: return 1
         }
     }
 
@@ -93,6 +101,9 @@ enum MNBlockType: String, CaseIterable {
         case .crystalSpike: return 18
         case .crystalOrb: return 26
         case .closetCrate: return 5
+        case .frostOre: return 12
+        case .glacierCrystal: return 22
+        case .snowstone: return 1
         case .woodBeam, .planks: return 1
         default: return 0
         }
@@ -113,6 +124,9 @@ enum MNBlockType: String, CaseIterable {
         case .crystalSpike: return 22
         case .crystalOrb: return 32
         case .closetCrate: return 8
+        case .frostOre: return 14
+        case .glacierCrystal: return 26
+        case .snowstone: return 1
         case .stone, .deepslate: return 1
         default: return 0
         }
@@ -141,6 +155,9 @@ enum MNBlockType: String, CaseIterable {
         case .crystalSpike: return "Spike Crystal"
         case .crystalOrb: return "Orb Crystal"
         case .closetCrate: return "Closet Crate"
+        case .frostOre: return "Frost Ore"
+        case .glacierCrystal: return "Glacier Crystal"
+        case .snowstone: return "Snowstone"
         }
     }
 
@@ -161,6 +178,9 @@ enum MNBlockType: String, CaseIterable {
         case .crystalSpike: return "🔺"
         case .crystalOrb: return "🔮"
         case .closetCrate: return "🚪"
+        case .frostOre: return "❄️"
+        case .glacierCrystal: return "🧊"
+        case .snowstone: return "⬜"
         default: return "🪨"
         }
     }
@@ -498,10 +518,17 @@ enum MNClosetKind: String, CaseIterable {
     }
 }
 
+/// A tracked frost pocket: clear its winter growths for a bonus.
+struct MNFrostPocket: Identifiable {
+    let id = UUID()
+    var center: SCNVector3
+    var cells: Set<MNCell>
+    var harvested: Bool = false
+}
+
 /// An openable block-built closet. The registry tracks opened state so a
 /// closet pays out exactly once.
-struct MNClosetCache: Identifiable {
-    let id = UUID()
+struct MNClosetCache: Identifiable {    let id = UUID()
     var cell: MNCell
     var position: SCNVector3
     var kind: MNClosetKind
@@ -595,6 +622,8 @@ final class MineManager: ObservableObject {
     /// Roblox-kit registries: tracked crystal caves + closet caches.
     @Published var mineCaves: [MNCrystalCave] = []
     @Published var mineClosets: [MNClosetCache] = []
+    /// Frostfall registry: tracked winter pockets.
+    @Published var mineFrost: [MNFrostPocket] = []
     // Smoothness + progression kits (standalone engines, one-line hooks).
     @Published var questBoard = MineQuestBoard()
     @Published var statTracker = MineStatTracker()
@@ -749,6 +778,8 @@ final class MineManager: ObservableObject {
         // Crystal caves: hollow gem pockets (square / spike / orb growths
         // ring their walls — see crystalType().
         if inCrystalCave(SCNVector3(x, y, z)) { return true }
+        // Frostfall pockets: cold air with winter ores on the walls.
+        if inFrostPocket(SCNVector3(x, y, z)) { return true }
         return false
     }
 
@@ -785,6 +816,37 @@ final class MineManager: ObservableObject {
     static func caveSeal(index: Int, center: SCNVector3) -> (locked: Bool, cost: [String: Int]) {
         guard index % 3 == 2 else { return (false, [:]) }
         return (true, sealCost(centerY: center.y))
+    }
+
+    // MARK: - Frostfall biome (cold pockets)
+
+    /// Frost pockets (center, radius): winter air in the rock.
+    static func frostPockets() -> [(SCNVector3, Float)] {
+        [
+            (SCNVector3(-10, 2, -28), 5),
+            (SCNVector3(30, 2, 14), 5),
+            (SCNVector3(-24, -3, 20), 5),
+            (SCNVector3(48, -3, -20), 5),
+            (SCNVector3(0, 2, 36), 5),
+        ]
+    }
+
+    static func inFrostPocket(_ p: SCNVector3) -> Bool {
+        for (c, r) in frostPockets() {
+            let dx = p.x - c.x, dy = (p.y - c.y) * 0.7, dz = p.z - c.z
+            if dx * dx + dy * dy + dz * dz < r * r { return true }
+        }
+        return false
+    }
+
+    /// Winter growth per wall cell (deterministic): frost ore, glacier
+    /// crystals, and plain snowstone filler.
+    static func frostType(at c: MNCell) -> MNBlockType? {
+        let h = abs(c.x * 41 + c.y * 59 + c.z * 23) % 10
+        if h < 4 { return .frostOre }
+        if h < 7 { return .glacierCrystal }
+        if h < 9 { return .snowstone }
+        return nil
     }
 
     static func inCrystalCave(_ p: SCNVector3) -> Bool {
@@ -921,6 +983,11 @@ final class MineManager: ObservableObject {
                         ores.append(MineWorldData.Block(id: UUID(), type: xtal, cell: c,
                                                          health: xtal.toughness, maxHealth: xtal.toughness))
                     }
+                    // Frost walls grow winter ores.
+                    if inFrostPocket(p), let frost = frostType(at: c), Int.random(in: 1...100) <= 55 {
+                        ores.append(MineWorldData.Block(id: UUID(), type: frost, cell: c,
+                                                         health: frost.toughness, maxHealth: frost.toughness))
+                    }
                 }
             }
         }
@@ -1020,6 +1087,7 @@ final class MineManager: ObservableObject {
         torches = data.torches.map { SCNVector3($0.x, $0.y, $0.z) }
         registerStaticClosets()
         registerStaticCaves()
+        registerStaticFrost()
     }
 
     /// Registry for the pre-generated closet crates (kind by cell hash).
@@ -1059,6 +1127,26 @@ final class MineManager: ObservableObject {
             let seal = Self.caveSeal(index: index, center: center)
             mineCaves.append(MNCrystalCave(center: center, shape: shape, cells: cells,
                                            isLocked: seal.locked, unlockCost: seal.cost))
+        }
+    }
+
+    /// Registry for frost pockets: cluster winter growths per pocket.
+    private func registerStaticFrost() {
+        for (center, r) in Self.frostPockets() {
+            var cells = Set<MNCell>()
+            for b in blocks where !b.isDestroyed {
+                switch b.type {
+                case .frostOre, .glacierCrystal, .snowstone:
+                    break
+                default:
+                    continue
+                }
+                let dx = b.position.x - center.x, dy = b.position.y - center.y, dz = b.position.z - center.z
+                guard dx * dx + dy * dy + dz * dz < (r + 2) * (r + 2) else { continue }
+                cells.insert(Self.cellForPos(b.position))
+            }
+            guard !cells.isEmpty else { continue }
+            mineFrost.append(MNFrostPocket(center: center, cells: cells))
         }
     }
 
@@ -1809,6 +1897,10 @@ final class MineManager: ObservableObject {
         if [.crystalCube, .crystalSpike, .crystalOrb].contains(b.type) {
             checkCaveHarvest(cell: Self.cellForPos(b.position))
         }
+        // Frost harvest tracking: clearing a pocket pays a smaller bonus.
+        if [.frostOre, .glacierCrystal, .snowstone].contains(b.type) {
+            checkFrostHarvest(cell: Self.cellForPos(b.position))
+        }
         // Legendary pulls get the slow-mo treatment (throttled).
         if (b.type == .diamondOre || b.type == .opalOre),
            Date().timeIntervalSince(lastLegendCine) > 120 {
@@ -1816,6 +1908,19 @@ final class MineManager: ObservableObject {
             cinema.play(.legendaryDrop(name: name))
         }
         return (name, unit * n, xp)
+    }
+
+    /// Bonus when every winter growth in a frost pocket is mined out.
+    private func checkFrostHarvest(cell: MNCell) {
+        guard let fi = mineFrost.firstIndex(where: { !$0.harvested && $0.cells.contains(cell) }) else { return }
+        let destroyed = Set(blocks.filter { $0.isDestroyed }.map { Self.cellForPos($0.position) })
+        guard mineFrost[fi].cells.isSubset(of: destroyed) else { return }
+        mineFrost[fi].harvested = true
+        let bonus = Int(80 * rebirthMult)
+        player.gold += bonus
+        player.experience += 40
+        checkLevelUp()
+        notify("❄️ Frost pocket fully harvested! +\(bonus)🪙")
     }
 
     /// Bonus when every growth in a tracked cave is mined out.
@@ -2345,6 +2450,9 @@ func mineBlockColor(_ type: MNBlockType) -> UIColor {
     case .crystalSpike: return UIColor(red: 0.3, green: 0.75, blue: 0.9, alpha: 1)
     case .crystalOrb: return UIColor(red: 0.9, green: 0.6, blue: 1.0, alpha: 1)
     case .closetCrate: return UIColor(red: 0.5, green: 0.33, blue: 0.2, alpha: 1)
+    case .frostOre: return UIColor(red: 0.6, green: 0.85, blue: 1.0, alpha: 1)
+    case .glacierCrystal: return UIColor(red: 0.75, green: 0.95, blue: 1.0, alpha: 1)
+    case .snowstone: return UIColor(red: 0.88, green: 0.9, blue: 0.94, alpha: 1)
     }
 }
 
@@ -2362,6 +2470,9 @@ func mineBlockEmissive(_ type: MNBlockType) -> UIColor? {
     case .crystalSpike: return UIColor(red: 0.25, green: 0.7, blue: 0.9, alpha: 1)
     case .crystalOrb: return UIColor(red: 0.85, green: 0.55, blue: 1.0, alpha: 1)
     case .closetCrate: return UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1)
+    case .frostOre: return UIColor(red: 0.5, green: 0.8, blue: 1.0, alpha: 1)
+    case .glacierCrystal: return UIColor(red: 0.7, green: 0.92, blue: 1.0, alpha: 1)
+    case .snowstone: return UIColor(red: 0.85, green: 0.88, blue: 0.92, alpha: 1)
     default: return nil
     }
 }
@@ -3449,6 +3560,7 @@ struct MinePickPanel: View {
     @State private var showFire = false
     @State private var showHub = false
     @State private var showForest = false
+    @State private var showGameFX = false
     @State private var showDaily = false
     @State private var showWelcome = !SpookyStore.onboardingDone
 
@@ -3485,7 +3597,7 @@ struct MinePickPanel: View {
                     }
                 }
                 Section(header: Text("Gem guide")) {
-                    Text("Coal: any pick • Iron/Gold/Lapis: Stone+ • Redstone/Emerald: Iron+ • Ruby: Golden+ • Diamond/Opal: Diamond")
+                    Text("Coal: any pick • Iron/Gold/Lapis: Stone+ • Redstone/Emerald: Iron+ • Ruby: Golden+ • Diamond/Opal: Diamond • Frost: Stone+ • Glacier: Iron+")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section(header: Text("🎒 Backpack (\(manager.player.backpackUsed)/\(manager.player.backpackCapacity))")) {
@@ -3663,6 +3775,9 @@ struct MinePickPanel: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                         Spacer()
+                        Button("🎮 Game FX") { showGameFX = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                     }
                     HStack {
                         Button("💧 Water") { showWater = true }
@@ -3793,6 +3908,9 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showMenu) {
                 MineArcadeOverhaulShowcaseView()
+            }
+            .sheet(isPresented: $showGameFX) {
+                MineGameFXShowcaseView()
             }
             .sheet(isPresented: $showWater) {
                 MineWaterShowcaseView()

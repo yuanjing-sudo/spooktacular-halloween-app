@@ -121,6 +121,21 @@ enum MineOreGuide {
             flavor: "Not ore at all — a cupboard. Opens by hand: snacks, tools, treasure… or cobwebs. The cobwebs are also treasure, emotionally."
         ),
         MineOreEntry(
+            name: "Frost Ore", emoji: "❄️", pick: "Stone+", depth: "Frost pockets",
+            value: 12,
+            flavor: "Winter hiding in the rock. Cold to the touch, warm to the wallet. Five pockets across both levels."
+        ),
+        MineOreEntry(
+            name: "Glacier Crystal", emoji: "🧊", pick: "Iron+", depth: "Frost pockets",
+            value: 22,
+            flavor: "Windows for giants. Sings bass in the cave choir. Clear whole pockets for the harvest bonus."
+        ),
+        MineOreEntry(
+            name: "Snowstone", emoji: "⬜", pick: "Any", depth: "Frost pockets",
+            value: 1,
+            flavor: "One tap and it's slush. The fastest quest progress in the book — shovel first, ask never."
+        ),
+        MineOreEntry(
             name: "Lava", emoji: "🔥", pick: "Unbreakable", depth: "Magma Core",
             value: 0,
             flavor: "Molten nope. Unbreakable, undrinkable, but great lighting. It warms you (warning only — god-mode means never harm)."

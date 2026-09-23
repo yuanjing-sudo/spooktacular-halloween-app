@@ -659,6 +659,60 @@ enum MineQuestCatalog {
             rewardGold: 1200, rewardXP: 800,
             tip: "Every third pocket is sealed; frontier sectors seal two in five."
         ),
+        MineQuest(
+            id: "frostbitten",
+            title: "Frostbitten",
+            detail: "Mine 8 Frost Ore. Cold to the touch, warm to the wallet.",
+            icon: "❄️",
+            trigger: .mineOre("Frost Ore", 8),
+            rewardGold: 350, rewardXP: 220,
+            tip: "Frost pockets ring both levels — look for the chill."
+        ),
+        MineQuest(
+            id: "glacier-glass",
+            title: "Glacier Glass",
+            detail: "Mine 5 Glacier Crystals. Windows for giants, paychecks for you.",
+            icon: "🧊",
+            trigger: .mineOre("Glacier Crystal", 5),
+            rewardGold: 550, rewardXP: 350,
+            tip: "Needs an Iron pick. Frost walls glitter blue-white."
+        ),
+        MineQuest(
+            id: "snow-day",
+            title: "Snow Day",
+            detail: "Clear 20 Snowstone. Somebody has to shovel the mine.",
+            icon: "⛏️",
+            trigger: .mineOre("Snowstone", 20),
+            rewardGold: 200, rewardXP: 150,
+            tip: "One tap each — the fastest quest in the book."
+        ),
+        MineQuest(
+            id: "permafrost-pro",
+            title: "Permafrost Pro",
+            detail: "Mine 20 Frost Ore. You don't feel the cold anymore. The cold feels you.",
+            icon: "❄️",
+            trigger: .mineOre("Frost Ore", 20),
+            rewardGold: 700, rewardXP: 450,
+            tip: "Five pockets plus patience. Check the map."
+        ),
+        MineQuest(
+            id: "ice-palace",
+            title: "Ice Palace",
+            detail: "Mine 12 Glacier Crystals. Royalty mines here. You ARE royalty now.",
+            icon: "🏰",
+            trigger: .mineOre("Glacier Crystal", 12),
+            rewardGold: 1100, rewardXP: 700,
+            tip: "Clear whole pockets for the harvest bonus."
+        ),
+        MineQuest(
+            id: "deep-freeze",
+            title: "Deep Freeze",
+            detail: "Clear 50 Snowstone. The mine's sidewalks have never been safer.",
+            icon: "🌨️",
+            trigger: .mineOre("Snowstone", 50),
+            rewardGold: 500, rewardXP: 300,
+            tip: "Frost walls crumble fast — bring a big backpack."
+        ),
     ]
 }
 

@@ -313,6 +313,105 @@ enum MazeExpeditionCatalog {
             rewardScore: 10000, rewardGold: 4000,
             tip: "Everything compounded: bonds, combos, shinies, claims."
         ),
+        MazeExpedition(
+            id: "first-blood",
+            title: "First Blood",
+            detail: "Defeat your first monster. The maze has a strict no-haunting policy, and you are the policy.",
+            icon: "🩸",
+            target: 1, unit: "monsters",
+            rewardScore: 100, rewardGold: 40,
+            tip: "Any monster counts. Bare hands work in a pinch."
+        ),
+        MazeExpedition(
+            id: "pocket-change",
+            title: "Pocket Change",
+            detail: "Find your first treasure. Shiny things go in the pack, no questions asked — this is the entire economy.",
+            icon: "🪙",
+            target: 1, unit: "treasures",
+            rewardScore: 120, rewardGold: 50,
+            tip: "Treasure rooms shimmer. Follow the shimmer."
+        ),
+        MazeExpedition(
+            id: "baby-steps",
+            title: "Baby Steps",
+            detail: "Bank 100 meters. Every legend starts with a single staircase joke. Make it.",
+            icon: "👣",
+            target: 100, unit: "meters",
+            rewardScore: 120, rewardGold: 50,
+            tip: "A stroll to the first fork covers it."
+        ),
+        MazeExpedition(
+            id: "cube-curious",
+            title: "Cube Curious",
+            detail: "Witness your first boxy encounter. Do not spook it. It spooks easily. It is a cube.",
+            icon: "❓",
+            target: 1, unit: "friends",
+            rewardScore: 200, rewardGold: 80,
+            tip: "Roam far tunnels and listen for squeaks."
+        ),
+        MazeExpedition(
+            id: "home-turf",
+            title: "Home Turf",
+            detail: "Map your first region beyond the Heart. The maze gets bigger the moment you look at it.",
+            icon: "🏠",
+            target: 2, unit: "regions",
+            rewardScore: 220, rewardGold: 90,
+            tip: "Push 40 units north or south of center."
+        ),
+        MazeExpedition(
+            id: "thousand-club",
+            title: "Thousand Club",
+            detail: "Earn 1,000 score lifetime. Four digits. The tunnels take notice.",
+            icon: "💯",
+            target: 1000, unit: "points",
+            rewardScore: 300, rewardGold: 140,
+            tip: "Combos and closets stack fast early."
+        ),
+        MazeExpedition(
+            id: "cave-scout",
+            title: "Cave Scout",
+            detail: "Mine 3 cave crystals. Cubes, spikes or orbs — the cave doesn't judge, and neither do we.",
+            icon: "⛏️",
+            target: 3, unit: "crystals",
+            rewardScore: 200, rewardGold: 80,
+            tip: "Caves ping the log when they crack open."
+        ),
+        MazeExpedition(
+            id: "fork-fan",
+            title: "Fork Fan",
+            detail: "Trigger your first frontier fork. You don't explore the maze so much as unfold it.",
+            icon: "🍴",
+            target: 1, unit: "forks",
+            rewardScore: 150, rewardGold: 60,
+            tip: "Walk into a fresh 24-unit chunk."
+        ),
+        MazeExpedition(
+            id: "treasure-chest-10",
+            title: "Chest Ache",
+            detail: "Pocket 10 treasures. Your inventory clinks. People notice. People are jealous.",
+            icon: "🧰",
+            target: 10, unit: "treasures",
+            rewardScore: 750, rewardGold: 340,
+            tip: "Roundabout chambers hide the densest caches."
+        ),
+        MazeExpedition(
+            id: "marathon-plus",
+            title: "Marathon Plus",
+            detail: "Bank 1,000 meters. Your boots file a second complaint. Denied again.",
+            icon: "🥾",
+            target: 1000, unit: "meters",
+            rewardScore: 700, rewardGold: 320,
+            tip: "The full spine Northgate to Far Reaches, one way."
+        ),
+        MazeExpedition(
+            id: "boss-hunter",
+            title: "Boss Hunter",
+            detail: "Take down 3 bosses. Ten times the points, zero times the mercy. (Yours.)",
+            icon: "👑",
+            target: 3, unit: "monsters",
+            rewardScore: 1200, rewardGold: 600,
+            tip: "Boss rooms glow. Save cooldowns for the tantrum phase."
+        ),
     ]
 }
 
@@ -380,7 +479,7 @@ final class MazeExpeditionBoard: ObservableObject {
         }
         // Lifetime-backed expeditions read totals.
         for e in active where !isDone(e) {
-            if e.id == "high-roller" || e.id == "living-myth" || e.id == "score-legend" || e.id == "mythic-score" {
+            if e.id == "high-roller" || e.id == "living-myth" || e.id == "score-legend" || e.id == "mythic-score" || e.id == "thousand-club" {
                 let v = min(lifetimeScore, e.target)
                 if v != progressOf(e) {
                     progress[e.id] = v
@@ -388,7 +487,7 @@ final class MazeExpeditionBoard: ObservableObject {
                     if v >= e.target { completed.insert(e.id) }
                 }
             }
-            if e.id == "marathon" || e.id == "ultra-marathon" || e.id == "pathfinder" {
+            if e.id == "marathon" || e.id == "ultra-marathon" || e.id == "pathfinder" || e.id == "baby-steps" || e.id == "marathon-plus" {
                 let v = min(lifetimeDistance, e.target)
                 if v != progressOf(e) {
                     progress[e.id] = v
@@ -403,15 +502,15 @@ final class MazeExpeditionBoard: ObservableObject {
     private func kindOf(_ id: String) -> MazeExpeditionKind {
         switch id {
         case "first-cache", "closet-crawl", "closet-magnate": return .closets
-        case "fork-scout", "fork-frenzy", "fork-lord": return .forks
-        case "boxy-hello", "wisp-whisperer", "cube-royalty": return .boxy
-        case "crystal-cutter", "crystal-magnate", "gem-emperor": return .crystals
+        case "fork-scout", "fork-frenzy", "fork-lord", "fork-fan": return .forks
+        case "boxy-hello", "wisp-whisperer", "cube-royalty", "cube-curious": return .boxy
+        case "crystal-cutter", "crystal-magnate", "gem-emperor", "cave-scout": return .crystals
         case "cave-comber", "spelunker": return .caves
-        case "cartographer-2", "grand-tour": return .regions
-        case "marathon", "ultra-marathon", "pathfinder": return .distance
-        case "treasure-goblin", "treasure-tycoon", "dragon-hoard": return .treasure
-        case "monster-bouncer", "extermination", "bounty-board": return .monsters
-        case "high-roller", "living-myth", "score-legend", "mythic-score": return .score
+        case "cartographer-2", "grand-tour", "home-turf": return .regions
+        case "marathon", "ultra-marathon", "pathfinder", "baby-steps", "marathon-plus": return .distance
+        case "treasure-goblin", "treasure-tycoon", "dragon-hoard", "pocket-change", "treasure-chest-10": return .treasure
+        case "monster-bouncer", "extermination", "bounty-board", "first-blood", "boss-hunter": return .monsters
+        case "high-roller", "living-myth", "score-legend", "mythic-score", "thousand-club": return .score
         default: return .score
         }
     }

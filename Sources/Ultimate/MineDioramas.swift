@@ -807,6 +807,48 @@ struct MineDioramaRebirth: View {
     }
 }
 
+/// Frostfall pocket: blue-white crystals, falling snow, frozen prospector.
+struct MineDioramaFrost: View {
+    @State private var shiver = false
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.12, green: 0.2, blue: 0.32), Color(red: 0.03, green: 0.05, blue: 0.1)],
+                startPoint: .top, endPoint: .bottom
+            )
+            MineRockBand(color: Color(red: 0.2, green: 0.28, blue: 0.4).opacity(0.7), height: 70, seed: 81)
+                .frame(height: 120)
+                .offset(y: -80)
+            // Frost crystals.
+            HStack(spacing: 16) {
+                MineAnimatedSpike(color: Color(red: 0.6, green: 0.85, blue: 1.0), height: 70)
+                MineAnimatedCube(color: Color(red: 0.7, green: 0.9, blue: 1.0), size: 44)
+                MineAnimatedOrb(color: Color(red: 0.8, green: 0.95, blue: 1.0), size: 40)
+            }
+            .offset(y: 40)
+            // Frozen prospector (very still, very chill).
+            Text("🧊")
+                .font(.system(size: 40))
+                .offset(x: -80, y: 50)
+                .rotationEffect(.degrees(shiver ? 2 : -2))
+                .animation(
+                    .easeInOut(duration: 1.4).repeatForever(autoreverses: true),
+                    value: shiver
+                )
+            // Snowfall.
+            MineParticleField(preset: .init(
+                name: "x", emoji: "x", colors: [.white, Color(red: 0.8, green: 0.9, blue: 1.0)],
+                shapes: [.circle, .star], flow: .fall, count: 40,
+                gravity: 50, wind: 20, size: 2.4, life: 5.0, twinkle: true,
+                flavor: ""
+            ))
+            MineVignette(strength: 0.5)
+        }
+        .onAppear { shiver.toggle() }
+    }
+}
+
 // ============================================================
 // MARK: - 5. Diorama showcase
 // ============================================================
@@ -863,6 +905,9 @@ struct MineDioramaShowcaseView: View {
                     }
                     dioramaCard(title: "🌊 Underground Lake", detail: "Black water, traveling ripples, one shade in a boat.") {
                         MineDioramaLake()
+                    }
+                    dioramaCard(title: "❄️ Frostfall Pocket", detail: "Blue-white crystals, snowfall, one frozen prospector.") {
+                        MineDioramaFrost()
                     }
                     dioramaCard(title: "🛒 Payday Parade", detail: "Marching coins and the happiest cart alive.") {
                         MineDioramaPayday()

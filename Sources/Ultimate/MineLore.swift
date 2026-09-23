@@ -477,6 +477,34 @@ enum MineLoreCatalog {
             source: "Carved above the fifth door",
             rule: .seals(5)
         ),
+        MineLoreFragment(
+            id: "echo-63",
+            title: "First Frost",
+            text: "Found winter hiding in the rock. It pays 12 gold a swing and smells like snow days. I moved in.",
+            source: "Diary, winter appendix",
+            rule: .ore(name: "Frost Ore", count: 5)
+        ),
+        MineLoreFragment(
+            id: "echo-64",
+            title: "Glacier Gospel",
+            text: "The glacier crystals sing lower than the cave ones. Bass section. The mine needed bass.",
+            source: "Choir notes, vol. 4",
+            rule: .ore(name: "Glacier Crystal", count: 4)
+        ),
+        MineLoreFragment(
+            id: "echo-65",
+            title: "Snowstone Sermon",
+            text: "Blessed are the soft rocks, for they break in one tap and ask nothing. Amen. Next.",
+            source: "Chapel pamphlet, vol. 3",
+            rule: .ore(name: "Snowstone", count: 15)
+        ),
+        MineLoreFragment(
+            id: "echo-66",
+            title: "The Cold Ledger",
+            text: "Counted every frost pocket: five. Cleared them twice each. The second clearing was just showing off.",
+            source: "Survey map, blue ink",
+            rule: .ore(name: "Frost Ore", count: 25)
+        ),
     ]
 
     /// Fragments unlocked by a snapshot of manager state.
