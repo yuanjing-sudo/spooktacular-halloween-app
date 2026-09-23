@@ -29,6 +29,9 @@ enum MNBlockType: String, CaseIterable {
     case redstoneOre, emeraldOre, rubyOre, diamondOre, opalOre
     case woodBeam, planks
     case lava, bedrock
+    // Roblox-expansion: minable crystal growths (square / triangle /
+    // sphere) + openable closet crates (some are fakes).
+    case crystalCube, crystalSpike, crystalOrb, closetCrate
 
     var isOre: Bool {
         switch self {
@@ -49,6 +52,9 @@ enum MNBlockType: String, CaseIterable {
         case .redstoneOre, .emeraldOre: return .iron
         case .rubyOre: return .golden
         case .diamondOre, .opalOre: return .diamond
+        case .crystalCube, .crystalSpike: return .stone
+        case .crystalOrb: return .iron
+        case .closetCrate: return .wooden
         default: return .wooden
         }
     }
@@ -65,6 +71,10 @@ enum MNBlockType: String, CaseIterable {
         case .goldOre, .redstoneOre: return 4
         case .emeraldOre, .rubyOre: return 5
         case .diamondOre, .opalOre: return 6
+        case .crystalCube: return 3
+        case .crystalSpike: return 4
+        case .crystalOrb: return 5
+        case .closetCrate: return 1
         }
     }
 
@@ -79,6 +89,10 @@ enum MNBlockType: String, CaseIterable {
         case .rubyOre: return 30
         case .diamondOre: return 25
         case .opalOre: return 40
+        case .crystalCube: return 14
+        case .crystalSpike: return 18
+        case .crystalOrb: return 26
+        case .closetCrate: return 5
         case .woodBeam, .planks: return 1
         default: return 0
         }
@@ -95,6 +109,10 @@ enum MNBlockType: String, CaseIterable {
         case .rubyOre: return 36
         case .diamondOre: return 30
         case .opalOre: return 50
+        case .crystalCube: return 16
+        case .crystalSpike: return 22
+        case .crystalOrb: return 32
+        case .closetCrate: return 8
         case .stone, .deepslate: return 1
         default: return 0
         }
@@ -119,6 +137,10 @@ enum MNBlockType: String, CaseIterable {
         case .planks: return "Planks"
         case .lava: return "Lava"
         case .bedrock: return "Bedrock"
+        case .crystalCube: return "Cube Crystal"
+        case .crystalSpike: return "Spike Crystal"
+        case .crystalOrb: return "Orb Crystal"
+        case .closetCrate: return "Closet Crate"
         }
     }
 
@@ -135,6 +157,10 @@ enum MNBlockType: String, CaseIterable {
         case .opalOre: return "🔮"
         case .woodBeam, .planks: return "🪵"
         case .lava: return "🔥"
+        case .crystalCube: return "🟪"
+        case .crystalSpike: return "🔺"
+        case .crystalOrb: return "🔮"
+        case .closetCrate: return "🚪"
         default: return "🪨"
         }
     }
@@ -288,6 +314,22 @@ struct MNMonster: Identifiable {
     var isDead: Bool = false
 }
 
+/// Rare friendly visitors: boxy animals that hop over, say hi, and gift
+/// ore + gold. Never hostile, never damage — pure Roblox-style encounters.
+struct MNBoxyCritter: Identifiable {
+    let id = UUID()
+    var species: String
+    var emoji: String
+    var color: UIColor
+    var position: SCNVector3
+    var anchor: SCNVector3
+    var phase: Float = Float.random(in: 0...6.28)
+    var wanderTarget: SCNVector3? = nil
+    var wanderTimer: Double = 0
+    var giftCooldown: Double = 0
+    var greeted: Bool = false
+}
+
 // MARK: - Player / events
 
 struct MNPlayer {
@@ -359,6 +401,8 @@ final class MineManager: ObservableObject {
     @Published var rockGroups: [Set<MNCell>] = [Set(), Set(), Set()]
     @Published var bats: [MNBat] = []
     @Published var monsters: [MNMonster] = []
+    /// Rare friendly visitors (boxy animals). Never hostile.
+    @Published var critters: [MNBoxyCritter] = []
     @Published var torches: [SCNVector3] = []
     @Published var notifications: [String] = []
     @Published var swingId = 0
@@ -400,6 +444,7 @@ final class MineManager: ObservableObject {
             self.applyWorldData(data)
             self.spawnAmbientBats()
             self.spawnMonsters()
+            self.spawnBoxyCritters()
             self.startLoop()
             self.worldReady = true
         }
@@ -440,7 +485,40 @@ final class MineManager: ObservableObject {
         }
         // Lava cavern room (deep east, expanded).
         if x >= 8 && x <= 24 && z >= 8 && z <= 24 && y >= -5 && y < 0 { return true }
+        // Crystal caves: hollow gem pockets (square / spike / orb growths
+        // ring their walls — see crystalType().
+        if inCrystalCave(SCNVector3(x, y, z)) { return true }
         return false
+    }
+
+    /// Crystal cave pockets (center, radius). Kept in one list so air,
+    /// ore and closet placement all agree on where the caves are.
+    static func crystalCaves() -> [(SCNVector3, Float)] {
+        [
+            (SCNVector3(32, -3, 0), 6),
+            (SCNVector3(-30, -3, 20), 5),
+            (SCNVector3(0, -3, -40), 7),
+            (SCNVector3(-20, 2, 30), 5),
+            (SCNVector3(44, 2, -32), 5),
+        ]
+    }
+
+    static func inCrystalCave(_ p: SCNVector3) -> Bool {
+        for (c, r) in crystalCaves() {
+            let dx = p.x - c.x, dy = (p.y - c.y) * 0.7, dz = p.z - c.z
+            if dx * dx + dy * dy + dz * dz < r * r { return true }
+        }
+        return false
+    }
+
+    /// Which crystal growth belongs on a cave wall cell (deterministic per
+    /// cell so gen stays stable): cubes, spikes and orbs by hash.
+    static func crystalType(at c: MNCell) -> MNBlockType? {
+        let h = abs(c.x * 73 + c.y * 37 + c.z * 11) % 10
+        if h < 4 { return .crystalCube }
+        if h < 7 { return .crystalSpike }
+        if h < 9 { return .crystalOrb }
+        return nil
     }
 
     static func cellCenter(_ c: MNCell) -> SCNVector3 {
@@ -536,7 +614,12 @@ final class MineManager: ObservableObject {
                     let deep = p.y < -2
                     if let ore = oreRoll(deep: deep, cavern: inCavern(p)) {
                         ores.append(MineWorldData.Block(id: UUID(), type: ore, cell: c,
-                                                        health: ore.toughness, maxHealth: ore.toughness))
+                                                         health: ore.toughness, maxHealth: ore.toughness))
+                    }
+                    // Cave walls grow cube / spike / orb crystals.
+                    if inCrystalCave(p), let xtal = crystalType(at: c), Int.random(in: 1...100) <= 55 {
+                        ores.append(MineWorldData.Block(id: UUID(), type: xtal, cell: c,
+                                                         health: xtal.toughness, maxHealth: xtal.toughness))
                     }
                 }
             }
@@ -548,7 +631,31 @@ final class MineManager: ObservableObject {
         let oreCells = Set(ores.map(\.cell))
         let beamCells = Set(beams.map(\.cell))
         let lavaCells = Set(lavas.map(\.cell))
-        let interactive = oreCells.union(beamCells).union(lavaCells)
+        // Closet crates: openable cupboards parked on tunnel floors
+        // (upper haulage + deep level). Some are fakes.
+        var closets: [MineWorldData.Block] = []
+        func cellFor(world: Float) -> Int { Int((world / mineU - 0.5).rounded()) }
+        var closetSpots: [SCNVector3] = []
+        for x in [-48.0, -24.0, 0.0, 24.0, 48.0] as [Float] {
+            for z in stride(from: -54.0, through: 54.0, by: 18.0) {
+                closetSpots.append(SCNVector3(x + 2.5, 1.75, Float(z)))
+            }
+        }
+        for x in [-24.0, 0.0, 24.0] as [Float] {
+            for z in [-36.0, 0.0, 36.0] as [Float] {
+                closetSpots.append(SCNVector3(x - 2.5, -4.75, Float(z)))
+            }
+        }
+        for spot in closetSpots {
+            let cell = MNCell(x: cellFor(world: spot.x), y: cellFor(world: spot.y), z: cellFor(world: spot.z))
+            guard isAirCell(cell) else { continue }
+            guard !oreCells.contains(cell) && !beamCells.contains(cell) && !lavaCells.contains(cell) else { continue }
+            guard !closets.contains(where: { $0.cell == cell }) else { continue }
+            closets.append(MineWorldData.Block(id: UUID(), type: .closetCrate, cell: cell,
+                                               health: MNBlockType.closetCrate.toughness,
+                                               maxHealth: MNBlockType.closetCrate.toughness))
+        }
+        let interactive = oreCells.union(beamCells).union(lavaCells).union(Set(closets.map(\.cell)))
         func rockMaterial(_ c: MNCell) -> Int {
             abs(c.x * 73 + c.y * 37 + c.z * 11) % 3
         }
@@ -599,7 +706,7 @@ final class MineManager: ObservableObject {
             torches.append(SIMD3(Float(x), -2.6, 8.0))
             torches.append(SIMD3(Float(x), -2.6, 14.0))
         }
-        return MineWorldData(blocks: ores + beams + lavas, rock: rock, torches: torches)
+        return MineWorldData(blocks: ores + beams + lavas + closets, rock: rock, torches: torches)
     }
 
     private func applyWorldData(_ data: MineWorldData) {
@@ -784,6 +891,7 @@ final class MineManager: ObservableObject {
             guard let self = self else { return }
             self.updateBats(dt: Float(dt))
             self.updateMonsters(dt: Float(dt))
+            self.updateCritters(dt: Float(dt))
             self.updateBombs(dt: Float(dt))
             phase += 1
             if phase % 5 == 0 { self.updateSlow() }
@@ -1011,15 +1119,81 @@ final class MineManager: ObservableObject {
         func count(_ k: MNMonsterKind) -> Int {
             monsters.filter { $0.kind == k && !$0.isDead }.count
         }
-        let wants: [(MNMonsterKind, Int, SCNVector3)] = [
-            (.spider, 4, SCNVector3(Float.random(in: -14...14), 1, Float.random(in: -14...14))),
-            (.slime, 3, SCNVector3(Float.random(in: -14...14), -5, Float.random(in: -14...14))),
-            (.wraith, 3, SCNVector3(Float.random(in: -14...14), -4, Float.random(in: -14...14))),
-        ]
+    let wants: [(MNMonsterKind, Int, SCNVector3)] = [
+        (.spider, 4, SCNVector3(Float.random(in: -50...50), 1, Float.random(in: -50...50))),
+        (.slime, 3, SCNVector3(Float.random(in: -50...50), -5, Float.random(in: -50...50))),
+        (.wraith, 3, SCNVector3(Float.random(in: -50...50), -4, Float.random(in: -50...50))),
+    ]
         for (kind, cap, pos) in wants where count(kind) < cap {
             monsters.append(MNMonster(kind: kind, position: pos, hp: kind.maxHP, anchor: pos))
         }
         monsters.removeAll { $0.isDead && Double.random(in: 0...1) < 0.5 }
+    }
+
+    /// Seed the mine's rare boxy visitors across both levels.
+    func spawnBoxyCritters() {
+        let defs: [(String, String, UIColor, SCNVector3)] = [
+            ("Mole", "📦", UIColor(red: 0.6, green: 0.45, blue: 0.3, alpha: 1), SCNVector3(10, 1, 20)),
+            ("Bat", "📦", UIColor(red: 0.35, green: 0.25, blue: 0.5, alpha: 1), SCNVector3(-18, 2.5, -8)),
+            ("Axolotl", "📦", UIColor(red: 1.0, green: 0.6, blue: 0.75, alpha: 1), SCNVector3(14, -4, 12)),
+            ("Fox", "📦", UIColor(red: 0.95, green: 0.5, blue: 0.2, alpha: 1), SCNVector3(-30, 1, 30)),
+            ("Wisp", "✨", UIColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1), SCNVector3(0, -3.5, -44)),
+        ]
+        for (species, emoji, color, pos) in defs {
+            critters.append(MNBoxyCritter(species: species, emoji: emoji, color: color,
+                                          position: pos, anchor: pos))
+        }
+    }
+
+    /// Curious hopping friends: drift toward the player when close, wander
+    /// otherwise, and gift ore + gold on a cooldown. Never hostile.
+    private func updateCritters(dt: Float) {
+        guard critters.count < 12 else { return }
+        for i in critters.indices {
+            var c = critters[i]
+            let dx = player.position.x - c.position.x
+            let dz = player.position.z - c.position.z
+            let dist = sqrt(dx * dx + dz * dz)
+            c.phase += dt * 6
+            c.giftCooldown -= Double(dt)
+            if dist < 7 && dist > 0.5 {
+                // Hop over to say hi (y locked near its floor).
+                let step: Float = 1.6 * dt
+                c.position.x += dx / max(dist, 0.01) * step
+                c.position.z += dz / max(dist, 0.01) * step
+            } else if dist >= 7 {
+                c.wanderTimer -= Double(dt)
+                if c.wanderTimer <= 0 || c.wanderTarget == nil {
+                    c.wanderTimer = Double.random(in: 3...6)
+                    c.wanderTarget = SCNVector3(
+                        c.anchor.x + Float.random(in: -5...5), c.anchor.y,
+                        c.anchor.z + Float.random(in: -5...5))
+                }
+                if let t = c.wanderTarget {
+                    let wx = t.x - c.position.x, wz = t.z - c.position.z
+                    let wd = sqrt(wx * wx + wz * wz)
+                    if wd > 0.3 {
+                        c.position.x += wx / wd * 0.8 * dt
+                        c.position.z += wz / wd * 0.8 * dt
+                    }
+                }
+            }
+            c.position.y = c.anchor.y + abs(sin(c.phase)) * 0.25
+            if dist < 1.8 && c.giftCooldown <= 0 {
+                c.giftCooldown = 40
+                let gold = c.species == "Wisp" ? Int.random(in: 20...40) : Int.random(in: 5...15)
+                player.gold += gold
+                player.experience += 10
+                checkLevelUp()
+                if !c.greeted {
+                    c.greeted = true
+                    notify("\(c.emoji) Rare encounter: Boxy \(c.species)! It likes you. (+\(gold)🪙)")
+                } else {
+                    notify("\(c.emoji) Boxy \(c.species) shares a gift! (+\(gold)🪙)")
+                }
+            }
+            critters[i] = c
+        }
     }
 
     private func updateMonsters(dt: Float) {
@@ -1217,6 +1391,10 @@ final class MineManager: ObservableObject {
         guard blocks.indices.contains(idx) else { return nil }
         var b = blocks[idx]
         guard !b.isDestroyed, !b.type.isUnbreakable else { return nil }
+        // Closet crates pop open with themed loot (or a fake-out).
+        if b.type == .closetCrate {
+            return openMineCloset(idx)
+        }
         b.isDestroyed = true
         blocks[idx] = b
         damageTick += 1
@@ -1235,6 +1413,47 @@ final class MineManager: ObservableObject {
             bombs += 1
         }
         return (name, g, xp)
+    }
+
+    /// Pops a closet crate: snacks pay gold, tool caches grant a bomb,
+    /// treasure caches burst gold + XP, fakes are cobwebs. Returns nil so
+    /// the generic "mined" message doesn't double up.
+    private func openMineCloset(_ idx: Int) -> (String, Int, Int)? {
+        guard blocks.indices.contains(idx) else { return nil }
+        var b = blocks[idx]
+        guard !b.isDestroyed else { return nil }
+        b.isDestroyed = true
+        blocks[idx] = b
+        damageTick += 1
+        player.blocksMined += 1
+        if player.blocksMined - lastBombAward >= 20, bombs < 9 {
+            lastBombAward = player.blocksMined
+            bombs += 1
+        }
+        let h = abs(Int(b.position.x * 13 + b.position.z * 7)) % 10
+        if h < 4 {
+            let g = Int.random(in: 8...15)
+            player.gold += g
+            player.experience += 6
+            checkLevelUp()
+            notify("🍬 Snack stash! +\(g)🪙")
+        } else if h < 7 {
+            bombs = min(9, bombs + 1)
+            player.experience += 8
+            checkLevelUp()
+            notify("🔧 Tool cache! +1 bomb! (have \(bombs))")
+        } else if h < 9 {
+            let g = Int.random(in: 40...80)
+            player.gold += g
+            player.experience += 30
+            checkLevelUp()
+            onEvent?(.minedOre("Closet Treasure", 1))
+            notify("💎 Treasure closet! +\(g)🪙")
+        } else {
+            player.experience += 2
+            notify("🕸️ Fake closet… just cobwebs!")
+        }
+        return nil
     }
 
     // MARK: - Mining (staged hits, pick tiers, debris-worthy)
@@ -1354,6 +1573,10 @@ func mineBlockColor(_ type: MNBlockType) -> UIColor {
     case .planks: return UIColor(red: 0.66, green: 0.49, blue: 0.31, alpha: 1)
     case .lava: return UIColor(red: 1.0, green: 0.35, blue: 0.0, alpha: 1)
     case .bedrock: return UIColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1)
+    case .crystalCube: return UIColor(red: 0.55, green: 0.3, blue: 0.9, alpha: 1)
+    case .crystalSpike: return UIColor(red: 0.3, green: 0.75, blue: 0.9, alpha: 1)
+    case .crystalOrb: return UIColor(red: 0.9, green: 0.6, blue: 1.0, alpha: 1)
+    case .closetCrate: return UIColor(red: 0.5, green: 0.33, blue: 0.2, alpha: 1)
     }
 }
 
@@ -1367,6 +1590,10 @@ func mineBlockEmissive(_ type: MNBlockType) -> UIColor? {
     case .diamondOre: return UIColor(red: 0.3, green: 0.9, blue: 1.0, alpha: 1)
     case .opalOre: return UIColor(red: 0.9, green: 0.85, blue: 1.0, alpha: 1)
     case .lava: return UIColor(red: 1.0, green: 0.4, blue: 0.0, alpha: 1)
+    case .crystalCube: return UIColor(red: 0.5, green: 0.25, blue: 0.9, alpha: 1)
+    case .crystalSpike: return UIColor(red: 0.25, green: 0.7, blue: 0.9, alpha: 1)
+    case .crystalOrb: return UIColor(red: 0.85, green: 0.55, blue: 1.0, alpha: 1)
+    case .closetCrate: return UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1)
     default: return nil
     }
 }
@@ -1629,7 +1856,18 @@ struct MineSceneView: UIViewRepresentable {
 
         func blockNode(_ b: MNBlock) -> SCNNode {
             let s = CGFloat(mineU)
-            let n = SCNNode(geometry: SCNBox(width: s, height: s, length: s, chamferRadius: 0))
+            // Crystal growths get their shape: spikes are pyramids,
+            // orbs are spheres, everything else stays a box.
+            let geo: SCNGeometry
+            switch b.type {
+            case .crystalSpike:
+                geo = SCNPyramid(width: s, height: s * 2.2, length: s)
+            case .crystalOrb:
+                geo = SCNSphere(radius: s * 0.55)
+            default:
+                geo = SCNBox(width: s, height: s, length: s, chamferRadius: 0)
+            }
+            let n = SCNNode(geometry: geo)
             n.geometry?.firstMaterial?.diffuse.contents = mineBlockColor(b.type)
             if let e = mineBlockEmissive(b.type) {
                 n.geometry?.firstMaterial?.emission.contents = e
@@ -1738,6 +1976,7 @@ struct MineSceneView: UIViewRepresentable {
             }
             syncBats(now: t)
             syncMonsters(now: t)
+            syncCritters(now: t)
             syncBombsAndBlast(now: t)
         }
 
@@ -1958,6 +2197,55 @@ struct MineSceneView: UIViewRepresentable {
                 n.childNodes.filter { $0.name == "batEye" }.forEach {
                     $0.geometry?.firstMaterial?.emission.contents = angry ? UIColor.red : UIColor.clear
                 }
+            }
+        }
+
+        // MARK: Boxy critters (rare friendly visitors)
+
+        func critterNode(_ c: MNBoxyCritter) -> SCNNode {
+            // Boxy by construction: cube body + glow eyes.
+            let root = SCNNode()
+            root.name = "critter"
+            root.setValue(c.id.uuidString, forKey: "critterId")
+            root.position = c.position
+            let s = CGFloat(mineU) * 0.9
+            let body = SCNNode(geometry: SCNBox(width: s, height: s, length: s, chamferRadius: 0.06))
+            body.geometry?.firstMaterial?.diffuse.contents = c.color
+            body.geometry?.firstMaterial?.emission.contents = c.color
+            body.geometry?.firstMaterial?.emission.intensity = 0.15
+            body.name = "critterBody"
+            root.addChildNode(body)
+            for side in [-1.0, 1.0] {
+                let eye = SCNNode(geometry: SCNSphere(radius: 0.03))
+                eye.geometry?.firstMaterial?.diffuse.contents = UIColor.white
+                eye.geometry?.firstMaterial?.emission.contents = UIColor.white
+                eye.position = SCNVector3(Float(side) * 0.07, 0.05, Float(s) * 0.45)
+                eye.name = "critterEye"
+                root.addChildNode(eye)
+            }
+            return root
+        }
+
+        func syncCritters(now: Double) {
+            _ = now
+            var nodes = scene.rootNode.childNodes.filter { $0.name == "critter" }
+            if nodes.count > manager.critters.count {
+                for n in nodes { n.removeFromParentNode() }
+                nodes = []
+            }
+            if nodes.count < manager.critters.count {
+                for c in manager.critters.dropFirst(nodes.count) {
+                    scene.rootNode.addChildNode(critterNode(c))
+                }
+                nodes = scene.rootNode.childNodes.filter { $0.name == "critter" }
+            }
+            for (i, c) in manager.critters.enumerated() where i < nodes.count {
+                let n = nodes[i]
+                n.setValue(c.id.uuidString, forKey: "critterId")
+                n.position = c.position
+                // Happy hop squash.
+                let hop = abs(sin(c.phase))
+                n.scale = SCNVector3(1 + Float(hop) * 0.08, 1 - Float(hop) * 0.08, 1 + Float(hop) * 0.08)
             }
         }
 

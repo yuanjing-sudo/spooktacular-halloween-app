@@ -69,6 +69,10 @@ enum BlockType: String, CaseIterable {
     case portalFrame, portalBlock, endPortal, netherPortal
     case treasureChest, goldenChest, crystalChest, ancientChest
 
+    // Roblox-expansion Blocks: crystal cave growths (square / triangle /
+    // sphere) + openable closet crates (some are fakes).
+    case crystalCube, crystalSpike, crystalOrb, closetCrate
+
     var hardness: Float {
         switch self {
         case .air: return 0
@@ -113,6 +117,8 @@ enum BlockType: String, CaseIterable {
             return true
         case .amethystGem, .topazGem, .opalGem, .jadeGem, .amberGem, .crystalGem:
             return true
+        case .crystalCube, .crystalSpike, .crystalOrb:
+            return true // cave crystals glow + drop gems when mined
         default:
             return false
         }
@@ -159,6 +165,10 @@ enum BlockType: String, CaseIterable {
         case .spiderWeb: return "🕸️"
         case .boneBlock: return "🦴"
         case .treasureChest: return "🎁"
+        case .crystalCube: return "🟪"
+        case .crystalSpike: return "🔺"
+        case .crystalOrb: return "🔮"
+        case .closetCrate: return "🚪"
         default: return "⬜"
         }
     }
@@ -221,6 +231,23 @@ enum MonsterType: String, CaseIterable {
     case voidLord = "👿 Void Lord"
     case shadowKing = "🌑 Shadow King"
 
+    // Boxy animal encounters (rare, friendly — Roblox-style companions)
+    case boxyMole = "📦 Boxy Mole"
+    case boxyBat = "📦 Boxy Bat"
+    case boxyAxolotl = "📦 Boxy Axolotl"
+    case boxyFox = "📦 Boxy Fox"
+    case goldenWisp = "✨ Golden Wisp"
+
+    /// Boxy animals render as cubes and never hunt the player.
+    var isBoxy: Bool {
+        switch self {
+        case .boxyMole, .boxyBat, .boxyAxolotl, .boxyFox, .goldenWisp:
+            return true
+        default:
+            return false
+        }
+    }
+
     var rarity: MonsterRarity {
         switch self {
         case .slime, .zombie, .skeleton, .spider, .bat, .caveSpider:
@@ -233,6 +260,10 @@ enum MonsterType: String, CaseIterable {
             return .uncommon
         case .dungeonGuardian, .crystalGolem, .shadowBeast, .voidWalker, .eternalSkeleton:
             return .rare
+        case .boxyMole, .boxyBat, .boxyAxolotl, .boxyFox:
+            return .rare
+        case .goldenWisp:
+            return .legendary
         case .elderGuardian, .wither, .enderDragon, .voidLord, .shadowKing:
             return .legendary
         }
@@ -273,6 +304,11 @@ enum MonsterType: String, CaseIterable {
         case .enderDragon: return "Ender Dragon"
         case .voidLord: return "Void Lord"
         case .shadowKing: return "Shadow King"
+        case .boxyMole: return "Boxy Mole"
+        case .boxyBat: return "Boxy Bat"
+        case .boxyAxolotl: return "Boxy Axolotl"
+        case .boxyFox: return "Boxy Fox"
+        case .goldenWisp: return "Golden Wisp"
         }
     }
 
@@ -306,6 +342,11 @@ enum MonsterType: String, CaseIterable {
         case .enderman: return 1.3
         case .witch: return 0.8
         case .ghast: return 1.0
+        case .boxyMole: return 0.5
+        case .boxyBat: return 1.6
+        case .boxyAxolotl: return 0.7
+        case .boxyFox: return 1.1
+        case .goldenWisp: return 1.9
         default: return Float.random(in: 0.5...1.5)
         }
     }
@@ -401,6 +442,68 @@ struct Treasure: Identifiable {
 
 enum TreasureType {
     case gem, coin, artifact, weapon, armor, tool, potion, scroll, key, map
+}
+
+// MARK: - Roblox-Expansion Systems (forkroads, crystal caves, closets)
+
+/// Crystal growth geometry: square cubes, triangle spikes, sphere orbs.
+enum CrystalShape: String, CaseIterable {
+    case cube, spike, orb
+
+    var blockType: BlockType {
+        switch self {
+        case .cube: return .crystalCube
+        case .spike: return .crystalSpike
+        case .orb: return .crystalOrb
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .cube: return "🟪"
+        case .spike: return "🔺"
+        case .orb: return "🔮"
+        }
+    }
+}
+
+struct CrystalCave: Identifiable {
+    let id = UUID()
+    var position: SCNVector3
+    var shape: CrystalShape
+    var radius: Int
+    var lootValue: Int
+    var isHarvested: Bool
+}
+
+/// Closet caches are block-built cupboards the player opens by tapping.
+/// Most hold snacks, tools or treasure — some are fakes with cobwebs.
+enum ClosetKind: String, CaseIterable {
+    case snacks, tools, treasure, fake
+
+    var emoji: String {
+        switch self {
+        case .snacks: return "🍬"
+        case .tools: return "🔧"
+        case .treasure: return "💎"
+        case .fake: return "🕸️"
+        }
+    }
+}
+
+struct ClosetCache: Identifiable {
+    let id = UUID()
+    var position: SCNVector3
+    var kind: ClosetKind
+    var isOpened: Bool
+}
+
+/// Forkroad junction styles for the endless mine.
+enum ForkStyle: String, CaseIterable {
+    case yFork = "Y-Fork"
+    case tJunction = "T-Junction"
+    case crossroads = "4-Way Cross"
+    case roundabout = "Round Chamber"
 }
 
 // MARK: - Player System
@@ -585,6 +688,15 @@ class TunnelMazeManager: ObservableObject {
     @Published var isVictory: Bool = false
     @Published var score: Int = 0
     @Published var scene: SCNScene?
+    // Roblox-expansion state: crystal caves, openable closets.
+    @Published var crystalCaves: [CrystalCave] = []
+    @Published var closets: [ClosetCache] = []
+    // Frontier growth: chunk keys already expanded + boxy spawn cooldown.
+    private var frontierKeys = Set<String>()
+    private var boxyCooldown = 0
+    private let maxFrontierTunnels = 6000
+    private let maxCaves = 40
+    private let maxClosets = 80
 
     // MARK: - Private Properties
     private var audioPlayer: AVAudioPlayer?
@@ -681,6 +793,8 @@ class TunnelMazeManager: ObservableObject {
         placeLights()
         generateMonsters()
         generateTreasures()
+        generateCrystalCaves()
+        generateClosets()
         placeAbandonedItems()
         startTimers()
         isGenerating = false
@@ -689,7 +803,9 @@ class TunnelMazeManager: ObservableObject {
 
     func generateMazeTunnels() {
         // Iterative backtracker (explicit stack — recursion would overflow).
-        let gx = mazeSize / 2, gy = max(1, mazeSize / 8), gz = mazeSize / 2
+        // Wide + long, shallow layers: the endless feel comes from the
+        // haulage spines, not from stacking 20 vertical layers.
+        let gx = mazeSize / 2, gy = max(2, mazeSize / 16), gz = mazeSize / 2
         var grid = Array(repeating: Array(repeating: Array(repeating: false, count: gz), count: gy), count: gx)
         let sx = gx / 2, sy = gy / 2, sz = gz / 2
         grid[sx][sy][sz] = true
@@ -774,6 +890,321 @@ class TunnelMazeManager: ObservableObject {
             // Side drift pockets off each crosscut (ore nooks).
             haulageTunnel(x: -32, z: Float(z) + 6, crosscut: false)
             haulageTunnel(x: 32, z: Float(z) - 6, crosscut: false)
+        }
+        generateForkroads()
+    }
+
+    /// Forkroad junctions: Y-forks, T-junctions, 4-way crosses and round
+    /// chambers stamped along every haulage spine so the mine branches
+    /// like Roblox mining tunnels instead of running straight.
+    func generateForkroads() {
+        let styles: [ForkStyle] = [.yFork, .tJunction, .crossroads, .roundabout]
+        var si = 0
+        for z in stride(from: -180.0, through: 180.0, by: 40.0) {
+            for x in [-24.0, 0.0, 24.0] as [Float] {
+                buildFork(atX: x, z: Float(z), style: styles[si % styles.count])
+                si += 1
+            }
+        }
+    }
+
+    private func buildFork(atX x: Float, z: Float, style: ForkStyle) {
+        func forkTunnel(dx: Float, dz: Float, dir: TunnelDirection) {
+            tunnels.append(Tunnel(
+                position: SCNVector3(x + dx, 2, z + dz),
+                direction: dir,
+                length: 8, width: 4, height: 3,
+                branches: [], rooms: [],
+                isExplored: false,
+                dangerLevel: Float.random(in: 0.2...0.7),
+                treasureCount: Int.random(in: 1...3),
+                monsterCount: Int.random(in: 0...1)
+            ))
+        }
+        switch style {
+        case .yFork:
+            forkTunnel(dx: -10, dz: -10, dir: .west)
+            forkTunnel(dx: 10, dz: -10, dir: .east)
+            forkTunnel(dx: 0, dz: 10, dir: .south)
+        case .tJunction:
+            forkTunnel(dx: -14, dz: 0, dir: .west)
+            forkTunnel(dx: 14, dz: 0, dir: .east)
+            forkTunnel(dx: 0, dz: 12, dir: .south)
+        case .crossroads:
+            forkTunnel(dx: -14, dz: 0, dir: .west)
+            forkTunnel(dx: 14, dz: 0, dir: .east)
+            forkTunnel(dx: 0, dz: -14, dir: .north)
+            forkTunnel(dx: 0, dz: 14, dir: .south)
+        case .roundabout:
+            let room = Room(
+                position: SCNVector3(x, 2, z),
+                size: CGSize(width: 6, height: 4),
+                type: .empty, isExplored: false,
+                hasTreasure: true, hasMonster: false, lightLevel: 0.4
+            )
+            rooms.append(room)
+            forkTunnel(dx: -12, dz: 0, dir: .west)
+            forkTunnel(dx: 12, dz: 0, dir: .east)
+            forkTunnel(dx: 0, dz: -12, dir: .north)
+            forkTunnel(dx: 0, dz: 12, dir: .south)
+        }
+    }
+
+    /// Crystal caves: gem rooms where the growth shape is square cubes,
+    /// triangle spikes or sphere orbs. Mining them drops gem loot.
+    func generateCrystalCaves() {
+        let spines: [Float] = [-24, 0, 24, -32, 32]
+        for i in 0..<12 {
+            let shape = CrystalShape.allCases.randomElement()!
+            let cave = CrystalCave(
+                position: SCNVector3(
+                    spines[i % spines.count] + Float.random(in: -4...4),
+                    2,
+                    Float.random(in: -180...180)
+                ),
+                shape: shape,
+                radius: Int.random(in: 3...5),
+                lootValue: Int.random(in: 60...160),
+                isHarvested: false
+            )
+            crystalCaves.append(cave)
+            buildCaveBlocks(cave)
+            buildCaveTreasure(cave)
+        }
+    }
+
+    private func crystalBlock(at pos: SCNVector3, shape: CrystalShape) {
+        blocks.append(Block(
+            type: shape.blockType,
+            position: pos,
+            health: 2.0, maxHealth: 2.0,
+            isDestroyed: false, isOccupied: false,
+            lightLevel: 0.6, metadata: [:]
+        ))
+    }
+
+    private func buildCaveBlocks(_ cave: CrystalCave) {
+        let r = Float(cave.radius)
+        let c = cave.position
+        switch cave.shape {
+        case .cube:
+            // Square clusters: cube grids on floor + walls.
+            for dx in stride(from: -r, through: r, by: 2) {
+                for dz in stride(from: -r, through: r, by: 2) {
+                    if abs(dx) + abs(dz) <= r * 1.5 {
+                        crystalBlock(at: SCNVector3(c.x + dx, c.y, c.z + dz), shape: .cube)
+                    }
+                }
+            }
+        case .spike:
+            // Triangle spikes: stalactites (ceiling) + stalagmites (floor).
+            for _ in 0..<(cave.radius * 6) {
+                let a = Float.random(in: 0...(2 * Float.pi))
+                let d = Float.random(in: 1...r)
+                let px = c.x + cos(a) * d, pz = c.z + sin(a) * d
+                crystalBlock(at: SCNVector3(px, c.y - 0.5, pz), shape: .spike)
+                if Bool.random() {
+                    crystalBlock(at: SCNVector3(px, c.y + 2.5, pz), shape: .spike)
+                }
+            }
+        case .orb:
+            // Sphere orbs: hollow shell ring floating at mid height.
+            for a in stride(from: 0.0, through: 2 * Double.pi, by: 0.5) {
+                let px = c.x + cos(Float(a)) * r
+                let pz = c.z + sin(Float(a)) * r
+                crystalBlock(at: SCNVector3(px, c.y + 1, pz), shape: .orb)
+                crystalBlock(at: SCNVector3(px, c.y + 2, pz), shape: .orb)
+            }
+            crystalBlock(at: SCNVector3(c.x, c.y + 1, c.z), shape: .orb)
+        }
+    }
+
+    private func buildCaveTreasure(_ cave: CrystalCave) {
+        let room = Room(
+            position: cave.position,
+            size: CGSize(width: CGFloat(cave.radius * 2), height: 4),
+            type: .treasure, isExplored: false,
+            hasTreasure: true, hasMonster: false, lightLevel: 0.6
+        )
+        rooms.append(room)
+        treasures.append(Treasure(
+            name: "\(cave.shape.rawValue.capitalized) Crystal Hoard",
+            type: .gem, rarity: .rare,
+            value: cave.lootValue,
+            position: SCNVector3(cave.position.x, cave.position.y + 1, cave.position.z),
+            isFound: false, icon: cave.shape.emoji
+        ))
+    }
+
+    /// Closet caches: block-built cupboards along the tunnels. Tap to open.
+    func generateClosets() {
+        let kinds: [ClosetKind] = [.snacks, .snacks, .tools, .tools, .treasure, .fake]
+        var ki = 0
+        for z in stride(from: -170.0, through: 170.0, by: 30.0) {
+            for x in [-24.0, 0.0, 24.0] as [Float] {
+                let pos = SCNVector3(x + 3, 3, Float(z))
+                let kind = kinds[ki % kinds.count]
+                ki += 1
+                closets.append(ClosetCache(position: pos, kind: kind, isOpened: false))
+                blocks.append(Block(
+                    type: .closetCrate,
+                    position: pos,
+                    health: 1.0, maxHealth: 1.0,
+                    isDestroyed: false, isOccupied: true,
+                    lightLevel: 0.2, metadata: ["closet": kind.rawValue]
+                ))
+            }
+        }
+    }
+
+    /// Opens a closet cache: snacks restore hunger/thirst, tools grant gear,
+    /// treasure pays gold + gems, fakes are cobwebs and a laugh.
+    func openCloset(at position: SCNVector3) {
+        guard let ci = closets.firstIndex(where: {
+            !$0.isOpened && calculateDistance($0.position, position) < 2.0
+        }) else { return }
+        closets[ci].isOpened = true
+        if let bi = blocks.firstIndex(where: {
+            !$0.isDestroyed && $0.type == .closetCrate &&
+            calculateDistance($0.position, position) < 2.0
+        }) {
+            lastChangedPos = blocks[bi].position
+            blocks[bi].isDestroyed = true
+        }
+        let kind = closets[ci].kind
+        switch kind {
+        case .snacks:
+            player.hunger = player.maxHunger
+            player.thirst = player.maxThirst
+            player.stamina = player.maxStamina
+            let bonus = Int.random(in: 10...30)
+            player.gold += bonus
+            addNotification("\(kind.emoji) Snack closet! Fully fed +\(bonus) gold!")
+        case .tools:
+            let drops: [BlockType] = [.abandonedPickaxe, .ironOre, .goldOre, .torch]
+            let drop = drops.randomElement()!
+            player.inventory.append(MazeInventoryItem(
+                name: drop.rawValue, type: .tool, quantity: 1, maxQuantity: 1,
+                description: "Pulled from a closet cache",
+                icon: drop.emoji, value: Int.random(in: 15...40), rarity: .uncommon
+            ))
+            addNotification("\(kind.emoji) Tool closet! Found \(drop.rawValue)!")
+        case .treasure:
+            let haul = Int.random(in: 60...150)
+            player.gold += haul
+            player.experience += haul / 2
+            addNotification("\(kind.emoji) Treasure closet! +\(haul) gold!")
+            checkLevelUp()
+        case .fake:
+            player.experience += 5
+            addNotification("\(kind.emoji) Fake closet… just cobwebs! (+5 XP for checking)")
+        }
+        createParticles(at: position, count: 16, emoji: kind.emoji)
+        triggerHaptic(.medium)
+    }
+
+    /// The mine grows as you explore: stepping into a fresh 24-unit chunk
+    /// stamps a new fork, and sometimes a cave, closet or boxy friend.
+    func expandFrontierIfNeeded() {
+        let key = "\(Int(player.position.x / 24)),\(Int(player.position.z / 24))"
+        guard !frontierKeys.contains(key) else { return }
+        frontierKeys.insert(key)
+        guard tunnels.count < maxFrontierTunnels else { return }
+        let styles: [ForkStyle] = ForkStyle.allCases
+        let style = styles[abs(key.hashValue) % styles.count]
+        let fx = player.position.x + Float.random(in: 12...30)
+        let fz = player.position.z + Float.random(in: 12...30)
+        let before = tunnels.count
+        buildFork(atX: fx, z: fz, style: style)
+        for t in tunnels[before...] { placeShell(for: t) }
+        let roll = Int.random(in: 1...100)
+        if roll <= 25 && crystalCaves.count < maxCaves {
+            let cave = CrystalCave(
+                position: SCNVector3(fx + 6, 2, fz),
+                shape: CrystalShape.allCases.randomElement()!,
+                radius: Int.random(in: 3...5),
+                lootValue: Int.random(in: 60...160),
+                isHarvested: false
+            )
+            crystalCaves.append(cave)
+            buildCaveBlocks(cave)
+            buildCaveTreasure(cave)
+            addNotification("\(cave.shape.emoji) The mine groans… a new crystal cave opened nearby!")
+        } else if roll <= 45 && closets.count < maxClosets {
+            let kinds: [ClosetKind] = [.snacks, .tools, .treasure, .fake]
+            let pos = SCNVector3(fx - 4, 3, fz + 4)
+            let kind = kinds.randomElement()!
+            closets.append(ClosetCache(position: pos, kind: kind, isOpened: false))
+            blocks.append(Block(
+                type: .closetCrate, position: pos,
+                health: 1.0, maxHealth: 1.0,
+                isDestroyed: false, isOccupied: true,
+                lightLevel: 0.2, metadata: ["closet": kind.rawValue]
+            ))
+        } else if roll <= 55 {
+            spawnBoxyAnimal(near: SCNVector3(fx, 2, fz))
+        }
+    }
+
+    /// Lightweight shell for frontier tunnels (floor + corner pillars).
+    private func placeShell(for tunnel: Tunnel) {
+        let x = Int(tunnel.position.x), y = Int(tunnel.position.y), z = Int(tunnel.position.z)
+        for dx in -1...1 {
+            for dz in -1...1 {
+                blocks.append(Block(
+                    type: .stone, position: SCNVector3(Float(x + dx), Float(y - 1), Float(z + dz)),
+                    health: 1.0, maxHealth: 1.0,
+                    isDestroyed: false, isOccupied: false,
+                    lightLevel: 0, metadata: [:]
+                ))
+            }
+        }
+        for (dx, dz) in [(-1, -1), (1, -1), (-1, 1), (1, 1)] {
+            for dy in 0...2 {
+                blocks.append(Block(
+                    type: .tunnelWall, position: SCNVector3(Float(x + dx), Float(y + dy), Float(z + dz)),
+                    health: 2.0, maxHealth: 2.0,
+                    isDestroyed: false, isOccupied: false,
+                    lightLevel: 0, metadata: [:]
+                ))
+            }
+        }
+    }
+
+    /// Rare boxy animal encounter: friendly, never hunts, drops gems.
+    func spawnBoxyAnimal(near pos: SCNVector3) {
+        let boxyAlive = monsters.filter { $0.isAlive && $0.type.isBoxy }.count
+        guard boxyAlive < 3 else { return }
+        let pool: [MonsterType] = [.boxyMole, .boxyBat, .boxyAxolotl, .boxyFox, .boxyMole, .boxyBat, .goldenWisp]
+        let type = pool.randomElement()!
+        let at = SCNVector3(
+            pos.x + Float.random(in: -6...6), 2,
+            pos.z + Float.random(in: -6...6)
+        )
+        monsters.append(Monster(
+            type: type,
+            name: "\(type.displayName) (friend)",
+            health: Float(type.health), maxHealth: Float(type.health),
+            damage: 0, speed: type.speed,
+            position: at, rotation: SCNVector3(0, Float.random(in: 0...6.28), 0),
+            isAlive: true, isAggressive: false, isBoss: false,
+            dropItems: [.diamondGem, .rubyGem, .sapphireGem, .emeraldGem],
+            experience: type == .goldenWisp ? 300 : 150,
+            attackCooldown: 99, currentCooldown: 0,
+            detectionRange: 0, // friends never chase
+            state: .wandering
+        ))
+        addNotification("📦 Rare encounter: \(type.displayName)! It seems friendly…")
+        createParticles(at: at, count: 24, emoji: "📦")
+        triggerHaptic(.medium)
+    }
+
+    private func maybeSpawnBoxyAnimal() {
+        if boxyCooldown > 0 { boxyCooldown -= 1; return }
+        // ~0.5% per tick while roaming: genuinely rare.
+        if Int.random(in: 1...200) == 1 {
+            boxyCooldown = 120
+            spawnBoxyAnimal(near: player.position)
         }
     }
 
@@ -1231,6 +1662,10 @@ class TunnelMazeManager: ObservableObject {
 
         // Check level up
         checkLevelUp()
+
+        // The mine grows as you roam + rare boxy friends may appear.
+        expandFrontierIfNeeded()
+        maybeSpawnBoxyAnimal()
     }
 
     func updatePlayerStats() {
@@ -1417,6 +1852,17 @@ class TunnelMazeManager: ObservableObject {
     // MARK: - Mining Functions
 
     func mineBlock(at position: SCNVector3) {
+        // Closet crates open by hand — no pickaxe needed.
+        if blocks.contains(where: {
+            !$0.isDestroyed && $0.type == .closetCrate &&
+            abs($0.position.x - position.x) < 1.5 &&
+            abs($0.position.y - position.y) < 1.5 &&
+            abs($0.position.z - position.z) < 1.5
+        }) {
+            openCloset(at: position)
+            return
+        }
+
         guard player.equippedTool != nil else {
             // Bare hands still work, slowly.
             return
@@ -1493,6 +1939,30 @@ class TunnelMazeManager: ObservableObject {
                 }
                 addNotification("💎 Mined \(dropCount)x \(block.type.rawValue)!")
                 createParticles(at: position, count: 20, emoji: "💎")
+            } else if block.type.isGem {
+                // Cave crystals burst into gem loot.
+                let gems: [BlockType] = [.diamondGem, .rubyGem, .sapphireGem, .emeraldGem, .amethystGem]
+                let gem = gems.randomElement()!
+                let haul = Int.random(in: 2...4)
+                player.gold += haul * 8
+                player.experience += haul * 10
+                player.inventory.append(MazeInventoryItem(
+                    name: gem.rawValue, type: .material, quantity: haul, maxQuantity: 99,
+                    description: "Knocked loose from a crystal cave",
+                    icon: gem.emoji, value: haul * 8, rarity: .rare
+                ))
+                if let ci = crystalCaves.firstIndex(where: {
+                    calculateDistance(SCNVector3($0.position.x, 0, $0.position.z),
+                                      SCNVector3(position.x, 0, position.z)) < Float($0.radius + 2)
+                }) {
+                    var cave = crystalCaves[ci]
+                    cave.lootValue = max(0, cave.lootValue - haul * 5)
+                    if cave.lootValue == 0 { cave.isHarvested = true }
+                    crystalCaves[ci] = cave
+                }
+                addNotification("\(block.type.emoji) Crystal shattered! +\(haul)x \(gem.rawValue)!")
+                createParticles(at: position, count: 24, emoji: block.type.emoji)
+                checkLevelUp()
             } else {
                 createParticles(at: position, count: 10, emoji: "⬜")
             }
@@ -1681,6 +2151,7 @@ class TunnelMazeManager: ObservableObject {
         player.position.x = min(mazeBound, max(-60, player.position.x + (fx * fwd + rx * strafe) * speed))
         player.position.z = min(mazeBound, max(-210, player.position.z + (fz * fwd + rz * strafe) * speed))
         player.isMoving = (abs(dx) + abs(dy)) > 0.15
+        expandFrontierIfNeeded()
     }
 
     func normalizeVector(_ vector: SCNVector3) -> SCNVector3 {
@@ -2010,8 +2481,9 @@ struct TunnelMazeSceneView: UIViewRepresentable {
             let yaw = manager.player.rotation.y
             let fx = -sin(yaw), fz = -cos(yaw)
             let rx = cos(yaw), rz = -sin(yaw)
-            manager.player.position.x = min(88, max(-2, manager.player.position.x + (fx * -dy + rx * dx) * speed * dt))
-            manager.player.position.z = min(88, max(-2, manager.player.position.z + (fz * -dy + rz * dx) * speed * dt))
+            manager.player.position.x = min(220, max(-60, manager.player.position.x + (fx * -dy + rx * dx) * speed * dt))
+            manager.player.position.z = min(220, max(-210, manager.player.position.z + (fz * -dy + rz * dx) * speed * dt))
+            manager.expandFrontierIfNeeded()
         }
 
         func syncLight(in scene: SCNScene) {
@@ -2055,12 +2527,24 @@ struct TunnelMazeSceneView: UIViewRepresentable {
         }
 
         func createBlockNode(block: Block) -> SCNNode {
-            let box = SCNBox(
-                width: 0.95,
-                height: 0.95,
-                length: 0.95,
-                chamferRadius: 0.02
-            )
+            // Crystal growths get their own geometry: cubes are square,
+            // spikes are pyramids, orbs are spheres.
+            let geometry: SCNGeometry
+            switch block.type {
+            case .crystalCube:
+                geometry = SCNBox(width: 0.7, height: 0.7, length: 0.7, chamferRadius: 0.05)
+            case .crystalSpike:
+                geometry = SCNPyramid(width: 0.7, height: 1.4, length: 0.7)
+            case .crystalOrb:
+                geometry = SCNSphere(radius: 0.45)
+            default:
+                geometry = SCNBox(
+                    width: 0.95,
+                    height: 0.95,
+                    length: 0.95,
+                    chamferRadius: 0.02
+                )
+            }
 
             let material = SCNMaterial()
             material.diffuse.contents = block.type.displayColor()
@@ -2078,9 +2562,14 @@ struct TunnelMazeSceneView: UIViewRepresentable {
                 material.emission.intensity = 0.3
             }
 
-            box.materials = [material]
+            if block.type == .closetCrate {
+                material.emission.contents = UIColor(red: 1.0, green: 0.6, blue: 0.2, alpha: 1)
+                material.emission.intensity = 0.25
+            }
 
-            let node = SCNNode(geometry: box)
+            geometry.materials = [material]
+
+            let node = SCNNode(geometry: geometry)
             node.position = block.position
             node.name = "block"
             node.rotation = SCNVector4(0, 1, 0, block.rotation)
@@ -2111,8 +2600,13 @@ struct TunnelMazeSceneView: UIViewRepresentable {
         func createMonsterNode(monster: Monster) -> SCNNode {
             let groupNode = SCNNode()
 
-            // Body
-            let body = SCNSphere(radius: 0.5)
+            // Body: boxy animals are cubes, everything else is a blob.
+            let body: SCNGeometry
+            if monster.type.isBoxy {
+                body = SCNBox(width: 0.8, height: 0.8, length: 0.8, chamferRadius: 0.08)
+            } else {
+                body = SCNSphere(radius: 0.5)
+            }
             let material = SCNMaterial()
             material.diffuse.contents = monsterColor(monster)
             material.roughness.contents = 0.5
@@ -2182,6 +2676,11 @@ struct TunnelMazeSceneView: UIViewRepresentable {
             case .elderGuardian: return .cyan
             case .wither: return .black
             case .enderDragon: return .purple
+            case .boxyMole: return UIColor(red: 0.6, green: 0.45, blue: 0.3, alpha: 1)
+            case .boxyBat: return UIColor(red: 0.35, green: 0.25, blue: 0.5, alpha: 1)
+            case .boxyAxolotl: return UIColor(red: 1.0, green: 0.6, blue: 0.75, alpha: 1)
+            case .boxyFox: return UIColor(red: 0.95, green: 0.5, blue: 0.2, alpha: 1)
+            case .goldenWisp: return UIColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1)
             default: return .gray
             }
         }
@@ -2326,6 +2825,10 @@ extension BlockType {
         case .spiderWeb: return UIColor(white: 0.8, alpha: 0.5)
         case .boneBlock: return UIColor.white
         case .treasureChest: return UIColor(red: 0.8, green: 0.6, blue: 0.1, alpha: 1)
+        case .crystalCube: return UIColor(red: 0.6, green: 0.3, blue: 0.9, alpha: 1)
+        case .crystalSpike: return UIColor(red: 0.3, green: 0.8, blue: 0.9, alpha: 1)
+        case .crystalOrb: return UIColor(red: 0.9, green: 0.6, blue: 1.0, alpha: 1)
+        case .closetCrate: return UIColor(red: 0.55, green: 0.35, blue: 0.2, alpha: 1)
         default: return UIColor.gray
         }
     }
