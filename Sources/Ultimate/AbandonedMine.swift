@@ -433,8 +433,79 @@ struct MNPet: Identifiable {
     }
 }
 
-// MARK: - Player / events
+// MARK: - Roblox-kit registries (forkroads, crystal caves, closets)
 
+/// Forkroad junction styles, mirroring the maze's forkroads.
+enum MNForkStyle: String, CaseIterable {
+    case yFork = "Y-Fork", tJunction = "T-Junction"
+    case crossroads = "4-Way Cross", roundabout = "Round Chamber"
+
+    var emoji: String {
+        switch self {
+        case .yFork: return "🔱"
+        case .tJunction: return "🛤️"
+        case .crossroads: return "➕"
+        case .roundabout: return "⭕"
+        }
+    }
+}
+
+/// Crystal growth shapes: square cubes, triangle spikes, sphere orbs.
+enum MNCrystalShape: String, CaseIterable {
+    case cube, spike, orb
+
+    var blockType: MNBlockType {
+        switch self {
+        case .cube: return .crystalCube
+        case .spike: return .crystalSpike
+        case .orb: return .crystalOrb
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .cube: return "🟪"
+        case .spike: return "🔺"
+        case .orb: return "🔮"
+        }
+    }
+}
+
+/// A tracked crystal cave: harvest every growth for a completion bonus.
+struct MNCrystalCave: Identifiable {
+    let id = UUID()
+    var center: SCNVector3
+    var shape: MNCrystalShape
+    var cells: Set<MNCell>
+    var announced: Bool = false
+    var harvested: Bool = false
+}
+
+/// Closet cache kinds: snacks, tools, treasure — and cobweb fakes.
+enum MNClosetKind: String, CaseIterable {
+    case snacks, tools, treasure, fake
+
+    var emoji: String {
+        switch self {
+        case .snacks: return "🍬"
+        case .tools: return "🔧"
+        case .treasure: return "💎"
+        case .fake: return "🕸️"
+        }
+    }
+}
+
+/// An openable block-built closet. The registry tracks opened state so a
+/// closet pays out exactly once.
+struct MNClosetCache: Identifiable {
+    let id = UUID()
+    var cell: MNCell
+    var position: SCNVector3
+    var kind: MNClosetKind
+    var isOpened: Bool = false
+}
+
+// MARK: - Player / events
 struct MNPlayer {
     var position: SCNVector3
     var health: Int
@@ -518,6 +589,9 @@ final class MineManager: ObservableObject {
     @Published var monsters: [MNMonster] = []
     /// Rare friendly visitors (boxy animals). Never hostile.
     @Published var critters: [MNBoxyCritter] = []
+    /// Roblox-kit registries: tracked crystal caves + closet caches.
+    @Published var mineCaves: [MNCrystalCave] = []
+    @Published var mineClosets: [MNClosetCache] = []
     @Published var torches: [SCNVector3] = []
     @Published var notifications: [String] = []
     @Published var swingId = 0
@@ -634,6 +708,22 @@ final class MineManager: ObservableObject {
         if h < 7 { return .crystalSpike }
         if h < 9 { return .crystalOrb }
         return nil
+    }
+
+    /// World position → cell coords (inverse of cellCenter).
+    static func cellForWorld(_ w: Float) -> Int { Int((w / mineU - 0.5).rounded()) }
+    static func cellForPos(_ p: SCNVector3) -> MNCell {
+        MNCell(x: cellForWorld(p.x), y: cellForWorld(p.y), z: cellForWorld(p.z))
+    }
+
+    /// Deterministic closet kind per cell: snacks, tools, treasure, fakes.
+    static func closetKind(at c: MNCell) -> MNClosetKind {
+        switch abs(c.x * 13 + c.y * 5 + c.z * 7) % 10 {
+        case 0..<4: return .snacks
+        case 4..<7: return .tools
+        case 7..<9: return .treasure
+        default: return .fake
+        }
     }
 
     static func cellCenter(_ c: MNCell) -> SCNVector3 {
@@ -833,6 +923,44 @@ final class MineManager: ObservableObject {
         blocks.sort { $0.position.x < $1.position.x }
         rockGroups = data.rock
         torches = data.torches.map { SCNVector3($0.x, $0.y, $0.z) }
+        registerStaticClosets()
+        registerStaticCaves()
+    }
+
+    /// Registry for the pre-generated closet crates (kind by cell hash).
+    private func registerStaticClosets() {
+        for b in blocks where b.type == .closetCrate && !b.isDestroyed {
+            let cell = Self.cellForPos(b.position)
+            guard !mineClosets.contains(where: { $0.cell == cell }) else { continue }
+            mineClosets.append(MNClosetCache(cell: cell, position: b.position,
+                                             kind: Self.closetKind(at: cell)))
+        }
+    }
+
+    /// Registry for the pre-generated crystal caves: cluster wall growths
+    /// around each pocket, majority vote decides the cave's shape.
+    private func registerStaticCaves() {
+        for (center, r) in Self.crystalCaves() {
+            var cells = Set<MNCell>()
+            var votes: [MNCrystalShape: Int] = [:]
+            for b in blocks where !b.isDestroyed {
+                let shape: MNCrystalShape?
+                switch b.type {
+                case .crystalCube: shape = .cube
+                case .crystalSpike: shape = .spike
+                case .crystalOrb: shape = .orb
+                default: shape = nil
+                }
+                guard let shape = shape else { continue }
+                let dx = b.position.x - center.x, dy = b.position.y - center.y, dz = b.position.z - center.z
+                guard dx * dx + dy * dy + dz * dz < (r + 2) * (r + 2) else { continue }
+                cells.insert(Self.cellForPos(b.position))
+                votes[shape, default: 0] += 1
+            }
+            guard !cells.isEmpty else { continue }
+            let shape = votes.max(by: { $0.value < $1.value })?.key ?? .cube
+            mineCaves.append(MNCrystalCave(center: center, shape: shape, cells: cells))
+        }
     }
 
     static func touchesAir(_ c: MNCell) -> Bool {
@@ -1300,12 +1428,17 @@ final class MineManager: ObservableObject {
                 let gold = c.species == "Wisp" ? Int.random(in: 20...40) : Int.random(in: 5...15)
                 player.gold += gold
                 player.experience += 10
+                // Boxy friends also share pocket ore (bonus, never capacity-gated).
+                let oreGifts = ["Iron Ore": 4, "Gold Ore": 10, "Diamond Ore": 25, "Emerald Ore": 20]
+                let ore = oreGifts.keys.randomElement()!
+                player.ores[ore, default: 0] += 2
+                player.sellValue += (oreGifts[ore] ?? 0) * 2
                 checkLevelUp()
                 if !c.greeted {
                     c.greeted = true
-                    notify("\(c.emoji) Rare encounter: Boxy \(c.species)! It likes you. (+\(gold)🪙)")
+                    notify("\(c.emoji) Rare encounter: Boxy \(c.species)! It likes you. (+\(gold)🪙, +2 \(ore))")
                 } else {
-                    notify("\(c.emoji) Boxy \(c.species) shares a gift! (+\(gold)🪙)")
+                    notify("\(c.emoji) Boxy \(c.species) shares a gift! (+\(gold)🪙, +2 \(ore))")
                 }
             }
             critters[i] = c
@@ -1541,7 +1674,24 @@ final class MineManager: ObservableObject {
             if player.backpackFull { msg += " FULL — go sell!" }
             notify(msg)
         }
+        // Crystal harvest tracking: clearing a whole cave pays a bonus.
+        if [.crystalCube, .crystalSpike, .crystalOrb].contains(b.type) {
+            checkCaveHarvest(cell: Self.cellForPos(b.position))
+        }
         return (name, unit * n, xp)
+    }
+
+    /// Bonus when every growth in a tracked cave is mined out.
+    private func checkCaveHarvest(cell: MNCell) {
+        guard let ci = mineCaves.firstIndex(where: { !$0.harvested && $0.cells.contains(cell) }) else { return }
+        let destroyed = Set(blocks.filter { $0.isDestroyed }.map { Self.cellForPos($0.position) })
+        guard mineCaves[ci].cells.isSubset(of: destroyed) else { return }
+        mineCaves[ci].harvested = true
+        let bonus = Int(120 * rebirthMult)
+        player.gold += bonus
+        player.experience += 60
+        checkLevelUp()
+        notify("\(mineCaves[ci].shape.emoji) Crystal cave fully harvested! +\(bonus)🪙")
     }
 
     /// Pops a closet crate: snacks pay gold, tool caches grant a bomb,
@@ -1559,19 +1709,28 @@ final class MineManager: ObservableObject {
             lastBombAward = player.blocksMined
             bombs += 1
         }
-        let h = abs(Int(b.position.x * 13 + b.position.z * 7)) % 10
-        if h < 4 {
+        // Registry kind (marks opened so a closet pays once); positional
+        // hash covers any unregistered crate.
+        let cell = Self.cellForPos(b.position)
+        let kind: MNClosetKind
+        if let ci = mineClosets.firstIndex(where: { $0.cell == cell }) {
+            mineClosets[ci].isOpened = true
+            kind = mineClosets[ci].kind
+        } else {
+            kind = Self.closetKind(at: cell)
+        }
+        if kind == .snacks {
             let g = Int.random(in: 8...15)
             player.gold += g
             player.experience += 6
             checkLevelUp()
             notify("🍬 Snack stash! +\(g)🪙")
-        } else if h < 7 {
+        } else if kind == .tools {
             bombs = min(9, bombs + 1)
             player.experience += 8
             checkLevelUp()
             notify("🔧 Tool cache! +1 bomb! (have \(bombs))")
-        } else if h < 9 {
+        } else if kind == .treasure {
             let g = Int.random(in: 40...80)
             player.gold += g
             player.experience += 30
@@ -1814,6 +1973,132 @@ final class MineManager: ObservableObject {
         let bonus = Int(150 * rebirthMult)
         player.gold += bonus
         notify("🗺️ New sector mapped: \(rows[row])-\(cols[col]) Dig! +\(bonus)🪙 (\(player.sectorsFound.count)/9)")
+        expandMineFrontier(col: col, row: row)
+    }
+
+    /// Frontier growth, maze-style: a fresh sector raises a timber forkroad
+    /// arch, cracks open a crystal cave, stocks closet caches, and may lure
+    /// a rare boxy visitor. Everything rides the dynamic block pipeline
+    /// (rock mesh is static, so growths sit in open tunnel air). Caps apply.
+    private func expandMineFrontier(col: Int, row: Int) {
+        let cx: Float = Float(col * 40 - 40)
+        let cz: Float = Float(row * 40 - 40)
+        guard let foothold = nearestAirCell(x: cx, z: cz) else { return }
+        var taken = Set(blocks.filter { !$0.isDestroyed }.map { Self.cellForPos($0.position) })
+        let fx = foothold.x, fy = foothold.y, fz = foothold.z
+
+        // 1. Timber forkroad arch in the tunnel.
+        let style = MNForkStyle.allCases[(col + row * 3) % MNForkStyle.allCases.count]
+        var raised = 0
+        var arch: [MNCell] = []
+        for dy in 0...4 {
+            arch.append(MNCell(x: fx - 6, y: fy + dy, z: fz))
+            arch.append(MNCell(x: fx + 6, y: fy + dy, z: fz))
+        }
+        for dx in -6...6 { arch.append(MNCell(x: fx + dx, y: fy + 5, z: fz)) }
+        for c in arch where Self.isAirCell(c) && !taken.contains(c) {
+            taken.insert(c)
+            blocks.append(MNBlock(type: .woodBeam, position: Self.cellCenter(c),
+                                  health: 2, maxHealth: 2, isDestroyed: false))
+            raised += 1
+        }
+        if raised > 0 {
+            notify("\(style.emoji) Forkroad raised: \(style.rawValue)! Timber marks the way.")
+        }
+
+        // 2. Fresh crystal cave: floor growths in open air (never inside
+        // the static rock mesh), tracked for a harvest bonus.
+        if mineCaves.count < 24 {
+            let shape = MNCrystalShape.allCases.randomElement()!
+            let spots = caveFloorSpots(shape: shape, fx: fx, fy: fy, fz: fz, taken: taken)
+            if !spots.isEmpty {
+                var cells = Set<MNCell>()
+                for c in spots {
+                    taken.insert(c)
+                    cells.insert(c)
+                    blocks.append(MNBlock(type: shape.blockType, position: Self.cellCenter(c),
+                                          health: shape.blockType.toughness,
+                                          maxHealth: shape.blockType.toughness, isDestroyed: false))
+                }
+                mineCaves.append(MNCrystalCave(center: Self.cellCenter(foothold), shape: shape,
+                                               cells: cells, announced: true))
+                notify("\(shape.emoji) The rock groans… a new \(shape.rawValue) crystal cave cracked open nearby!")
+            }
+        }
+
+        // 3. Restock closets near the new fork.
+        if mineClosets.count < 60, Int.random(in: 1...100) <= 60 {
+            var stocked = 0
+            for (ox, oz) in [(8, 4), (-8, -4)] as [(Int, Int)] {
+                let c = MNCell(x: fx + ox, y: fy, z: fz + oz)
+                guard Self.isAirCell(c), !taken.contains(c) else { continue }
+                taken.insert(c)
+                let pos = Self.cellCenter(c)
+                blocks.append(MNBlock(type: .closetCrate, position: pos,
+                                      health: 1, maxHealth: 1, isDestroyed: false))
+                mineClosets.append(MNClosetCache(cell: c, position: pos, kind: Self.closetKind(at: c)))
+                stocked += 1
+            }
+            if stocked > 0 { notify("🚪 Explorers stashed \(stocked) closet cache(s) by the fork!") }
+        }
+
+        // 4. Rare boxy visitor wanders in from the new tunnels.
+        if critters.count < 8, Int.random(in: 1...100) <= 35 {
+            let table: [(String, String, UIColor)] = [
+                ("Mole", "📦", UIColor(red: 0.6, green: 0.45, blue: 0.3, alpha: 1)),
+                ("Bat", "📦", UIColor(red: 0.35, green: 0.25, blue: 0.5, alpha: 1)),
+                ("Axolotl", "📦", UIColor(red: 1.0, green: 0.6, blue: 0.75, alpha: 1)),
+                ("Fox", "📦", UIColor(red: 0.95, green: 0.5, blue: 0.2, alpha: 1)),
+                ("Wisp", "✨", UIColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1)),
+            ]
+            let pick = table.randomElement()!
+            let pos = Self.cellCenter(foothold)
+            critters.append(MNBoxyCritter(species: pick.0, emoji: pick.1, color: pick.2,
+                                          position: pos, anchor: pos))
+            notify("\(pick.1) Rare encounter: a Boxy \(pick.0) wandered in from the new tunnels!")
+        }
+    }
+
+    /// Floor growth pattern for a frontier cave, open-air cells only.
+    private func caveFloorSpots(shape: MNCrystalShape, fx: Int, fy: Int, fz: Int, taken: Set<MNCell>) -> [MNCell] {
+        var rel: [(Int, Int, Int)] = []
+        switch shape {
+        case .cube:
+            for dx in -1...1 { for dz in -1...1 { rel.append((dx * 2, 0, dz * 2)) } }
+        case .spike:
+            rel = [(0, 0, 0), (4, 0, 2), (-4, 0, -2), (2, 0, -5), (-3, 0, 5), (0, 6, 0), (3, 6, -3)]
+        case .orb:
+            for a in stride(from: 0.0, through: 2 * Double.pi, by: Double.pi / 3) {
+                rel.append((Int((cos(a) * 5).rounded()), 3, Int((sin(a) * 5).rounded())))
+            }
+            rel.append((0, 3, 0))
+        }
+        var out: [MNCell] = []
+        for (dx, dy, dz) in rel {
+            let c = MNCell(x: fx + dx, y: fy + dy, z: fz + dz)
+            guard Self.isAirCell(c), !taken.contains(c) else { continue }
+            guard !out.contains(c) else { continue }
+            out.append(c)
+            if out.count >= 14 { break }
+        }
+        return out
+    }
+
+    /// Nearest tunnel air cell to a world x/z (upper level, then deep).
+    private func nearestAirCell(x: Float, z: Float) -> MNCell? {
+        let bx = Self.cellForWorld(x), bz = Self.cellForWorld(z)
+        for r in 0...24 {
+            for y in [3, -10] as [Int] {
+                for dx in -r...r {
+                    for dz in -r...r {
+                        guard max(abs(dx), abs(dz)) == r else { continue }
+                        let c = MNCell(x: bx + dx, y: y, z: bz + dz)
+                        if Self.isAirCell(c) { return c }
+                    }
+                }
+            }
+        }
+        return nil
     }
 }
 
