@@ -697,6 +697,12 @@ class TunnelMazeManager: ObservableObject {
     private let maxFrontierTunnels = 6000
     private let maxCaves = 40
     private let maxClosets = 80
+    // Expedition + region + bond kits (standalone engines, one-line hooks).
+    @Published var expeditionBoard = MazeExpeditionBoard()
+    @Published var regionDirector = MazeRegionDirector()
+    @Published var bondLedger = BoxyBondLedger()
+    private var lastExpScore = 0
+    private var lastExpDist: Float = 0
 
     // MARK: - Private Properties
     private var audioPlayer: AVAudioPlayer?
@@ -728,6 +734,23 @@ class TunnelMazeManager: ObservableObject {
         setupHaptics()
         generateWorld()
         generateInitialNotifications()
+        // Expedition rewards land straight in score + wallet.
+        expeditionBoard.onReward = { [weak self] score, gold in
+            guard let self = self else { return }
+            self.score += score
+            self.player.gold += gold
+            self.player.experience += score / 2
+            self.addNotification("🧭 Expedition complete! +\(score) pts +\(gold)🪙!")
+            self.checkLevelUp()
+        }
+        // Region discovery pays score + gold and feeds expeditions.
+        regionDirector.onDiscover = { [weak self] region in
+            guard let self = self else { return }
+            self.score += region.bonusScore
+            self.player.gold += region.bonusScore / 2
+            self.addNotification("🗺️ New region: \(region.emoji) \(region.name)! +\(region.bonusScore) pts")
+            self.expeditionBoard.record(.regionMapped(count: self.regionDirector.mappedCount))
+        }
     }
 
     // MARK: - Setup Methods
@@ -1101,6 +1124,7 @@ class TunnelMazeManager: ObservableObject {
         }
         createParticles(at: position, count: 16, emoji: kind.emoji)
         triggerHaptic(.medium)
+        expeditionBoard.record(.closetOpened)
     }
 
     /// The mine grows as you explore: stepping into a fresh 24-unit chunk
@@ -1116,6 +1140,7 @@ class TunnelMazeManager: ObservableObject {
         let fz = player.position.z + Float.random(in: 12...30)
         let before = tunnels.count
         buildFork(atX: fx, z: fz, style: style)
+        expeditionBoard.record(.forkRaised)
         for t in tunnels[before...] { placeShell(for: t) }
         let roll = Int.random(in: 1...100)
         if roll <= 25 && crystalCaves.count < maxCaves {
@@ -1197,6 +1222,8 @@ class TunnelMazeManager: ObservableObject {
         addNotification("📦 Rare encounter: \(type.displayName)! It seems friendly…")
         createParticles(at: at, count: 24, emoji: "📦")
         triggerHaptic(.medium)
+        expeditionBoard.record(.boxyMet)
+        bondLedger.recordEncounter(species: type.displayName)
     }
 
     private func maybeSpawnBoxyAnimal() {
@@ -1666,6 +1693,74 @@ class TunnelMazeManager: ObservableObject {
         // The mine grows as you roam + rare boxy friends may appear.
         expandFrontierIfNeeded()
         maybeSpawnBoxyAnimal()
+
+        // Expedition + region + bond ticks.
+        expeditionTick()
+        maybeBoxyGift()
+    }
+
+    /// Per-tick expedition bookkeeping: region discovery plus lifetime
+    /// score/distance deltas for the long-haul objectives.
+    private func expeditionTick() {
+        _ = regionDirector.update(x: player.position.x, z: player.position.z)
+        let ds = score - lastExpScore
+        if ds > 0 { expeditionBoard.record(.scoreEarned(points: ds)) }
+        lastExpScore = score
+        let dd = Int(player.distanceTraveled - lastExpDist)
+        if dd > 0 { expeditionBoard.record(.distanceBanked(meters: dd)) }
+        lastExpDist = player.distanceTraveled
+    }
+
+    /// Bonded boxy friends (Lv.3+) occasionally share gems with nearby pals.
+    private func maybeBoxyGift() {
+        for monster in monsters where monster.isAlive && monster.type.isBoxy {
+            let d = calculateDistance(monster.position, player.position)
+            guard d < 4 else { continue }
+            let species = monster.type.displayName
+            let level = bondLedger.level(for: species)
+            guard level >= 3 else { continue }
+            guard Double.random(in: 0...1) < BoxyBondRank.giftChance(level: level) else { continue }
+            let gems: [BlockType] = [.diamondGem, .rubyGem, .sapphireGem, .emeraldGem]
+            let gem = gems.randomElement()!
+            let haul = 10 + level * 5
+            player.gold += haul
+            player.inventory.append(MazeInventoryItem(
+                name: gem.rawValue, type: .material, quantity: 1, maxQuantity: 99,
+                description: "A gift from your \(species) pal",
+                icon: gem.emoji, value: haul, rarity: .rare
+            ))
+            bondLedger.recordGift(species: species)
+            addNotification("💝 Your \(species) pal shares \(gem.rawValue)! +\(haul)🪙")
+            createParticles(at: monster.position, count: 18, emoji: "💝")
+            return // one gift per tick
+        }
+    }
+
+    /// Feed a nearby boxy friend (journal button). Costs gold, builds bond.
+    func feedNearbyBoxy(species: String) {
+        guard let target = monsters.first(where: {
+            $0.isAlive && $0.type.isBoxy && $0.type.displayName == species &&
+            calculateDistance($0.position, player.position) < 6
+        }) else {
+            addNotification("📦 No \(species) close enough to feed — go find your cube!")
+            return
+        }
+        let level = bondLedger.level(for: species)
+        let cost = BoxyBondRank.feedCost(level: level)
+        guard player.gold >= cost else {
+            addNotification("📦 Feeding \(species) costs \(cost)🪙 (have \(player.gold)).")
+            return
+        }
+        player.gold -= cost
+        bondLedger.recordFeed(species: species)
+        createParticles(at: target.position, count: 20, emoji: "🍬")
+        triggerHaptic(.medium)
+        let newLevel = bondLedger.level(for: species)
+        if newLevel > level {
+            addNotification("💖 \(species) is now Lv.\(newLevel) \(BoxyBondRank.title(level: newLevel))!")
+        } else {
+            addNotification("🍬 Fed \(species)! Bond growing.")
+        }
     }
 
     func updatePlayerStats() {
@@ -1818,6 +1913,7 @@ class TunnelMazeManager: ObservableObject {
                     player.experience += treasure.value / 2
 
                     addNotification("💎 Found \(treasure.name)! +\(treasure.value) gold!")
+                    expeditionBoard.record(.treasureFound)
                     triggerHaptic(.medium)
                     createTreasureEffect(at: treasure.position)
 
@@ -1957,11 +2053,16 @@ class TunnelMazeManager: ObservableObject {
                 }) {
                     var cave = crystalCaves[ci]
                     cave.lootValue = max(0, cave.lootValue - haul * 5)
-                    if cave.lootValue == 0 { cave.isHarvested = true }
+                    if cave.lootValue == 0 && !cave.isHarvested {
+                        cave.isHarvested = true
+                        expeditionBoard.record(.caveHarvested)
+                        addNotification("\(cave.shape.emoji) Cave fully harvested! The maze thanks you.")
+                    }
                     crystalCaves[ci] = cave
                 }
                 addNotification("\(block.type.emoji) Crystal shattered! +\(haul)x \(gem.rawValue)!")
                 createParticles(at: position, count: 24, emoji: block.type.emoji)
+                expeditionBoard.record(.crystalMined)
                 checkLevelUp()
             } else {
                 createParticles(at: position, count: 10, emoji: "⬜")
@@ -2048,6 +2149,11 @@ class TunnelMazeManager: ObservableObject {
             addNotification("⚔️ Defeated \(monster.name)! +\(monster.experience) experience")
             createParticles(at: position, count: 30, emoji: "⭐")
             triggerHaptic(.medium)
+            expeditionBoard.record(.monsterSlain)
+            if monster.type.isBoxy {
+                bondLedger.recordLoss(species: monster.type.displayName)
+                addNotification("💔 The cubes will remember that. Bond halved.")
+            }
             checkLevelUp()
         } else {
             monsters[monsterIndex] = monster
@@ -2069,6 +2175,10 @@ class TunnelMazeManager: ObservableObject {
             player.experience += monster.experience
             player.gold += Int.random(in: 5...20)
             addNotification("⚔️ Defeated \(monster.name)! +\(monster.experience) experience")
+            expeditionBoard.record(.monsterSlain)
+            if monster.type.isBoxy {
+                bondLedger.recordLoss(species: monster.type.displayName)
+            }
             checkLevelUp()
         } else {
             monsters[monsterIndex] = monster
@@ -2951,6 +3061,14 @@ struct TunnelMazeView: View {
                             .background(Color.gray.opacity(0.7))
                             .cornerRadius(8)
                     }
+
+                    Button(action: { showQuests.toggle() }) {
+                        Image(systemName: "book.circle.fill")
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.purple.opacity(0.7))
+                            .cornerRadius(8)
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 8)
@@ -3088,6 +3206,15 @@ struct TunnelMazeView: View {
         .sheet(isPresented: $showSettings) {
             MazeSettingsView()
                 .environmentObject(manager)
+        }
+        .sheet(isPresented: $showQuests) {
+            MazeJournalView(
+                expeditions: manager.expeditionBoard,
+                regions: manager.regionDirector,
+                bonds: manager.bondLedger,
+                gold: manager.player.gold,
+                feed: { species in manager.feedNearbyBoxy(species: species) }
+            )
         }
         .preferredColorScheme(.dark)
     }

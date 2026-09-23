@@ -592,6 +592,16 @@ final class MineManager: ObservableObject {
     /// Roblox-kit registries: tracked crystal caves + closet caches.
     @Published var mineCaves: [MNCrystalCave] = []
     @Published var mineClosets: [MNClosetCache] = []
+    // Smoothness + progression kits (standalone engines, one-line hooks).
+    @Published var questBoard = MineQuestBoard()
+    @Published var statTracker = MineStatTracker()
+    @Published var frameMonitor = MineFrameMonitor()
+    @Published var tutorial = MineTutorialState()
+    /// Spice dial: monster feistiness, loot luck, prices. Never lethality.
+    @Published var difficulty = SpookyDifficulty.adventurer
+    /// All-time records board.
+    @Published var bestSale: Int = 0
+    @Published var richestPack: Int = 0
     @Published var torches: [SCNVector3] = []
     @Published var notifications: [String] = []
     @Published var swingId = 0
@@ -619,12 +629,21 @@ final class MineManager: ObservableObject {
     private var ghostAudioCooldown: Double = 12
     private var lavaHurtCooldown: Double = 0
     private var monsterRespawn: Double = 30
+    private var lastLifetimeXP: Int = 0
 
     init() {
         // God-mode mine: nothing down here can kill you or drag you back.
         self.lifeLossEnabled = false
         UserDefaults.standard.set(false, forKey: "mineLifeLoss")
         self.worldReady = true // play instantly; world streams in behind
+        // Quest rewards land straight in the player wallet.
+        self.questBoard.onReward = { [weak self] gold, xp in
+            guard let self = self else { return }
+            self.player.gold += gold
+            self.player.experience += xp
+            self.checkLevelUp()
+            self.notify("📜 Quest complete! +\(gold)🪙 +\(xp) XP!")
+        }
         // World gen runs off-main with no blocking veil.
         Task {
             let data = await Task.detached(priority: .userInitiated) {
@@ -984,6 +1003,7 @@ final class MineManager: ObservableObject {
     }
 
     func look(deltaYaw: Float, deltaPitch: Float) {
+        tutorial.complete(.look)
         player.yaw += deltaYaw
         player.pitch = max(-Float.pi / 2 + 0.01, min(Float.pi / 2 - 0.01, player.pitch + deltaPitch))
     }
@@ -1117,7 +1137,12 @@ final class MineManager: ObservableObject {
             moving = false
         }
         if moving != isMoving { isMoving = moving }
-        if moving { trackExploration() } // sectors + deepest depth
+        if moving {
+            trackExploration() // sectors + deepest depth
+            statTracker.recordMove(x: player.position.x, z: player.position.z)
+            tutorial.complete(.move)
+            if currentLayer != .meadow { tutorial.complete(.layer) }
+        }
         if !moving && player.moveTarget == nil && strafeInput == 0 && walkInput == 0 {
             moveClock?.invalidate()
             moveClock = nil
@@ -1137,6 +1162,8 @@ final class MineManager: ObservableObject {
             self.updateMonsters(dt: Float(dt))
             self.updateCritters(dt: Float(dt))
             self.updateBombs(dt: Float(dt))
+            self.frameMonitor.recordFrame(dt: dt)
+            self.statTracker.tick(dt: dt)
             phase += 1
             if phase % 5 == 0 { self.updateSlow() }
         }
@@ -1176,6 +1203,12 @@ final class MineManager: ObservableObject {
         if monsterRespawn <= 0 {
             monsterRespawn = 30
             topUpMonsters()
+        }
+        // Lifetime XP sync: catches every source (mining, closets, gifts).
+        let gained = player.experience - lastLifetimeXP
+        if gained > 0 {
+            questBoard.record(.xpEarned(amount: gained))
+            lastLifetimeXP = player.experience
         }
     }
 
@@ -1434,7 +1467,10 @@ final class MineManager: ObservableObject {
                 player.ores[ore, default: 0] += 2
                 player.sellValue += (oreGifts[ore] ?? 0) * 2
                 checkLevelUp()
+                statTracker.recordGift()
                 if !c.greeted {
+                    questBoard.record(.critterGreeted)
+                    statTracker.recordCritter()
                     c.greeted = true
                     notify("\(c.emoji) Rare encounter: Boxy \(c.species)! It likes you. (+\(gold)🪙, +2 \(ore))")
                 } else {
@@ -1451,8 +1487,9 @@ final class MineManager: ObservableObject {
             let dx = player.position.x - m.position.x
             let dz = player.position.z - m.position.z
             let dist = sqrt(dx * dx + dz * dz)
-            m.attackCooldown -= Double(dt)
-            if dist < 9 && player.health > 0 {
+        m.attackCooldown -= Double(dt)
+        // Difficulty scales the chase radius (never the lethality).
+        if dist < Float(9 * difficulty.monsterAggression) && player.health > 0 {
                 // Chase (y locked to its floor).
                 let step = m.kind.speed * dt
                 m.position.x += dx / max(dist, 0.01) * step
@@ -1530,6 +1567,7 @@ final class MineManager: ObservableObject {
             checkLevelUp()
             onEvent?(.monsterSlain(m.kind.rawValue))
             notify("\(m.kind.emoji) \(m.kind.rawValue.capitalized) slain! +\(m.kind.goldReward)🪙")
+            questBoard.record(.monsterSlain)
         }
         monsters[i] = m
     }
@@ -1559,6 +1597,8 @@ final class MineManager: ObservableObject {
         }
         guard bombCooldown <= 0 else { return }
         bombs -= 1
+        questBoard.record(.bombThrown)
+        statTracker.recordBomb()
         bombCooldown = 3
         let eye = eyePos(), dir = lookDir()
         let target = SCNVector3(
@@ -1674,6 +1714,14 @@ final class MineManager: ObservableObject {
             if player.backpackFull { msg += " FULL — go sell!" }
             notify(msg)
         }
+        // Quest / stat / tutorial hooks.
+        questBoard.record(.blockBroken)
+        questBoard.record(.oreMined(name: name, count: n))
+        questBoard.record(.layerReached(name: layer.title))
+        statTracker.recordBreak(layer: layer.title, oreUnits: n, gold: unit * n, xp: xp)
+        richestPack = max(richestPack, player.sellValue)
+        tutorial.complete(.mineFirst)
+        if player.backpackUsed >= 5 { tutorial.complete(.readBackpack) }
         // Crystal harvest tracking: clearing a whole cave pays a bonus.
         if [.crystalCube, .crystalSpike, .crystalOrb].contains(b.type) {
             checkCaveHarvest(cell: Self.cellForPos(b.position))
@@ -1692,6 +1740,8 @@ final class MineManager: ObservableObject {
         player.experience += 60
         checkLevelUp()
         notify("\(mineCaves[ci].shape.emoji) Crystal cave fully harvested! +\(bonus)🪙")
+        questBoard.record(.caveHarvested)
+        statTracker.recordCave()
     }
 
     /// Pops a closet crate: snacks pay gold, tool caches grant a bomb,
@@ -1741,6 +1791,9 @@ final class MineManager: ObservableObject {
             player.experience += 2
             notify("🕸️ Fake closet… just cobwebs!")
         }
+        questBoard.record(.closetOpened)
+        statTracker.recordCloset()
+        tutorial.complete(.closet)
         return nil
     }
 
@@ -1748,6 +1801,8 @@ final class MineManager: ObservableObject {
 
     func mineBlock(at worldPos: SCNVector3) {
         swingId += 1
+        statTracker.recordSwing()
+        tutorial.complete(.tapOre)
         let eye = eyePos()
         var bestIdx: Int? = nil
         var bestTap: Float = 0.9
@@ -1765,6 +1820,7 @@ final class MineManager: ObservableObject {
 
     func mineNearestBlock() {
         swingId += 1
+        statTracker.recordSwing()
         let eye = eyePos()
         var bestIdx: Int? = nil
         var bestDist: Float = 4.5
@@ -1827,6 +1883,8 @@ final class MineManager: ObservableObject {
         player.ores["Coal Ore"] = have - next.coalCost
         player.pickTier = next
         notify("\(next.emoji) Forged \(next.name)! Unlocks: \(next.unlocks).")
+        questBoard.record(.pickForged)
+        tutorial.complete(.forge)
         return true
     }
 
@@ -1852,8 +1910,8 @@ final class MineManager: ObservableObject {
     }
 
     var luckChance: Double {
-        min(0.5, player.pets.filter { $0.isEquipped && $0.boostKind == "Luck" }
-            .reduce(0.0) { $0 + $1.boostValue })
+        min(0.6, player.pets.filter { $0.isEquipped && $0.boostKind == "Luck" }
+            .reduce(0.0) { $0 + $1.boostValue } + difficulty.lootLuck)
     }
 
     var petGoldMult: Double {
@@ -1894,10 +1952,15 @@ final class MineManager: ObservableObject {
         } else {
             notify("💰 Sold \(units) ores! +\(payout)🪙 (tip: the surface cart pays +25%)")
         }
+        questBoard.record(.goldSold(amount: payout))
+        tutorial.complete(.sell)
+        bestSale = max(bestSale, payout)
     }
 
     /// Bigger backpack, stay down longer. Gold cost grows quadratically.
-    var backpackCost: Int { 250 * (player.backpackTier + 1) * (player.backpackTier + 1) }
+    var backpackCost: Int {
+        Int(Double(250 * (player.backpackTier + 1) * (player.backpackTier + 1)) * difficulty.priceFactor)
+    }
 
     @discardableResult
     func upgradeBackpack() -> Bool {
@@ -1909,11 +1972,12 @@ final class MineManager: ObservableObject {
         player.backpackTier += 1
         player.backpackCapacity += 50
         notify("🎒 Backpack Mk.\(player.backpackTier + 1)! Capacity \(player.backpackCapacity).")
+        questBoard.record(.packUpgraded)
         return true
     }
 
     /// Hatch a mystery egg. Duplicates are fine — more pets, more stacking.
-    var petEggCost: Int { 400 * (player.pets.count + 1) }
+    var petEggCost: Int { Int(Double(400 * (player.pets.count + 1)) * difficulty.priceFactor) }
 
     func hatchPet() {
         guard player.gold >= petEggCost else {
@@ -1926,6 +1990,8 @@ final class MineManager: ObservableObject {
         if player.pets.filter({ $0.isEquipped }).count < 3 { pet.isEquipped = true }
         player.pets.append(pet)
         notify("\(pet.emoji) Hatched \(pet.rarity) \(pet.species)! +\(Int(pet.boostValue * 100))% \(pet.boostKind).")
+        questBoard.record(.petHatched)
+        tutorial.complete(.pet)
     }
 
     func togglePetEquip(_ id: UUID) {
@@ -1958,6 +2024,8 @@ final class MineManager: ObservableObject {
         player.pets = []
         player.health = player.maxHealth
         notify("💫 REBIRTH #\(player.rebirths)! Permanent +\(Int(rebirthMult * 100 - 100))% power. The mine remembers you.")
+        questBoard.record(.rebirthed)
+        lastLifetimeXP = 0
     }
 
     /// Maze half of the loop: 9 named sectors pay discovery bonuses, and
@@ -1973,6 +2041,9 @@ final class MineManager: ObservableObject {
         let bonus = Int(150 * rebirthMult)
         player.gold += bonus
         notify("🗺️ New sector mapped: \(rows[row])-\(cols[col]) Dig! +\(bonus)🪙 (\(player.sectorsFound.count)/9)")
+        questBoard.record(.sectorMapped(count: player.sectorsFound.count))
+        questBoard.record(.depthReached(y: player.deepestY))
+        tutorial.complete(.sector)
         expandMineFrontier(col: col, row: row)
     }
 
@@ -3171,6 +3242,14 @@ struct UltimateMagicView: View {
             }
         }
         .onDisappear { bankOnce() }
+        .overlay(alignment: .bottom) {
+            MineTutorialView(tutorial: manager.tutorial)
+        }
+        .overlay(alignment: .topTrailing) {
+            MineFrameBadge(monitor: manager.frameMonitor)
+                .padding(.trailing, 8)
+                .padding(.top, 96)
+        }
     }
 
     func bankOnce() {
@@ -3189,6 +3268,12 @@ struct UltimateMagicView: View {
 struct MinePickPanel: View {
     @ObservedObject var manager: MineManager
     @Environment(\.dismiss) private var dismiss
+    @State private var showQuests = false
+    @State private var showCodex = false
+    @State private var showPerf = false
+    @State private var showSettings = false
+    @State private var showLore = false
+    @State private var showMap = false
 
     var body: some View {
         NavigationView {
@@ -3272,6 +3357,47 @@ struct MinePickPanel: View {
                             .tint(.purple)
                     }
                 }
+                Section(header: Text("🧭 Adventurer")) {
+                    HStack {
+                        Button("📜 Quests (\(manager.questBoard.doneCount)/\(manager.questBoard.totalCount))") { showQuests = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        if !manager.questBoard.claimable.isEmpty {
+                            Text("\(manager.questBoard.claimable.count) claimable!")
+                                .font(.caption2.bold()).foregroundColor(.green)
+                        }
+                    }
+                    HStack {
+                        Button("📖 Codex") { showCodex = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🎞️ Performance") { showPerf = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("⚙️ Settings") { showSettings = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("📜 Echoes") { showLore = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🗺️ Sector Map") { showMap = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Text("\(manager.frameMonitor.grade) • \(Int(manager.frameMonitor.fps)) FPS • ⏱️ \(manager.statTracker.playClock)")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Reset tutorial") { manager.tutorial.reset() }
+                            .font(.caption)
+                    }
+                }
                 Section(header: Text("Mine rules")) {
                     // Endless-mine god mode is locked on: hits are warnings only,
                     // HP floors at 1, and you never leave your tunnel.
@@ -3288,6 +3414,24 @@ struct MinePickPanel: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showQuests) {
+                MineQuestView(board: manager.questBoard)
+            }
+            .sheet(isPresented: $showCodex) {
+                MineCodexView(manager: manager)
+            }
+            .sheet(isPresented: $showPerf) {
+                MinePerfPanel(monitor: manager.frameMonitor, stats: manager.statTracker, manager: manager)
+            }
+            .sheet(isPresented: $showSettings) {
+                MineSettingsView(manager: manager)
+            }
+            .sheet(isPresented: $showLore) {
+                MineLoreView(manager: manager)
+            }
+            .sheet(isPresented: $showMap) {
+                MineMapView(manager: manager)
             }
         }
     }
