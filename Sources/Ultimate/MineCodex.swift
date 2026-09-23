@@ -330,6 +330,7 @@ struct MineCodexView: View {
                 Section(header: Text("🕳️ Layer guide")) {
                     ForEach(MineLayerGuide.all, id: \.title) { layer in
                         VStack(alignment: .leading, spacing: 4) {
+                            MineLayerDiorama(title: layer.title)
                             HStack {
                                 Text(layer.emoji).font(.title2)
                                 VStack(alignment: .leading, spacing: 2) {

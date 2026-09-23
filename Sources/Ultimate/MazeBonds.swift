@@ -286,6 +286,8 @@ struct MazeJournalView: View {
     var gold: Int
     var feed: (String) -> Void
     @State private var showBestiary = false
+    @State private var showMotion = false
+    @State private var showSky = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -309,6 +311,32 @@ struct MazeJournalView: View {
                         .cornerRadius(12)
                     }
                     .padding(.horizontal, 12)
+                    Button(action: { showMotion = true }) {
+                        HStack {
+                            Image(systemName: "wand.and.stars")
+                            Text("Motion Lab — animated rows")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.purple.opacity(0.6))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 12)
+                    Button(action: { showSky = true }) {
+                        HStack {
+                            Image(systemName: "moon.stars.fill")
+                            Text("Sky Observatory — 10 skies")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.blue.opacity(0.6))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 12)
                 }
                 .padding(.vertical, 12)
             }
@@ -322,6 +350,12 @@ struct MazeJournalView: View {
             }
             .sheet(isPresented: $showBestiary) {
                 MazeBestiaryView()
+            }
+            .sheet(isPresented: $showMotion) {
+                MazeMotionShowcaseView()
+            }
+            .sheet(isPresented: $showSky) {
+                MazeSkyShowcaseView()
             }
         }
         .preferredColorScheme(.dark)
@@ -378,7 +412,7 @@ struct MazeJournalView: View {
                         Text(found ? region.name : "???")
                             .font(.subheadline.bold()).foregroundColor(.white)
                         Text(found ? region.bounds : "Unmapped dark")
-                            .font(.caption).foregroundColor(.white.opacity(0.6))
+                            .font(.caption).foregroundColor(.white.opacity(0.75))
                     }
                     Spacer()
                     if found {
@@ -388,7 +422,14 @@ struct MazeJournalView: View {
                     }
                 }
                 .padding(10)
-                .background(Color.white.opacity(0.08))
+                .background(
+                    ZStack {
+                        MazeRegionSky(id: region.id)
+                            .opacity(found ? 1 : 0.3)
+                            .saturation(found ? 1 : 0)
+                        Color.black.opacity(found ? 0.2 : 0.5)
+                    }
+                )
                 .cornerRadius(12)
                 .padding(.horizontal, 12)
             }

@@ -605,6 +605,56 @@ final class MineManager: ObservableObject {
     /// All-time records board.
     @Published var bestSale: Int = 0
     @Published var richestPack: Int = 0
+    /// Live weather director for the HUD overlay.
+    @Published var weather = MineWeatherDirector()
+    /// Cinematic queue for big moments (rebirths, seals, legendaries).
+    @Published var cinema = MineCinematicDirector()
+    private var lastLegendCine = Date.distantPast
+    private var sawMagmaCine = false
+    /// Daily spin gate (calendar-day string in UserDefaults).
+    private let spinKey = "mineLastSpinDay.v1"
+
+    /// True when today's free spin is still available.
+    var canSpinToday: Bool {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return UserDefaults.standard.string(forKey: spinKey) != fmt.string(from: Date())
+    }
+
+    /// Roll the daily wheel: applies gold/XP/bombs, stamps the day.
+    /// Returns nil when today's spin is spent.
+    @discardableResult
+    func dailySpin() -> MineSpinPrize? {        guard canSpinToday else {
+            notify("🎡 Wheel recharges at midnight. Come back tomorrow!")
+            return nil
+        }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        UserDefaults.standard.set(fmt.string(from: Date()), forKey: spinKey)
+        let prize = MineSpinTable.roll()
+        applySpin(prize)
+        return prize
+    }
+
+    /// Stamp today's spin as spent (the wheel view calls this on award).
+    func stampSpinDay() {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        UserDefaults.standard.set(fmt.string(from: Date()), forKey: spinKey)
+    }
+
+    /// Apply a rolled prize (wheel view + daily roll share this path).
+    func applySpin(_ prize: MineSpinPrize) {
+        player.gold += prize.gold
+        player.experience += prize.xp
+        bombs = min(9, bombs + prize.bombs)
+        checkLevelUp()
+        var bits: [String] = []
+        if prize.gold > 0 { bits.append("+\(prize.gold)🪙") }
+        if prize.xp > 0 { bits.append("+\(prize.xp) XP") }
+        if prize.bombs > 0 { bits.append("+\(prize.bombs)🧨") }
+        notify("🎡 Wheel pays \(prize.emoji) \(bits.joined(separator: " "))!")
+    }
     @Published var torches: [SCNVector3] = []
     @Published var notifications: [String] = []
     @Published var swingId = 0
@@ -1501,6 +1551,9 @@ final class MineManager: ObservableObject {
                 if !c.greeted {
                     questBoard.record(.critterGreeted)
                     statTracker.recordCritter()
+                    if c.species == "Wisp" {
+                        cinema.play(.wispGreeting)
+                    }
                     c.greeted = true
                     notify("\(c.emoji) Rare encounter: Boxy \(c.species)! It likes you. (+\(gold)🪙, +2 \(ore))")
                 } else {
@@ -1756,6 +1809,12 @@ final class MineManager: ObservableObject {
         if [.crystalCube, .crystalSpike, .crystalOrb].contains(b.type) {
             checkCaveHarvest(cell: Self.cellForPos(b.position))
         }
+        // Legendary pulls get the slow-mo treatment (throttled).
+        if (b.type == .diamondOre || b.type == .opalOre),
+           Date().timeIntervalSince(lastLegendCine) > 120 {
+            lastLegendCine = Date()
+            cinema.play(.legendaryDrop(name: name))
+        }
         return (name, unit * n, xp)
     }
 
@@ -1804,6 +1863,7 @@ final class MineManager: ObservableObject {
         mineCaves[ci].isLocked = false
         questBoard.record(.caveUnlocked)
         statTracker.recordCaveOpened()
+        cinema.play(.sealBroken(shape: mineCaves[ci].shape.rawValue.capitalized))
         notify("\(mineCaves[ci].shape.emoji) Seal broken! The \(mineCaves[ci].shape.rawValue) cave stands open — mine it clean!")
         return true
     }
@@ -1967,6 +2027,7 @@ final class MineManager: ObservableObject {
             player.health = player.maxHealth
             onEvent?(.leveledUp(lv))
             notify("⬆️ Miner rank \(lv)! Health restored!")
+            cinema.play(.levelUp(level: lv))
         }
     }
 
@@ -2096,6 +2157,7 @@ final class MineManager: ObservableObject {
         player.health = player.maxHealth
         notify("💫 REBIRTH #\(player.rebirths)! Permanent +\(Int(rebirthMult * 100 - 100))% power. The mine remembers you.")
         questBoard.record(.rebirthed)
+        cinema.play(.rebirth(number: player.rebirths))
         lastLifetimeXP = 0
     }
 
@@ -2114,6 +2176,10 @@ final class MineManager: ObservableObject {
         notify("🗺️ New sector mapped: \(rows[row])-\(cols[col]) Dig! +\(bonus)🪙 (\(player.sectorsFound.count)/9)")
         questBoard.record(.sectorMapped(count: player.sectorsFound.count))
         questBoard.record(.depthReached(y: player.deepestY))
+        if !sawMagmaCine && player.deepestY <= -4.5 {
+            sawMagmaCine = true
+            cinema.play(.firstMagma)
+        }
         tutorial.complete(.sector)
         expandMineFrontier(col: col, row: row)
     }
@@ -3324,6 +3390,12 @@ struct UltimateMagicView: View {
         .overlay(alignment: .bottom) {
             MineTutorialView(tutorial: manager.tutorial)
         }
+        .overlay {
+            MineWeatherOverlay(layerTitle: manager.currentLayer.title, director: manager.weather)
+        }
+        .overlay {
+            MineCinematicHost(director: manager.cinema)
+        }
         .overlay(alignment: .topTrailing) {
             MineFrameBadge(monitor: manager.frameMonitor)
                 .padding(.trailing, 8)
@@ -3356,6 +3428,25 @@ struct MinePickPanel: View {
     @State private var showCaves = false
     @State private var showGhosts = false
     @State private var showCrystals = false
+    @State private var showLights = false
+    @State private var showParticles = false
+    @State private var showDioramas = false
+    @State private var showGhosts2 = false
+    @State private var showCrystals2 = false
+    @State private var showCinema = false
+    @State private var showMotion = false
+    @State private var showSectors = false
+    @State private var showWeather = false
+    @State private var showBosses = false
+    @State private var showPets = false
+    @State private var showSpin = false
+    @State private var showParty = false
+    @State private var showShop = false
+    @State private var showSwap = false
+    @State private var showArcade = false
+    @State private var showWater = false
+    @State private var showFire = false
+    @State private var showHub = false
 
     var body: some View {
         NavigationView {
@@ -3413,6 +3504,8 @@ struct MinePickPanel: View {
                         .controlSize(.small)
                     ForEach(manager.player.pets) { pet in
                         HStack {
+                            MinePetSprite(species: pet.species, size: 40)
+                                .frame(width: 44, height: 44)
                             Text(pet.emoji).font(.title2)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(pet.species) • \(pet.rarity)").bold().font(.subheadline)
@@ -3489,6 +3582,95 @@ struct MinePickPanel: View {
                             .controlSize(.small)
                     }
                     HStack {
+                        Button("🔥 Lighting") { showLights = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("✨ Particles") { showParticles = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🖼️ Dioramas") { showDioramas = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🎬 Cinematics") { showCinema = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("👻 Ghosts II") { showGhosts2 = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("💠 Crystals II") { showCrystals2 = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🎛️ Motion Lab") { showMotion = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🌤️ Weather") { showWeather = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🖼️ Sectors") { showSectors = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("👑 Bosses") { showBosses = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🐾 Pet FX") { showPets = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button(manager.canSpinToday ? "🎡 Daily Spin!" : "🎡 Spun ✓") { showSpin = true }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(manager.canSpinToday ? .purple : .gray)
+                    }
+                    HStack {
+                        Button("🎉 Celebrations") { showParty = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🔨 Workshop") { showShop = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🔀 Transitions") { showSwap = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🕹️ Arcade FX") { showArcade = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("💧 Water") { showWater = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🔥 Fire") { showFire = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🎨 ALL GRAPHICS") { showHub = true }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(.pink)
+                        Spacer()
+                    }
+                    HStack {
                         Text("\(manager.frameMonitor.grade) • \(Int(manager.frameMonitor.fps)) FPS • ⏱️ \(manager.statTracker.playClock)")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
@@ -3539,6 +3721,63 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showCrystals) {
                 MineCrystalShowcaseView()
+            }
+            .sheet(isPresented: $showLights) {
+                MineLightingShowcaseView()
+            }
+            .sheet(isPresented: $showParticles) {
+                MineParticleShowcaseView()
+            }
+            .sheet(isPresented: $showDioramas) {
+                MineDioramaShowcaseView()
+            }
+            .sheet(isPresented: $showGhosts2) {
+                MineGhostTheater2ShowcaseView()
+            }
+            .sheet(isPresented: $showCrystals2) {
+                MineCrystalTheater2ShowcaseView()
+            }
+            .sheet(isPresented: $showCinema) {
+                MineCinematicShowcaseView()
+            }
+            .sheet(isPresented: $showMotion) {
+                MineHUDMotionShowcaseView()
+            }
+            .sheet(isPresented: $showSectors) {
+                MineSectorShowcaseView()
+            }
+            .sheet(isPresented: $showWeather) {
+                MineWeatherShowcaseView()
+            }
+            .sheet(isPresented: $showBosses) {
+                MineBossCinemaShowcaseView()
+            }
+            .sheet(isPresented: $showPets) {
+                MinePetFXShowcaseView()
+            }
+            .sheet(isPresented: $showSpin) {
+                MineDailyWheelView(manager: manager)
+            }
+            .sheet(isPresented: $showParty) {
+                MineCelebrationShowcaseView()
+            }
+            .sheet(isPresented: $showShop) {
+                MineWorkshopShowcaseView()
+            }
+            .sheet(isPresented: $showSwap) {
+                MineTransitionShowcaseView()
+            }
+            .sheet(isPresented: $showArcade) {
+                MineArcadeShowcaseView()
+            }
+            .sheet(isPresented: $showWater) {
+                MineWaterShowcaseView()
+            }
+            .sheet(isPresented: $showFire) {
+                MineFireShowcaseView()
+            }
+            .sheet(isPresented: $showHub) {
+                MineGraphicsHubView()
             }
         }
     }

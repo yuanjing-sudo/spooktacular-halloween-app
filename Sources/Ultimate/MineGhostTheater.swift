@@ -21,6 +21,7 @@ import SwiftUI
 /// The six haunting kinds. Each gets its own sprite, eyes, wail and trail.
 enum MineGhostKind: String, CaseIterable {
     case wisp, shade, wraith, poltergeist, lanternKeeper, gloom
+    case partyGhost, sleepyBat, mossSpirit
 
     var title: String {
         switch self {
@@ -30,6 +31,9 @@ enum MineGhostKind: String, CaseIterable {
         case .poltergeist: return "Poltergeist"
         case .lanternKeeper: return "Lantern Keeper"
         case .gloom: return "Gloom"
+        case .partyGhost: return "Party Ghost"
+        case .sleepyBat: return "Sleepy Bat"
+        case .mossSpirit: return "Moss Spirit"
         }
     }
 
@@ -41,6 +45,9 @@ enum MineGhostKind: String, CaseIterable {
         case .poltergeist: return "🌀"
         case .lanternKeeper: return "🏮"
         case .gloom: return "🌑"
+        case .partyGhost: return "🎉"
+        case .sleepyBat: return "🦇"
+        case .mossSpirit: return "🌿"
         }
     }
 
@@ -53,6 +60,9 @@ enum MineGhostKind: String, CaseIterable {
         case .poltergeist: return Color(red: 0.7, green: 0.5, blue: 1.0)
         case .lanternKeeper: return Color(red: 1.0, green: 0.6, blue: 0.25)
         case .gloom: return Color(red: 0.25, green: 0.2, blue: 0.45)
+        case .partyGhost: return Color(red: 1.0, green: 0.5, blue: 0.75)
+        case .sleepyBat: return Color(red: 0.4, green: 0.35, blue: 0.6)
+        case .mossSpirit: return Color(red: 0.35, green: 0.75, blue: 0.4)
         }
     }
 
@@ -65,6 +75,9 @@ enum MineGhostKind: String, CaseIterable {
         case .poltergeist: return 18
         case .lanternKeeper: return 6
         case .gloom: return 10
+        case .partyGhost: return 16
+        case .sleepyBat: return 5
+        case .mossSpirit: return 9
         }
     }
 
@@ -77,6 +90,9 @@ enum MineGhostKind: String, CaseIterable {
         case .poltergeist: return 1.2
         case .lanternKeeper: return 3.0
         case .gloom: return 2.4
+        case .partyGhost: return 1.0
+        case .sleepyBat: return 3.4
+        case .mossSpirit: return 2.2
         }
     }
 
@@ -88,6 +104,9 @@ enum MineGhostKind: String, CaseIterable {
         case .poltergeist: return "Throws pebbles, moves helmets, denies everything. Chaotic neutral."
         case .lanternKeeper: return "Tends the dead lanterns. Tips its cap to miners. Has no cap."
         case .gloom: return "Weather, but personal. Follows you until you compliment its aura."
+        case .partyGhost: return "Haunts celebrations. Throws confetti, catches compliments."
+        case .sleepyBat: return "Naps hanging upside down. Snores in squeaks. Dreams in squares."
+        case .mossSpirit: return "A garden that learned to float. Smells like rain. Hums like moss."
         }
     }
 }
@@ -325,6 +344,9 @@ struct MineGhostEye: View {
         case .poltergeist: return .purple
         case .lanternKeeper: return .red
         case .gloom: return .black
+        case .partyGhost: return .pink
+        case .sleepyBat: return .brown
+        case .mossSpirit: return .green
         }
     }
 }
@@ -395,6 +417,62 @@ struct MineGhostProp: View {
                     .frame(width: size * 1.1, height: size * 0.3)
                     .offset(y: -size * 0.52)
                     .blur(radius: 3)
+            case .partyGhost:
+                // Party hat + confetti dot.
+                ZStack {
+                    Triangle()
+                        .fill(Color.pink)
+                        .frame(width: size * 0.3, height: size * 0.34)
+                        .offset(y: -size * 0.58)
+                    Circle()
+                        .fill(Color.yellow)
+                        .frame(width: 8, height: 8)
+                        .offset(y: -size * 0.78)
+                    HStack(spacing: 3) {
+                        Circle().fill(Color.cyan).frame(width: 5, height: 5)
+                        Circle().fill(Color.yellow).frame(width: 5, height: 5)
+                        Circle().fill(Color.pink).frame(width: 5, height: 5)
+                    }
+                    .offset(x: size * 0.42, y: -size * 0.3)
+                }
+            case .sleepyBat:
+                // Nightcap + "Z" drift.
+                ZStack {
+                    Capsule()
+                        .fill(Color.blue.opacity(0.85))
+                        .frame(width: size * 0.4, height: size * 0.2)
+                        .offset(x: -size * 0.1, y: -size * 0.52)
+                        .rotationEffect(.degrees(-14))
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: size * 0.12, height: size * 0.12)
+                        .offset(x: -size * 0.28, y: -size * 0.46)
+                    Text("Z")
+                        .font(.system(size: size * 0.22, weight: .bold))
+                        .foregroundColor(Color.white.opacity(0.8))
+                        .offset(x: size * 0.44, y: -size * 0.5)
+                }
+            case .mossSpirit:
+                // Leafy crown + vine pemdants.
+                ZStack {
+                    HStack(spacing: 2) {
+                        ForEach(0..<5, id: \.self) { i in
+                            Ellipse()
+                                .fill(Color(red: 0.3, green: 0.65, blue: 0.35))
+                                .frame(width: size * 0.14, height: size * 0.22)
+                                .rotationEffect(.degrees(Double(i * 18 - 36)))
+                        }
+                    }
+                    .offset(y: -size * 0.52)
+                    Capsule()
+                        .fill(Color(red: 0.3, green: 0.6, blue: 0.3))
+                        .frame(width: 6, height: size * 0.3)
+                        .offset(x: -size * 0.42, y: -size * 0.2)
+                    Capsule()
+                        .fill(Color(red: 0.3, green: 0.6, blue: 0.3))
+                        .frame(width: 6, height: size * 0.24)
+                        .offset(x: size * 0.42, y: -size * 0.22)
+                }
             case .shade, .wraith:
                 EmptyView()
             }
@@ -810,6 +888,83 @@ struct MineBooBurst: View {
 }
 
 // ============================================================
+// MARK: - 11. Elder trio + ghost choir
+// ============================================================
+
+/// Elder trio: three ancients stacked in a totem with shared halo.
+struct MineElderTrio: View {
+    @State private var hum = false
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            // Shared halo.
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.purple.opacity(0.5), .clear],
+                        center: .center, startRadius: 10, endRadius: 130
+                    )
+                )
+                .frame(width: 260, height: 260)
+                .opacity(hum ? 1 : 0.5)
+                .animation(
+                    .easeInOut(duration: 2.6).repeatForever(autoreverses: true),
+                    value: hum
+                )
+            VStack(spacing: -18) {
+                MineGhostSprite(kind: .wisp, size: 52)
+                    .offset(y: hum ? -6 : 6)
+                    .animation(
+                        .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                        value: hum
+                    )
+                MineGhostSprite(kind: .wraith, size: 68)
+                MineGhostSprite(kind: .gloom, size: 84)
+                    .offset(y: hum ? 6 : -6)
+                    .animation(
+                        .easeInOut(duration: 2.2).repeatForever(autoreverses: true),
+                        value: hum
+                    )
+            }
+            Text("👑").font(.title).offset(y: -172)
+        }
+        .frame(height: 330)
+        .onAppear { hum.toggle() }
+    }
+}
+
+/// Ghost choir: five singers scaling in canon, conductor wisp in front.
+struct MineGhostChoir: View {
+    @State private var beat = 0
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                ForEach(0..<5, id: \.self) { i in
+                    MineGhostSprite(
+                        kind: [MineGhostKind.shade, .wraith, .gloom, .shade, .wraith][i],
+                        size: 44,
+                        wailing: beat % 5 == i
+                    )
+                    .scaleEffect(beat % 5 == i ? 1.18 : 0.94)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.55), value: beat)
+                }
+            }
+            MineGhostSprite(kind: .wisp, size: 40)
+            Text("The Hollows Choir — wailing in canon")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(height: 220)
+        .onAppear {
+            Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { _ in
+                beat = (beat + 1) % 5
+                if beat == 0 { SpookyHaptics.play(.light) }
+            }
+        }
+    }
+}
+
+// ============================================================
 // MARK: - 10. Showcase gallery (all ghosts, all moves)
 // ============================================================
 
@@ -914,6 +1069,16 @@ struct MineGhostShowcaseView: View {
                         MineGhostRadar(kinds: Array(MineGhostKind.allCases.prefix(4))) { _ in
                             director.startleAll()
                         }
+                    }
+                    VStack(spacing: 8) {
+                        Text("Elder trio").font(.headline)
+                        Text("Three ancients, one totem, shared halo.").font(.caption).foregroundStyle(.secondary)
+                        MineElderTrio()
+                    }
+                    VStack(spacing: 8) {
+                        Text("Hollows choir").font(.headline)
+                        Text("Five singers wailing in canon.").font(.caption).foregroundStyle(.secondary)
+                        MineGhostChoir()
                     }
                     .padding(.bottom, 20)
                 }

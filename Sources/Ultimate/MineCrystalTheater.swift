@@ -30,6 +30,9 @@ enum MineDoorStyle: String, CaseIterable {
     case crystalSeal = "Crystal Seal"
     case timberBarricade = "Timber Barricade"
     case magmaGrate = "Magma Grate"
+    case mossDoor = "Moss Door"
+    case clockworkDoor = "Clockwork Door"
+    case starfallDoor = "Starfall Door"
 
     var emoji: String {
         switch self {
@@ -38,6 +41,9 @@ enum MineDoorStyle: String, CaseIterable {
         case .crystalSeal: return "🔮"
         case .timberBarricade: return "🪵"
         case .magmaGrate: return "🔥"
+        case .mossDoor: return "🌿"
+        case .clockworkDoor: return "⏳"
+        case .starfallDoor: return "🌠"
         }
     }
 
@@ -48,6 +54,9 @@ enum MineDoorStyle: String, CaseIterable {
         case .crystalSeal: return Color(red: 0.3, green: 0.8, blue: 0.95)
         case .timberBarricade: return Color(red: 0.55, green: 0.36, blue: 0.2)
         case .magmaGrate: return Color(red: 1.0, green: 0.4, blue: 0.1)
+        case .mossDoor: return Color(red: 0.3, green: 0.65, blue: 0.35)
+        case .clockworkDoor: return Color(red: 0.8, green: 0.65, blue: 0.35)
+        case .starfallDoor: return Color(red: 0.5, green: 0.4, blue: 1.0)
         }
     }
 
@@ -58,6 +67,9 @@ enum MineDoorStyle: String, CaseIterable {
         case .crystalSeal: return "The cave sealed itself in glass. Flattering. Expensive."
         case .timberBarricade: return "Somebody boarded this up in a hurry. Somebody was right."
         case .magmaGrate: return "Warm to the touch. The lock is the least hot thing here."
+        case .mossDoor: return "Grown shut over decades. Pruning fees payable in ore."
+        case .clockworkDoor: return "Ticks when you walk past. It is counting your coins. Correctly."
+        case .starfallDoor: return "Shows you rich behind starlight. Pay to make it true."
         }
     }
 }
@@ -645,6 +657,73 @@ struct MineLockedDoor: View {
                     }
                 }
             }
+        case .mossDoor:
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color(red: 0.12, green: 0.22, blue: 0.12))
+                    .frame(width: 150, height: 180)
+                ForEach(0..<6, id: \.self) { i in
+                    Capsule()
+                        .fill(Color(red: 0.28, green: 0.6, blue: 0.3))
+                        .frame(width: 14, height: 150 - CGFloat((i * 47) % 50))
+                        .offset(x: CGFloat(i * 24 - 60))
+                        .rotationEffect(.degrees(Double((i * 31) % 24) - 12))
+                }
+                Text("🍃").font(.title).offset(x: 44, y: -56)
+                Text("🌸").font(.body).offset(x: -44, y: 50)
+            }
+        case .clockworkDoor:
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(red: 0.8, green: 0.66, blue: 0.34), Color(red: 0.32, green: 0.24, blue: 0.12)],
+                            center: .center, startRadius: 8, endRadius: 85
+                        )
+                    )
+                    .frame(width: 170, height: 170)
+                ForEach(0..<12, id: \.self) { i in
+                    Capsule()
+                        .fill(Color(red: 0.45, green: 0.33, blue: 0.15))
+                        .frame(width: 10, height: 22)
+                        .offset(y: -72)
+                        .rotationEffect(.degrees(Double(i) * 30))
+                }
+                Circle()
+                    .fill(Color(red: 0.18, green: 0.12, blue: 0.05))
+                    .frame(width: 96, height: 96)
+                // Hands.
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 4, height: 34)
+                    .offset(y: -14)
+                    .rotationEffect(.degrees(64))
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 4, height: 24)
+                    .offset(y: -9)
+                    .rotationEffect(.degrees(210))
+            }
+        case .starfallDoor:
+            ZStack {
+                RoundedRectangle(cornerRadius: 60)
+                    .fill(Color(red: 0.05, green: 0.05, blue: 0.16))
+                    .frame(width: 140, height: 180)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 60)
+                            .stroke(Color(red: 0.5, green: 0.4, blue: 1.0), lineWidth: 3)
+                    )
+                ForEach(0..<7, id: \.self) { i in
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 4 + CGFloat((i * 37) % 4), height: 4 + CGFloat((i * 37) % 4))
+                        .offset(
+                            x: CGFloat((i * 53) % 80 - 40),
+                            y: CGFloat((i * 91) % 120 - 60)
+                        )
+                }
+                Text("🌠").font(.title).offset(y: -40)
+            }
         }
     }
 }
@@ -937,9 +1016,103 @@ struct MineLockedCavePanel: View {
 }
 
 // ============================================================
-// MARK: - 9. Crystal showcase gallery
+// MARK: - 10. Prism palace (grand scene)
 // ============================================================
 
+/// The Hollows' cathedral: prism fan above, crystal garden below,
+///
+/// orb ring choir, shimmer everywhere.
+struct MinePrismPalace: View {
+    @State private var breathe = false
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.1, green: 0.06, blue: 0.22), Color(red: 0.02, green: 0.01, blue: 0.07)],
+                startPoint: .top, endPoint: .bottom
+            )
+            MineCaveShimmer(colors: [.purple, .cyan, .pink, .white], moteCount: 50)
+            // Fan on the ceiling.
+            MinePrismFan()
+                .scaleEffect(0.7)
+                .offset(y: -90)
+            // Garden floor.
+            HStack(spacing: 14) {
+                MineAnimatedCube(color: .purple, size: 44)
+                MineAnimatedSpike(color: .cyan, height: 70)
+                MineAnimatedOrb(color: .pink, size: 48)
+                MineAnimatedSpike(color: .purple, height: 56)
+                MineAnimatedCube(color: .cyan, size: 38)
+            }
+            .offset(y: 70)
+            // Orb choir floating mid.
+            HStack(spacing: 22) {
+                ForEach(0..<3, id: \.self) { i in
+                    MineAnimatedOrb(color: [.purple, .cyan, .pink][i], size: 26)
+                        .offset(y: breathe ? -8 : 8)
+                        .animation(
+                            .easeInOut(duration: 1.8).repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.3),
+                            value: breathe
+                        )
+                }
+            }
+            .offset(y: -10)
+            MineVignette(strength: 0.45)
+        }
+        .frame(height: 330)
+        .cornerRadius(16)
+        .padding(.horizontal)
+        .onAppear { breathe.toggle() }
+    }
+}
+
+/// Credits roll: the mine thanks its crystals, scrolling upward forever.
+struct MineCrystalCredits: View {
+    @State private var roll = false
+
+    private let lines = [
+        ("🟪", "Cubes — for holding the floor"),
+        ("🔺", "Spikes — for reaching up"),
+        ("🔮", "Orbs — for glowing through"),
+        ("⛏️", "Miners — for swinging true"),
+        ("💎", "You — for reading credits"),
+    ]
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.black)
+                .frame(height: 170)
+            VStack(spacing: 8) {
+                ForEach(lines.indices, id: \.self) { i in
+                    HStack {
+                        Text(lines[i].0)
+                        Text(lines[i].1)
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.85))
+                    }
+                }
+            }
+            .offset(y: roll ? -30 : 30)
+            .animation(
+                .easeInOut(duration: 4).repeatForever(autoreverses: true),
+                value: roll
+            )
+            .mask(
+                LinearGradient(
+                    colors: [.clear, .black, .black, .clear],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+        }
+        .onAppear { roll.toggle() }
+    }
+}
+
+// ============================================================
+// MARK: - 9. Crystal showcase gallery
+// ============================================================
 /// Full crystal showcase: every shape, locks, doors, ceremonies, beds.
 /// Present from the codex or a debug button for a live demo.
 struct MineCrystalShowcaseView: View {
@@ -1058,6 +1231,15 @@ struct MineCrystalShowcaseView: View {
                             MineHarvestBurst(emoji: "🔮", color: .pink)
                         }
                         .frame(height: 140)
+                    }
+                    VStack(spacing: 10) {
+                        Text("Prism palace").font(.headline)
+                        Text("The Hollows' cathedral: fan above, garden below.").font(.caption).foregroundStyle(.secondary)
+                        MinePrismPalace()
+                    }
+                    VStack(spacing: 10) {
+                        Text("🎬 Credits roll").font(.headline)
+                        MineCrystalCredits()
                     }
                     .padding(.bottom, 20)
                 }
