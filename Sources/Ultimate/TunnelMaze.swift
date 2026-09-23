@@ -1825,6 +1825,8 @@ class TunnelMazeManager: ObservableObject {
     }
 
     func updateMonsters() {
+        // A* budget: at most 2 pathed hunts per tick, rest steer direct.
+        var pathedThisTick = 0
         for index in monsters.indices {
             var monster = monsters[index]
             if !monster.isAlive { continue }
@@ -1867,8 +1869,12 @@ class TunnelMazeManager: ObservableObject {
                 } else if distanceToPlayer > monster.detectionRange * 1.5 {
                     monster.state = .idle
                     monster.isAggressive = false
+                } else if pathedThisTick < 2,
+                          chaseViaStar(monster: &monster) {
+                    // A* waypoint step taken (wall-aware hunt).
+                    pathedThisTick += 1
                 } else {
-                    // Move towards player
+                    // Steering fallback (straight line).
                     let direction = SCNVector3(
                         player.position.x - monster.position.x,
                         0,
@@ -2303,6 +2309,48 @@ class TunnelMazeManager: ObservableObject {
         let length = sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z)
         guard length > 0 else { return SCNVector3(0, 0, 0) }
         return SCNVector3(vector.x / length, vector.y / length, vector.z / length)
+    }
+
+    /// A* walkability over the endless maze: inside bounds and near tunnel
+    /// structure (sampled stride keeps queries cheap on huge maps).
+    func mazeWalkable(_ n: AStarPathfinder.Node) -> Bool {
+        let x = Float(n.x) * 2, z = Float(n.z) * 2
+        if x < -60 || x > mazeBound || z < -210 || z > mazeBound { return false }
+        var i = 0
+        while i < tunnels.count {
+            let t = tunnels[i]
+            let dx = t.position.x - x, dz = t.position.z - z
+            if dx * dx + dz * dz < 100 { return true } // within 10 units
+            i += 10
+        }
+        return false
+    }
+
+    /// One A* waypoint step toward the player. Returns false when no path
+    /// (caller falls back to steering). Node budget caps the hunt cost.
+    @discardableResult
+    func chaseViaStar(monster: inout Monster) -> Bool {
+        let from = AStarPathfinder.Node(
+            x: Int((monster.position.x / 2).rounded()),
+            z: Int((monster.position.z / 2).rounded())
+        )
+        let goal = AStarPathfinder.Node(
+            x: Int((player.position.x / 2).rounded()),
+            z: Int((player.position.z / 2).rounded())
+        )
+        guard let path = AStarPathfinder.findPath(
+            start: from, goal: goal,
+            walkable: mazeWalkable, maxIter: 200
+        ), path.count > 1 else {
+            return false
+        }
+        let next = path[1]
+        let tx = Float(next.x) * 2, tz = Float(next.z) * 2
+        let dx = tx - monster.position.x, dz = tz - monster.position.z
+        let d = max(0.01, sqrt(dx * dx + dz * dz))
+        monster.position.x += dx / d * monster.speed * 0.1
+        monster.position.z += dz / d * monster.speed * 0.1
+        return true
     }
 
     func createParticles(at position: SCNVector3, count: Int, emoji: String) {

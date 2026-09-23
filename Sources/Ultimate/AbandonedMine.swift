@@ -833,8 +833,10 @@ final class MineManager: ObservableObject {
 
     static func inFrostPocket(_ p: SCNVector3) -> Bool {
         for (c, r) in frostPockets() {
+            let wobble = Float(caveNoise.fbm(x: Double(p.x) * 0.17 + 40, y: Double(p.z) * 0.17)) * 2.5
             let dx = p.x - c.x, dy = (p.y - c.y) * 0.7, dz = p.z - c.z
-            if dx * dx + dy * dy + dz * dz < r * r { return true }
+            let rr = r + wobble
+            if dx * dx + dy * dy + dz * dz < rr * rr { return true }
         }
         return false
     }
@@ -851,11 +853,20 @@ final class MineManager: ObservableObject {
 
     static func inCrystalCave(_ p: SCNVector3) -> Bool {
         for (c, r) in crystalCaves() {
+            // Organic walls: Perlin wobble on the radius. Movement and
+            // mesh share this function, so collision always agrees.
+            let wobble = Float(caveNoise.fbm(x: Double(p.x) * 0.15, y: Double(p.z) * 0.15)) * 3
             let dx = p.x - c.x, dy = (p.y - c.y) * 0.7, dz = p.z - c.z
-            if dx * dx + dy * dy + dz * dz < r * r { return true }
+            let rr = r + wobble
+            if dx * dx + dy * dy + dz * dz < rr * rr { return true }
         }
         return false
     }
+
+    /// Shared Perlin fields (stable seeds: same mountain every launch).
+    /// Cave walls wobble on `caveNoise`; ore veins bloom on `veinNoise`.
+    static let caveNoise = PerlinNoise(seed: 777)
+    static let veinNoise = PerlinNoise(seed: 20240)
 
     /// Which crystal growth belongs on a cave wall cell (deterministic per
     /// cell so gen stays stable): cubes, spikes and orbs by hash.
@@ -977,6 +988,15 @@ final class MineManager: ObservableObject {
                     if let ore = oreRoll(deep: deep, cavern: inCavern(p)) {
                         ores.append(MineWorldData.Block(id: UUID(), type: ore, cell: c,
                                                          health: ore.toughness, maxHealth: ore.toughness))
+                    } else if deep {
+                        // Perlin vein blobs: where the smooth field peaks,
+                        // bonus deep ore blooms (organic veins, bounded:
+                        // only cells the plain roll left empty).
+                        let vein = Self.veinNoise.fbm(x: Double(p.x) * 0.2, y: Double(p.z) * 0.2)
+                        if vein > 0.42, let bonus = oreRoll(deep: true, cavern: inCavern(p)) {
+                            ores.append(MineWorldData.Block(id: UUID(), type: bonus, cell: c,
+                                                             health: bonus.toughness, maxHealth: bonus.toughness))
+                        }
                     }
                     // Cave walls grow cube / spike / orb crystals.
                     if inCrystalCave(p), let xtal = crystalType(at: c), Int.random(in: 1...100) <= 55 {
@@ -2028,22 +2048,51 @@ final class MineManager: ObservableObject {
 
     // MARK: - Mining (staged hits, pick tiers, debris-worthy)
 
+    /// Ray-precision pick: the interactive block nearest the camera ray.
+    /// `anchor` optionally biases toward a tap point; `anchorTol` gates it.
+    private func pickBlockOnRay(origin: SCNVector3, dir: SCNVector3, anchor: SCNVector3?, maxRange: Float, rayTol: Float, anchorTol: Float) -> Int? {
+        let o = SIMD3<Float>(origin.x, origin.y, origin.z)
+        let d = SIMD3<Float>(dir.x, dir.y, dir.z)
+        var best: Int? = nil
+        var bestScore = Float.infinity
+        for i in blocks.indices where !blocks[i].isDestroyed && !blocks[i].type.isUnbreakable {
+            let bp = blocks[i].position
+            let dx = bp.x - o.x, dy = bp.y - o.y, dz = bp.z - o.z
+            if dx * dx + dy * dy + dz * dz > maxRange * maxRange { continue }
+            let rd = MineRaycaster.rayDistance(
+                origin: o, direction: d,
+                point: SIMD3<Float>(bp.x, bp.y, bp.z)
+            )
+            guard rd < rayTol else { continue }
+            var score = rd
+            if let a = anchor {
+                let ax = bp.x - a.x, ay = bp.y - a.y, az = bp.z - a.z
+                let ad = sqrt(ax * ax + ay * ay + az * az)
+                guard ad < anchorTol else { continue }
+                score += ad * 0.25
+            }
+            if score < bestScore {
+                bestScore = score
+                best = i
+            }
+        }
+        return best
+    }
+
     func mineBlock(at worldPos: SCNVector3) {
         swingId += 1
         statTracker.recordSwing()
         tutorial.complete(.tapOre)
         let eye = eyePos()
-        var bestIdx: Int? = nil
-        var bestTap: Float = 0.9
-        for i in blocks.indices where !blocks[i].isDestroyed {
-            let bp = blocks[i].position
-            let ex = bp.x - eye.x, ey = bp.y - eye.y, ez = bp.z - eye.z
-            guard sqrt(ex * ex + ey * ey + ez * ez) <= 5.0 else { continue }
-            let dx = bp.x - worldPos.x, dy = bp.y - worldPos.y, dz = bp.z - worldPos.z
-            let tap = sqrt(dx * dx + dy * dy + dz * dz)
-            if tap < bestTap { bestTap = tap; bestIdx = i }
-        }
-        guard let idx = bestIdx else { return }
+        // Fire a ray from the camera through the tap point (Roblox-style
+        // picking): nearest interactive block to the ray wins.
+        let ex = worldPos.x - eye.x, ey = worldPos.y - eye.y, ez = worldPos.z - eye.z
+        let el = max(0.01, sqrt(ex * ex + ey * ey + ez * ez))
+        guard let idx = pickBlockOnRay(
+            origin: eye,
+            dir: SCNVector3(ex / el, ey / el, ez / el),
+            anchor: worldPos, maxRange: 5.0, rayTol: 0.9, anchorTol: 1.2
+        ) else { return }
         applyMineHit(idx)
     }
 
@@ -2051,16 +2100,12 @@ final class MineManager: ObservableObject {
         swingId += 1
         statTracker.recordSwing()
         let eye = eyePos()
-        var bestIdx: Int? = nil
-        var bestDist: Float = 4.5
-        for i in blocks.indices where !blocks[i].isDestroyed && !blocks[i].type.isUnbreakable {
-            let dx = blocks[i].position.x - eye.x
-            let dy = blocks[i].position.y - eye.y
-            let dz = blocks[i].position.z - eye.z
-            let dist = sqrt(dx * dx + dy * dy + dz * dz)
-            if dist < bestDist { bestDist = dist; bestIdx = i }
-        }
-        guard let idx = bestIdx else {
+        // Hold-to-mine aims down the look ray.
+        let dir = lookDir()
+        guard let idx = pickBlockOnRay(
+            origin: eye, dir: dir,
+            anchor: nil, maxRange: 4.5, rayTol: 0.9, anchorTol: 0
+        ) else {
             notify("⛏️ Aim at a glowing ore!")
             return
         }
@@ -2538,6 +2583,12 @@ struct MineSceneView: UIViewRepresentable {
         private var lastSwingSeen = 0
         private var lastHitMonster: UUID?
         private var destroyedBlockIds = Set<UUID>()
+        // Streaming: 8-unit cell of the last block rebuild (dynamic
+        // culling — distant blocks cost zero nodes).
+        private var lastStreamX = Int.min
+        private var lastStreamZ = Int.min
+        /// Streaming radius (world units) around the player.
+        private let streamRadius: Float = 16
         private var divingBatIds = Set<UUID>()
 
         init(manager: MineManager) {
@@ -2766,8 +2817,13 @@ struct MineSceneView: UIViewRepresentable {
         func rebuild() {
             let destroyed = manager.blocks.filter { $0.isDestroyed }.count
             let structHash = (destroyed << 16) ^ (manager.blocks.count << 4)
-            if structHash != lastBuildHash {
+            // Streaming cell: crossing an 8-unit boundary re-streams.
+            let streamX = Int(floor(manager.player.position.x / 8))
+            let streamZ = Int(floor(manager.player.position.z / 8))
+            if structHash != lastBuildHash || streamX != lastStreamX || streamZ != lastStreamZ {
                 lastBuildHash = structHash
+                lastStreamX = streamX
+                lastStreamZ = streamZ
                 for b in manager.blocks where b.isDestroyed && !destroyedBlockIds.contains(b.id) {
                     spawnDebris(at: b.position, color: mineBlockColor(b.type))
                     destroyedBlockIds.insert(b.id)
@@ -2776,7 +2832,12 @@ struct MineSceneView: UIViewRepresentable {
                 for child in scene.rootNode.childNodes where child.name == "block" {
                     child.removeFromParentNode()
                 }
+                // Dynamic culling: only near, live blocks get 3D nodes.
+                // Buried/interior cells were already skipped at gen
+                // (touchesAir shell); this skips the merely distant.
+                let px = manager.player.position.x, pz = manager.player.position.z
                 for b in manager.blocks where !b.isDestroyed {
+                    if abs(b.position.x - px) > streamRadius || abs(b.position.z - pz) > streamRadius { continue }
                     scene.rootNode.addChildNode(blockNode(b))
                 }
             } else if manager.damageTick != lastDamageTick {
@@ -3560,6 +3621,8 @@ struct MinePickPanel: View {
     @State private var showFire = false
     @State private var showHub = false
     @State private var showForest = false
+    @State private var showSystems = false
+    @State private var showNet = false
     @State private var showGameFX = false
     @State private var showDaily = false
     @State private var showWelcome = !SpookyStore.onboardingDone
@@ -3800,6 +3863,15 @@ struct MinePickPanel: View {
                             .tint(.green)
                     }
                     HStack {
+                        Button("🔬 Systems Lab") { showSystems = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🌐 Net Loop") { showNet = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
                         Button("📅 Daily Hub") { showDaily = true }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
@@ -3923,6 +3995,12 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showForest) {
                 MineForestShowcaseView()
+            }
+            .sheet(isPresented: $showSystems) {
+                MineAlgorithmsShowcaseView()
+            }
+            .sheet(isPresented: $showNet) {
+                MineNetShowcaseView()
             }
             .sheet(isPresented: $showDaily) {
                 MineDailyHubView(manager: manager)
