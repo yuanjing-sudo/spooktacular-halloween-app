@@ -309,6 +309,15 @@ enum MineQuestCatalog {
             tip: "Below y −4.5. The lava glows; you glow brighter."
         ),
         MineQuest(
+            id: "core-sample",
+            title: "Core Sample",
+            detail: "Touch the Magma Core floor (y −4.5 or deeper). Bring back stories and soot.",
+            icon: "🕳️",
+            trigger: .reachDepth(-4.5),
+            rewardGold: 500, rewardXP: 350,
+            tip: "The shaft down at x 6…10 ends at the melt."
+        ),
+        MineQuest(
             id: "diamond-hands",
             title: "Diamond Hands",
             detail: "Hold six diamonds all the way to the sell cart.",
