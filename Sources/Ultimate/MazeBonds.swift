@@ -280,6 +280,7 @@ struct BoxyBondView: View {
 /// One sheet combining the expedition board, region atlas and bond
 /// ledger so the maze needs a single journal button.
 struct MazeJournalView: View {
+    @ObservedObject var manager: TunnelMazeManager
     @ObservedObject var expeditions: MazeExpeditionBoard
     @ObservedObject var regions: MazeRegionDirector
     @ObservedObject var bonds: BoxyBondLedger
@@ -292,6 +293,8 @@ struct MazeJournalView: View {
     @State private var showSky = false
     @State private var showDaily = false
     @State private var showCine = false
+    @State private var showRush = false
+    @State private var showGems = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -300,6 +303,9 @@ struct MazeJournalView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     expeditionSection
                     atlasSection
+                    companionSection
+                    themeSection
+                    trinketSection
                     BoxyBondView(ledger: bonds, gold: gold, feed: feed)
                         .padding(.horizontal, 12)
                     Button(action: { showBestiary = true }) {
@@ -367,6 +373,32 @@ struct MazeJournalView: View {
                         .cornerRadius(12)
                     }
                     .padding(.horizontal, 12)
+                    Button(action: { showRush = true }) {
+                        HStack {
+                            Image(systemName: "crown.fill")
+                            Text("Boss Rush — 5 bounties")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.red.opacity(0.6))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 12)
+                    Button(action: { showGems = true }) {
+                        HStack {
+                            Image(systemName: "diamond.fill")
+                            Text("Gem Atelier — cut for 2×")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.cyan.opacity(0.6))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 12)
                 }
                 .padding(.vertical, 12)
             }
@@ -399,6 +431,12 @@ struct MazeJournalView: View {
             }
             .sheet(isPresented: $showCine) {
                 MazeCinematicShowcaseView()
+            }
+            .sheet(isPresented: $showRush) {
+                MazeRushView(board: manager.rushBoard)
+            }
+            .sheet(isPresented: $showGems) {
+                MineGemBenchView(manager: manager)
             }
         }
         .preferredColorScheme(.dark)
@@ -442,8 +480,22 @@ struct MazeJournalView: View {
         }
     }
 
-    private var atlasSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var companionSection: some View {
+        MazeCompanionView(manager: manager)
+            .padding(.horizontal, 12)
+    }
+
+    private var themeSection: some View {
+        MazeThemePickerView(manager: manager)
+            .padding(.horizontal, 12)
+    }
+
+    private var trinketSection: some View {
+        MazeTrinketBoxView(manager: manager)
+            .padding(.horizontal, 12)
+    }
+
+    private var atlasSection: some View {        VStack(alignment: .leading, spacing: 8) {
             Text("🗺️ Regions (\(regions.mappedCount)/\(MazeRegionAtlas.all.count))")
                 .font(.headline).foregroundColor(.white)
                 .padding(.horizontal, 12)

@@ -3678,6 +3678,11 @@ struct MinePickPanel: View {
     @State private var showFire = false
     @State private var showHub = false
     @State private var showForest = false
+    @State private var showContracts = false
+    @State private var showTrials = false
+    @State private var showConsole = false
+    @State private var showBank = false
+    @State private var showDive = false
     @State private var showFish = false
     @State private var showAchieve = false
     @State private var showRelics = false
@@ -3946,6 +3951,30 @@ struct MinePickPanel: View {
                             .tint(.green)
                     }
                     HStack {
+                        Button("📋 Contracts") { showContracts = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("⏱️ Trials") { showTrials = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("📡 Weather") { showConsole = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🏦 Bank") { showBank = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🕳️ Deep Dives") { showDive = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                    }
+                    HStack {
                         Button("🎚️ Motion") { showEngine = true }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -4102,6 +4131,21 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showForest) {
                 MineForestShowcaseView()
+            }
+            .sheet(isPresented: $showContracts) {
+                MineContractView(manager: manager)
+            }
+            .sheet(isPresented: $showTrials) {
+                MineTrialView(manager: manager)
+            }
+            .sheet(isPresented: $showConsole) {
+                MineWeatherConsoleView(manager: manager)
+            }
+            .sheet(isPresented: $showBank) {
+                MineBankView(manager: manager)
+            }
+            .sheet(isPresented: $showDive) {
+                MineDeepDiveView(manager: manager)
             }
             .sheet(isPresented: $showEngine) {
                 MineMotionEngineShowcaseView()

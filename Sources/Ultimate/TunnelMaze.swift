@@ -703,6 +703,8 @@ class TunnelMazeManager: ObservableObject {
     @Published var bondLedger = BoxyBondLedger()
     // Cinematic queue for big maze moments.
     @Published var cinema = MazeCinematicDirector()
+    // Boss Rush gauntlet board.
+    @Published var rushBoard = MazeRushBoard()
     private var lastExpScore = 0
     private var lastExpDist: Float = 0
     private var knownCompletedExpeditions = Set<String>()
@@ -754,10 +756,20 @@ class TunnelMazeManager: ObservableObject {
         // Expedition rewards land straight in score + wallet.
         expeditionBoard.onReward = { [weak self] score, gold in
             guard let self = self else { return }
+            let bonusGold = Int(Double(gold) * self.followerGoldMult)
             self.score += score
-            self.player.gold += gold
+            self.player.gold += bonusGold
             self.player.experience += score / 2
-            self.addNotification("🧭 Expedition complete! +\(score) pts +\(gold)🪙!")
+            self.addNotification("🧭 Expedition complete! +\(score) pts +\(bonusGold)🪙!")
+            self.checkLevelUp()
+        }
+        // Boss Rush bounties land the same way.
+        rushBoard.onReward = { [weak self] score, gold in
+            guard let self = self else { return }
+            let bonusGold = Int(Double(gold) * self.followerGoldMult)
+            self.score += score
+            self.player.gold += bonusGold
+            self.addNotification("👑 Boss bounty! +\(score) pts +\(bonusGold)🪙!")
             self.checkLevelUp()
         }
         // Region discovery pays score + gold and feeds expeditions.
@@ -1280,8 +1292,9 @@ class TunnelMazeManager: ObservableObject {
 
     private func maybeSpawnBoxyAnimal() {
         if boxyCooldown > 0 { boxyCooldown -= 1; return }
-        // ~0.5% per tick while roaming: genuinely rare.
-        if Int.random(in: 1...200) == 1 {
+        // Rare encounter, luckier under crystal/void tunnel themes.
+        let denom = max(60, 200 - Int(mazeTheme.boxyLuck * 400))
+        if Int.random(in: 1...denom) == 1 {
             boxyCooldown = 120
             spawnBoxyAnimal(near: player.position)
         }
@@ -1985,8 +1998,8 @@ class TunnelMazeManager: ObservableObject {
                 if let index = treasures.firstIndex(where: { $0.id == treasure.id }) {
                     treasures[index].isFound = true
                     player.treasureFound += 1
-                    player.gold += treasure.value
-                    player.experience += treasure.value / 2
+                    player.gold += Int(Double(treasure.value) * followerGoldMult)
+                    player.experience += Int(Double(treasure.value / 2) * followerXPMult)
 
                     addNotification("💎 Found \(treasure.name)! +\(treasure.value) gold!")
                     expeditionBoard.record(.treasureFound)
@@ -2226,6 +2239,8 @@ class TunnelMazeManager: ObservableObject {
             createParticles(at: position, count: 30, emoji: "⭐")
             triggerHaptic(.medium)
             expeditionBoard.record(.monsterSlain)
+            _ = rushBoard.recordKill(monsterName: monster.type.displayName)
+            _ = maybeDropTrinket(at: position)
             if monster.isBoss {
                 cinema.play(.bossDown(name: monster.name))
             }
@@ -2255,6 +2270,8 @@ class TunnelMazeManager: ObservableObject {
             player.gold += Int.random(in: 5...20)
             addNotification("⚔️ Defeated \(monster.name)! +\(monster.experience) experience")
             expeditionBoard.record(.monsterSlain)
+            _ = rushBoard.recordKill(monsterName: monster.type.displayName)
+            _ = maybeDropTrinket(at: position)
             if monster.isBoss {
                 cinema.play(.bossDown(name: monster.name))
             }
@@ -3371,6 +3388,7 @@ struct TunnelMazeView: View {
         }
         .sheet(isPresented: $showQuests) {
             MazeJournalView(
+                manager: manager,
                 expeditions: manager.expeditionBoard,
                 regions: manager.regionDirector,
                 bonds: manager.bondLedger,
