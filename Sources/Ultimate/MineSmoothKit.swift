@@ -927,23 +927,83 @@ struct MineMapView: View {
         let found = manager.player.sectorsFound.contains("\(col),\(row)")
         let here = isPlayerSector(col: col, row: row)
         return ZStack {
+            // Living diorama backdrop (dimmed until mapped).
+            MineSectorMini(col: col, row: row)
+                .opacity(found ? 1 : 0.3)
+                .saturation(found ? 1 : 0)
             RoundedRectangle(cornerRadius: 10)
-                .fill(found ? Color.orange.opacity(0.35) : Color.gray.opacity(0.2))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(here ? Color.green : Color.clear, lineWidth: 3)
-                )
-                .frame(height: 84)
+                .fill(Color.black.opacity(found ? 0.15 : 0.45))
+            if here {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.green, lineWidth: 3)
+            }
             VStack(spacing: 2) {
                 Text(found ? ["🧭", "⛏️", "🦇", "💜", "🛤️", "🔥", "🔮", "⬛", "🌋"][row * 3 + col] : "⬜")
                     .font(.title2)
                 Text("\(rows[row].prefix(1))-\(cols[col].prefix(1))")
                     .font(.caption2.bold()).foregroundColor(.white)
                 if here {
-                    Text("📍").font(.caption2)
+                    Text("📍 YOU").font(.caption2.bold()).foregroundColor(.green)
                 }
             }
+            // Content markers: caves, closets, critters in-sector.
+            VStack {
+                Spacer()
+                HStack(spacing: 3) {
+                    if sectorCaves(col: col, row: row) > 0 {
+                        Text("🔮\(sectorCaves(col: col, row: row))")
+                            .font(.system(size: 9).bold())
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.black.opacity(0.65))
+                            .foregroundColor(.white)
+                            .cornerRadius(5)
+                    }
+                    if sectorClosets(col: col, row: row) > 0 {
+                        Text("🚪\(sectorClosets(col: col, row: row))")
+                            .font(.system(size: 9).bold())
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.black.opacity(0.65))
+                            .foregroundColor(.white)
+                            .cornerRadius(5)
+                    }
+                    if sectorCritters(col: col, row: row) > 0 {
+                        Text("📦\(sectorCritters(col: col, row: row))")
+                            .font(.system(size: 9).bold())
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.black.opacity(0.65))
+                            .foregroundColor(.white)
+                            .cornerRadius(5)
+                    }
+                }
+                .padding(.bottom, 3)
+            }
         }
+        .frame(height: 84)
+    }
+
+    private func sectorOf(x: Float, z: Float) -> (Int, Int) {
+        (min(2, max(0, Int((x + 60) / 40))), min(2, max(0, Int((z + 60) / 40))))
+    }
+
+    private func sectorCaves(col: Int, row: Int) -> Int {
+        manager.mineCaves.filter({
+            let (c, r) = sectorOf(x: $0.center.x, z: $0.center.z)
+            return c == col && r == row
+        }).count
+    }
+
+    private func sectorClosets(col: Int, row: Int) -> Int {
+        manager.mineClosets.filter({
+            let (c, r) = sectorOf(x: $0.position.x, z: $0.position.z)
+            return c == col && r == row
+        }).count
+    }
+
+    private func sectorCritters(col: Int, row: Int) -> Int {
+        manager.critters.filter({
+            let (c, r) = sectorOf(x: $0.position.x, z: $0.position.z)
+            return c == col && r == row
+        }).count
     }
 }
 

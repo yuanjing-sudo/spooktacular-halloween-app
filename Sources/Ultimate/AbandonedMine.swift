@@ -643,6 +643,21 @@ final class MineManager: ObservableObject {
     @Published var cinema = MineCinematicDirector()
     private var lastLegendCine = Date.distantPast
     private var sawMagmaCine = false
+    // Angler state: creel, rod, cast helper.
+    @Published var fishCaught: [String: Int] = [:]
+    @Published var rodTier: Int = 0
+    @Published var fishing = MNFishingState()
+    // Relic vault: found charms + equipped set.
+    @Published var relics: [MNRelic] = []
+    @Published var equippedRelics: Set<UUID> = []
+    // Events + merchant ledger.
+    @Published var eventDirector = MineEventDirector()
+    @Published var eventsSeen: Int = 0
+    @Published var merchantDeals: Int = 0
+    /// Best single fish-market sale (achievements).
+    @Published var fishMarketBest: Int = 0
+    /// Achievement board (poll-based, no hooks).
+    @Published var achBoard = MineAchievementBoard()
     /// Daily spin gate (calendar-day string in UserDefaults).
     private let spinKey = "mineLastSpinDay.v1"
 
@@ -728,6 +743,13 @@ final class MineManager: ObservableObject {
             self.player.experience += xp
             self.checkLevelUp()
             self.notify("📜 Quest complete! +\(gold)🪙 +\(xp) XP!")
+        }
+        self.achBoard.onReward = { [weak self] gold, xp in
+            guard let self = self else { return }
+            self.player.gold += gold
+            self.player.experience += xp
+            self.checkLevelUp()
+            self.notify("🏆 Achievement claimed! +\(gold)🪙 +\(xp) XP!")
         }
         // World gen runs off-main with no blocking veil.
         Task {
@@ -1354,6 +1376,7 @@ final class MineManager: ObservableObject {
             self.updateMonsters(dt: Float(dt))
             self.updateCritters(dt: Float(dt))
             self.updateBombs(dt: Float(dt))
+            self.eventDirector.tick(dt: dt, on: self)
             self.frameMonitor.recordFrame(dt: dt)
             self.statTracker.tick(dt: dt)
             phase += 1
@@ -1684,7 +1707,8 @@ final class MineManager: ObservableObject {
             let dist = sqrt(dx * dx + dz * dz)
         m.attackCooldown -= Double(dt)
         // Difficulty scales the chase radius (never the lethality).
-        if dist < Float(9 * difficulty.monsterAggression) && player.health > 0 {
+        // Quiet Hour: monsters nap instead of chasing.
+        if dist < Float(9 * difficulty.monsterAggression) && player.health > 0 && !eventDirector.monstersAsleep {
                 // Chase (y locked to its floor).
                 let step = m.kind.speed * dt
                 m.position.x += dx / max(dist, 0.01) * step
@@ -1882,6 +1906,7 @@ final class MineManager: ObservableObject {
         damageTick += 1
         destroyedCount += 1
         player.blocksMined += 1
+        SpookyStore.set(SpookyStore.int("lifeBlocks") + 1, "lifeBlocks")
         let name = b.type.displayName
         // Tycoon loop: ore rides in the backpack, value accrues unsold.
         // Luck pets can double the drop; depth multiplies value + XP.
@@ -1892,9 +1917,14 @@ final class MineManager: ObservableObject {
         player.ores[name, default: 0] += n
         // Coal is pick-forge currency, never sold: it rides along but
         // accrues no sale value (still takes backpack space — upgrade!).
-        let unit = (name == "Coal Ore") ? 0 : Int(Double(b.type.goldValue) * layer.rewardMultiplier)
+        // Event + relic multipliers stack on depth pay.        var eventMult = layer.rewardMultiplier * eventDirector.oreMult * eventDirector.rainbowMult
+        if name == "Gold Ore" { eventMult *= eventDirector.goldOreMult }
+        if b.type == .crystalCube || b.type == .crystalSpike || b.type == .crystalOrb {
+            eventMult *= eventDirector.crystalMult
+        }
+        let unit = (name == "Coal Ore") ? 0 : Int(Double(b.type.goldValue) * eventMult)
         player.sellValue += unit * n
-        let xp = Int(Double(b.type.xpReward) * layer.rewardMultiplier * rebirthMult)
+        let xp = Int(Double(b.type.xpReward) * layer.rewardMultiplier * rebirthMult * eventDirector.xpMult)
         if b.type.goldValue > 0 || b.type.xpReward > 0 {
             player.experience += xp
             checkLevelUp()
@@ -1906,8 +1936,8 @@ final class MineManager: ObservableObject {
         }
         let luckyTag = lucky ? "🍀 Lucky double! " : ""
         if b.type.goldValue > 0 || b.type.xpReward > 0 {
-            var msg = "⛏️ \(luckyTag)\(name) x\(n)! +\(xp) XP → 🎒 (\(player.backpackUsed)/\(player.backpackCapacity))"
-            if player.backpackFull { msg += " FULL — go sell!" }
+            var msg = "⛏️ \(luckyTag)\(name) x\(n)! +\(xp) XP → 🎒 (\(player.backpackUsed)/\(effectivePackCapacity))"
+            if packFull { msg += " FULL — go sell!" }
             notify(msg)
         }
         // Quest / stat / tutorial hooks.
@@ -2042,6 +2072,10 @@ final class MineManager: ObservableObject {
             checkLevelUp()
             onEvent?(.minedOre("Closet Treasure", 1))
             notify("💎 Treasure closet! +\(g)🪙")
+            // One in four treasure closets hides a relic.
+            if Int.random(in: 1...4) == 1 {
+                _ = grantRandomRelic(source: "a treasure closet")
+            }
         } else {
             player.experience += 2
             notify("🕸️ Fake closet… just cobwebs!")
@@ -2140,13 +2174,18 @@ final class MineManager: ObservableObject {
         }
         // Full backpack: ore blocks bounce off until you sell (closets
         // always open — they're bonuses, not backpack fill).
-        if player.backpackFull && b.type != .closetCrate {
-            notify("🎒 Backpack full (\(player.backpackCapacity))! Hit 💰 to sell — the surface cart pays +25%.")
+        if packFull && b.type != .closetCrate {
+            notify("🎒 Backpack full (\(effectivePackCapacity))! Hit 💰 to sell — the surface cart pays +25%.")
             return
         }
         let before = bombs
-        // Speed pets + rebirth power up every swing; deep rock is tougher.
-        blocks[idx].damage += player.pickTier.damage * Float(speedMult * rebirthMult)
+        // Speed pets + relics + rebirth power every swing; deep rock is
+        // tougher; lucky strikes (event buff) hit 50% harder.
+        var swingDamage = player.pickTier.damage * Float(speedMult * rebirthMult) * Float(relicDamageMult() * relicSpeedMult() * eventDirector.drillMult)
+        if eventDirector.spendLuckySwing() {
+            swingDamage *= 1.5
+        }
+        blocks[idx].damage += swingDamage
         if Int.random(in: 1...10) == 1 { blocks[idx].damage += 1 } // lucky crack
         if blocks[idx].damage >= effectiveToughness(b.type, atY: blocks[idx].position.y) {
             _ = breakBlock(idx)
@@ -2199,7 +2238,7 @@ final class MineManager: ObservableObject {
 
     var luckChance: Double {
         min(0.6, player.pets.filter { $0.isEquipped && $0.boostKind == "Luck" }
-            .reduce(0.0) { $0 + $1.boostValue } + difficulty.lootLuck)
+            .reduce(0.0) { $0 + $1.boostValue } + difficulty.lootLuck + relicLuckBonus())
     }
 
     var petGoldMult: Double {
@@ -2228,13 +2267,14 @@ final class MineManager: ObservableObject {
             return
         }
         let bonus = isAtSellPad ? 1.25 : 1.0
-        let payout = Int(Double(player.sellValue) * bonus * petGoldMult * rebirthMult)
+        let payout = Int(Double(player.sellValue) * bonus * petGoldMult * rebirthMult * relicGoldMult())
         let units = player.backpackUsed
         // Coal stays banked for the pick forge — everything else sells.
         let coal = player.ores["Coal Ore", default: 0]
         player.gold += payout
         player.ores = coal > 0 ? ["Coal Ore": coal] : [:]
         player.sellValue = 0
+        SpookyStore.set(SpookyStore.int("lifeGold") + payout, "lifeGold")
         if isAtSellPad {
             notify("💰 Sold \(units) ores at the surface cart! +\(payout)🪙 (surface bonus!)")
         } else {
@@ -2244,6 +2284,9 @@ final class MineManager: ObservableObject {
         tutorial.complete(.sell)
         bestSale = max(bestSale, payout)
     }
+
+    /// Pack-full check with relic pockets included.
+    var packFull: Bool { player.backpackUsed >= effectivePackCapacity }
 
     /// Bigger backpack, stay down longer. Gold cost grows quadratically.
     var backpackCost: Int {
@@ -3377,7 +3420,7 @@ struct UltimateMagicView: View {
                 HStack(spacing: 8) {
                     VStack(spacing: 0) {
                         Text("🦇 Abandoned Mine").font(.subheadline.bold()).foregroundColor(.white)
-                        Text("Lv.\(manager.player.level) • 💰\(manager.player.gold) • 🎒\(manager.player.backpackUsed)/\(manager.player.backpackCapacity) • 👾\(manager.player.monstersSlain)")
+                        Text("Lv.\(manager.player.level) • 💰\(manager.player.gold) • 🎒\(manager.player.backpackUsed)/\(manager.effectivePackCapacity) • 👾\(manager.player.monstersSlain)")
                             .font(.system(size: 9)).foregroundColor(.white.opacity(0.85))
                         Text("\(manager.currentLayer.emoji) \(manager.currentLayer.title)\(manager.player.rebirths > 0 ? " • 💫\(manager.player.rebirths)" : "")")
                             .font(.system(size: 9)).foregroundColor(.yellow.opacity(0.95))
@@ -3526,6 +3569,12 @@ struct UltimateMagicView: View {
         .sheet(isPresented: $showPickPanel) {
             MinePickPanel(manager: manager)
         }
+        .sheet(isPresented: Binding(
+            get: { manager.eventDirector.merchantOpen },
+            set: { if !$0 { manager.eventDirector.closeMerchant() } }
+        )) {
+            MineMerchantView(manager: manager)
+        }
         .onChange(of: manager.scareId) { _, _ in
             scareFlash = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { scareFlash = false }
@@ -3629,6 +3678,9 @@ struct MinePickPanel: View {
     @State private var showFire = false
     @State private var showHub = false
     @State private var showForest = false
+    @State private var showFish = false
+    @State private var showAchieve = false
+    @State private var showRelics = false
     @State private var showEngine = false
     @State private var showChoreo = false
     @State private var showLoop = false
@@ -3674,7 +3726,7 @@ struct MinePickPanel: View {
                     Text("Coal: any pick • Iron/Gold/Lapis: Stone+ • Redstone/Emerald: Iron+ • Ruby: Golden+ • Diamond/Opal: Diamond • Frost: Stone+ • Glacier: Iron+")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section(header: Text("🎒 Backpack (\(manager.player.backpackUsed)/\(manager.player.backpackCapacity))")) {
+                Section(header: Text("🎒 Backpack (\(manager.player.backpackUsed)/\(manager.effectivePackCapacity))")) {
                     Text("Unsold value: \(manager.player.sellValue)🪙 — sell at the 💰 cart. Surface entrance pays +25%\(manager.isAtSellPad ? " (YOU'RE THERE!)" : "").")
                         .font(.caption).foregroundStyle(.secondary)
                     HStack {
@@ -3825,6 +3877,26 @@ struct MinePickPanel: View {
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
                             .tint(manager.canSpinToday ? .purple : .gray)
+                    }
+                    HStack {
+                        Button("🎣 Fishing") { showFish = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        Button("🏆 Achievements (\(manager.achBoard.doneCount))") { showAchieve = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Button("🗿 Relics (\(manager.relics.count))") { showRelics = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Spacer()
+                        if manager.eventDirector.merchantOpen {
+                            Text("🧳 Merchant waiting!").font(.caption.bold()).foregroundColor(.orange)
+                        } else {
+                            Text("\(manager.eventsSeen) events seen").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     HStack {
                         Button("🎉 Celebrations") { showParty = true }
@@ -3988,6 +4060,15 @@ struct MinePickPanel: View {
             }
             .sheet(isPresented: $showPets) {
                 MinePetFXShowcaseView()
+            }
+            .sheet(isPresented: $showFish) {
+                MineFishingView(manager: manager)
+            }
+            .sheet(isPresented: $showAchieve) {
+                MineAchievementsView(manager: manager, board: manager.achBoard)
+            }
+            .sheet(isPresented: $showRelics) {
+                MineRelicVaultView(manager: manager)
             }
             .sheet(isPresented: $showSpin) {
                 MineDailyWheelView(manager: manager)

@@ -27,6 +27,9 @@ enum MineLoreRule {
     case gold(Int)
     case critters(Int)
     case seals(Int)
+    case fish(Int)
+    case events(Int)
+    case trader(Int)
 }
 
 struct MineLoreFragment: Identifiable {
@@ -505,13 +508,70 @@ enum MineLoreCatalog {
             source: "Survey map, blue ink",
             rule: .ore(name: "Frost Ore", count: 25)
         ),
+        MineLoreFragment(
+            id: "echo-67",
+            title: "Gone Fishin'",
+            text: "Hung a sign, took a rod, caught dinner and a legend. The lake provides. The lake always provides.",
+            source: "Sign by the underground lake",
+            rule: .fish(10)
+        ),
+        MineLoreFragment(
+            id: "echo-68",
+            title: "Magma Angler's Oath",
+            text: "I swear by the ember eel: lava fishing counts double because the bait screams the whole time.",
+            source: "Oath, notarized in soot",
+            rule: .fish(30)
+        ),
+        MineLoreFragment(
+            id: "echo-69",
+            title: "Eventful Life",
+            text: "Ghost parades, mushroom blooms, merchant visits. Some miners dig. I attend.",
+            source: "Social calendar, laminated",
+            rule: .events(10)
+        ),
+        MineLoreFragment(
+            id: "echo-70",
+            title: "Storm Chaser",
+            text: "Thirty happenings witnessed. I rate them all five stars except the bats. The bats know why.",
+            source: "Review scroll",
+            rule: .events(30)
+        ),
+        MineLoreFragment(
+            id: "echo-71",
+            title: "Peddler's Pal",
+            text: "Bought thrice from the traveling merchant. He remembers my name. I remember his prices. Fair trade.",
+            source: "Receipt bundle",
+            rule: .trader(3)
+        ),
+        MineLoreFragment(
+            id: "echo-72",
+            title: "Relic Respect",
+            text: "Six charms on the belt, each with a story. The belt has back problems. Worth it.",
+            source: "Belt-maker's invoice",
+            rule: .trader(6)
+        ),
+        MineLoreFragment(
+            id: "echo-73",
+            title: "Angler's Atlas",
+            text: "Every species logged, both waters. The creel journal is complete and slightly damp.",
+            source: "Creel journal, last page",
+            rule: .fish(60)
+        ),
+        MineLoreFragment(
+            id: "echo-74",
+            title: "Merchant Royalty",
+            text: "Ten deals closed. The peddler saves the good relics for me now. Or says so. Either way: relics.",
+            source: "Loyalty card, full",
+            rule: .trader(10)
+        ),
     ]
 
     /// Fragments unlocked by a snapshot of manager state.
     static func unlocked(
         sectors: Int, deepestY: Float, ores: [String: Int],
         closets: Int, caves: Int, pets: Int, rebirths: Int,
-        level: Int, gold: Int, critters: Int, seals: Int = 0
+        level: Int, gold: Int, critters: Int, seals: Int = 0,
+        fish: Int = 0, events: Int = 0, trader: Int = 0
     ) -> [MineLoreFragment] {
         all.filter { f in
             switch f.rule {
@@ -527,6 +587,9 @@ enum MineLoreCatalog {
             case .gold(let n): return gold >= n
             case .critters(let n): return critters >= n
             case .seals(let n): return seals >= n
+            case .fish(let n): return fish >= n
+            case .events(let n): return events >= n
+            case .trader(let n): return trader >= n
             }
         }
     }
@@ -595,7 +658,10 @@ struct MineLoreView: View {
             level: manager.player.level,
             gold: manager.player.gold,
             critters: manager.critters.filter({ $0.greeted }).count,
-            seals: manager.mineCaves.filter({ !$0.isLocked && !$0.unlockCost.isEmpty }).count
+            seals: manager.mineCaves.filter({ !$0.isLocked && !$0.unlockCost.isEmpty }).count,
+            fish: manager.fishCaught.values.reduce(0, +),
+            events: manager.eventsSeen,
+            trader: manager.merchantDeals
         )
     }
 
@@ -617,6 +683,9 @@ struct MineLoreView: View {
         case .gold(let n): return "Hold \(n)🪙."
         case .critters(let n): return "Befriend \(n) critters."
         case .seals(let n): return "Break \(n) cave seals."
+        case .fish(let n): return "Catch \(n) fish."
+        case .events(let n): return "Witness \(n) events."
+        case .trader(let n): return "Close \(n) merchant deals."
         }
     }
 }

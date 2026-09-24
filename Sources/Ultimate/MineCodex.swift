@@ -512,6 +512,16 @@ struct MineCodexView: View {
                         Spacer()
                         Text("\(manager.player.pets.count)").bold().monospacedDigit()
                     }
+                    HStack {
+                        Text("🧱 Lifetime blocks (all visits)")
+                        Spacer()
+                        Text("\(SpookyStore.int("lifeBlocks"))").bold().monospacedDigit()
+                    }
+                    HStack {
+                        Text("💰 Lifetime gold sold")
+                        Spacer()
+                        Text("\(SpookyStore.int("lifeGold"))🪙").bold().foregroundColor(.yellow).monospacedDigit()
+                    }
                 }
                 Section(header: Text("💹 Tycoon playbook")) {
                     Text("The loop: dig deep → fill the pack → sell at the surface cart (+25%) → buy picks (coal) and packs (gold) → hatch pets → dig deeper → rebirth at rank 15 + Magma → repeat at +15% forever.")
