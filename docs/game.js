@@ -43,7 +43,7 @@
     G = {
       seed: seed, depth: 0, score: 0, combo: 0, streak: 0,
       state: 'title', tab: 0, picked: 0,
-      meta: { gold: 0, level: 1, xp: 0, pickIdx: 0, relics: [], ach: {}, best: best },
+      meta: { gold: 0, coal: 0, level: 1, xp: 0, pickIdx: 0, relics: [], ach: {}, best: best },
       player: { x: 1, y: 1, px: 1, py: 1, t: 1 },
       ghost: { x: 1, y: 1, px: 1, py: 1, t: 1, path: [], think: 0 },
       candies: [], crystals: [], relicSpot: null, pond: null, pondUsed: false,
@@ -357,8 +357,29 @@
       openShop: function () { if (G.state === 'play') openShop(); },
       newMaze: function () { document.getElementById('newmaze').click(); }
     },
-    host: { onUnlock: function (id, name) { meta().ach[id] = name; } }
+    host: { onUnlock: function (id, name) { meta().ach[id] = name; } },
+    profile: makeProfile()
   });
+  function makeProfile() {
+    return {
+      gold: function () { return meta().gold; },
+      addGold: function (n) { meta().gold += n; renderHUD(); },
+      spendGold: function (n) { if (meta().gold < n) return false; meta().gold -= n; renderHUD(); return true; },
+      coal: function () { return meta().coal || 0; },
+      addCoal: function (n) { meta().coal = (meta().coal || 0) + n; renderHUD(); },
+      spendCoal: function (n) { if ((meta().coal || 0) < n) return false; meta().coal -= n; renderHUD(); return true; },
+      level: function () { return meta().level; },
+      pickIdx: function () { return meta().pickIdx; },
+      setPick: function (i) { meta().pickIdx = i; renderHUD(); },
+      pickDamage: function () { return S.PICKS[meta().pickIdx].speed; },
+      goldMult: function () { return goldMult(); },
+      gainXP: gainXP,
+      addScore: function (n) { G.score += n; renderHUD(); },
+      unlock: function (id, name) { ach(id, name); },
+      flash: flash,
+      hud: renderHUD
+    };
+  }
   showOverlay('🎃 Spooktacular Ultimate',
     'Mine 3 depths (Dirt Tunnels → Crystal Hollows → Magma Core). Grab 🍬💎, find 🗿 relics, fish 🎣 ponds, earn gold, buy all 7 picks up to the Void Drill. The 👻 hunts with real A*.',
     'Start haunting', null, null);

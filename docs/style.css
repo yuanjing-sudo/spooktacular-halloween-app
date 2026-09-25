@@ -63,3 +63,10 @@ footer { opacity: .6; font-size: .8rem; margin: 10px 0 4px; }
 }
 .memcard.open { background: #6d28a8; color: #fff; }
 .memcard.done { background: #1d5e2b; color: #c6ffcc; }
+/* ---- mining sim ---- */
+.minegrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin: 8px auto; max-width: 480px; }
+.minecell {
+  background: #3b1d5e; border: 1px solid #6d28a8; border-radius: 4px;
+  font-size: 1rem; padding: 4px 0; cursor: pointer; min-height: 34px; color: #fff;
+}
+.gamestage { margin-top: 6px; }

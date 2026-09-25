@@ -260,6 +260,19 @@
   ];
   var REGIONS = ["Northgate Warren", "Ember Deeps", "The Heart", "Lantern Row",
     "Tangle Warrens", "Gilded Warrens", "Far Reaches", "Howling Deeps"];
+  /* ---- Mining ores (MNBlockType values, verbatim) ---- */
+  var ORES = [
+    { key: 'dirt', name: 'Dirt', emoji: '🟫', color: '#5a412d', hp: 1, gold: 0, xp: 0, tier: 0, w: 22 },
+    { key: 'stone', name: 'Stone', emoji: '🪨', color: '#5f556e', hp: 2, gold: 0, xp: 1, tier: 0, w: 22 },
+    { key: 'coal', name: 'Coal Ore', emoji: '⬛', color: '#28282e', hp: 3, gold: 0, xp: 4, tier: 0, coal: 1, w: 14 },
+    { key: 'iron', name: 'Iron Ore', emoji: '🟫', color: '#786046', hp: 3, gold: 4, xp: 6, tier: 1, w: 10 },
+    { key: 'gold', name: 'Gold Ore', emoji: '🟨', color: '#beA028', hp: 4, gold: 10, xp: 12, tier: 1, w: 7 },
+    { key: 'lapis', name: 'Lapis Ore', emoji: '🟦', color: '#2850be', hp: 3, gold: 8, xp: 10, tier: 1, w: 6 },
+    { key: 'emerald', name: 'Emerald Ore', emoji: '🟩', color: '#28aa50', hp: 5, gold: 20, xp: 24, tier: 2, w: 5 },
+    { key: 'ruby', name: 'Ruby Ore', emoji: '♦️', color: '#c8285a', hp: 5, gold: 30, xp: 36, tier: 3, w: 4 },
+    { key: 'diamond', name: 'Diamond Ore', emoji: '💎', color: '#78dcf0', hp: 6, gold: 25, xp: 30, tier: 4, w: 4 },
+    { key: 'crystal', name: 'Spike Crystal', emoji: '🔺', color: '#4bd8ff', hp: 4, gold: 18, xp: 22, tier: 1, w: 6 }
+  ];
   /* ---- Minimal mat4 core (column-major, WebGL-ready, pure) ---- */
   function mIdentity() { return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; }
   function mMul(a, b) {
@@ -291,7 +304,7 @@
 
   var api = { SeededRNG: SeededRNG, carveDFS: carveDFS, connected: connected, astar: astar, ease: ease, comboMult: comboMult, streakBonus: streakBonus, compact: compact, key: key,
     PICKS: PICKS, LAYERS: LAYERS, RELICS: RELICS, FISH: FISH, FISH_WEIGHT: FISH_WEIGHT, xpNext: xpNext,
-    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS };
+    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS, ORES: ORES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Spooky = api;
 })(typeof self !== 'undefined' ? self : this);

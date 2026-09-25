@@ -228,7 +228,7 @@
     var best = 0;
     try { best = +localStorage.getItem('spooky_best3d') || 0; } catch (e) {}
     G = { seed: seed, depth: 0, score: 0, combo: 0, streak: 0, state: 'title', time: 0, tab: 0, picked: 0,
-      meta: { gold: 0, level: 1, xp: 0, pickIdx: 0, relics: [], ach: {}, best: best },
+      meta: { gold: 0, coal: 0, level: 1, xp: 0, pickIdx: 0, relics: [], ach: {}, best: best },
       px: 1.5, pz: 1.5, yaw: 0, pitch: 0, orbit: false,
       ghost: { x: 1, y: 1, fx: 1, fz: 1, t: 1, path: [], think: 0 },
       candies: [], crystals: [], relicSpot: null, pond: null, pondUsed: false, torches: [],
@@ -758,8 +758,29 @@
       openShop: function () { if (G.state === 'play') openShop(); },
       newMaze: function () { document.getElementById('newmaze').click(); }
     },
-    host: { onUnlock: function (id, name) { meta().ach[id] = name; } }
+    host: { onUnlock: function (id, name) { meta().ach[id] = name; } },
+    profile: makeProfile()
   });
+  function makeProfile() {
+    return {
+      gold: function () { return meta().gold; },
+      addGold: function (n) { meta().gold += n; renderHUD(); },
+      spendGold: function (n) { if (meta().gold < n) return false; meta().gold -= n; renderHUD(); return true; },
+      coal: function () { return meta().coal || 0; },
+      addCoal: function (n) { meta().coal = (meta().coal || 0) + n; renderHUD(); },
+      spendCoal: function (n) { if ((meta().coal || 0) < n) return false; meta().coal -= n; renderHUD(); return true; },
+      level: function () { return meta().level; },
+      pickIdx: function () { return meta().pickIdx; },
+      setPick: function (i) { meta().pickIdx = i; renderHUD(); },
+      pickDamage: function () { return S.PICKS[meta().pickIdx].speed; },
+      goldMult: function () { return goldMult(); },
+      gainXP: gainXP,
+      addScore: function (n) { G.score += n; renderHUD(); },
+      unlock: function (id, name) { ach(id, name); },
+      flash: flash,
+      hud: renderHUD
+    };
+  }
   showOverlay('🎃 Spooktacular Mine 3D',
     'Same mine, real 3D. WASD + drag to walk the ' + DEPTHS[0].layer + '. Grab 🍬💎, find 🗿, fish 🎣, buy picks 🛒, dodge the 👻. Press O for the AR-style diorama orbit.',
     'Descend ⛏️', null, null);
