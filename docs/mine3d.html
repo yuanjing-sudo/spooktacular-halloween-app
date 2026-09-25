@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>🎃 Spooktacular Mine 3D</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #game3d { width: 94vw; max-width: 900px; height: 62vh; display: block; }
+  #minimap { position: absolute; top: 8px; right: 8px; border: 1px solid #6d28a8; border-radius: 6px; background: rgba(11,6,32,.8); }
+  #stick { position: absolute; bottom: 14px; left: 14px; width: 110px; height: 110px; border-radius: 50%; background: rgba(109,40,168,.25); border: 1px solid #6d28a8; display: none; }
+  #nub { position: absolute; width: 46px; height: 46px; border-radius: 50%; background: rgba(255,209,102,.5); left: 32px; top: 32px; }
+  #help { font-size: .8rem; opacity: .7; }
+</style>
+</head>
+<body>
+<h1>🎃 Spooktacular Mine 3D</h1>
+<p class="sub">The mine, portable — same mazes, same ghost AI, same gold. WASD + drag to look · O for diorama orbit.</p>
+<div id="hud">
+  <span>Score <b id="score">0</b></span>
+  <span>Depth <b id="depth">–</b></span>
+  <span>Left <b id="candy">0</b></span>
+  <span>Gold <b id="gold">0</b></span>
+  <span>Level <b id="level">1</b></span>
+  <span>Pick <b id="pick">Wooden Pick</b></span>
+</div>
+<div id="wrap">
+  <canvas id="game3d" width="900" height="560"></canvas>
+  <canvas id="minimap" width="132" height="132"></canvas>
+  <div id="stick"><div id="nub"></div></div>
+  <div id="overlay" class="hidden">
+    <h2 id="overlay-title"></h2>
+    <p id="overlay-text"></p>
+    <button id="overlay-btn"></button>
+    <button id="overlay-btn2" style="display:none"></button>
+  </div>
+</div>
+<button id="newmaze">🎲 New maze</button> <button id="shopbtn">🛒 Shop</button>
+<button id="orbitbtn">🪐 Diorama</button> <a href="index.html" style="color:#ffd166">⛏️ 2D version</a>
+<p id="help">WASD/arrows move · mouse/touch drag looks · walk into 🍬💎🗿🎣 · dodge 👻</p>
+<script src="spooky.js"></script>
+<script src="mine3d.js"></script>
+</body>
+</html>
