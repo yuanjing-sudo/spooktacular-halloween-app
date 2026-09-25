@@ -1,5 +1,7 @@
 package spooktacular.game;
 
+import spooktacular.combat.Bestiary;
+import spooktacular.combat.World;
 import spooktacular.data.*;
 import spooktacular.engine.Engine;
 import spooktacular.engine.Engine.Cell;
@@ -227,6 +229,65 @@ public class TestEngine {
         check("sell banks gold", sim.player().gold >= 0, sim.player().gold);
         // achievements refresh over sim snapshot
         check("sim snapshot valid", sim.snapshotView().player().blocksMined >= 1, "");
+        // ---- avatar-world combat ----
+        check("5 worlds", World.levels().size() == 5, World.levels().size());
+        check("38 bestiary notes", Bestiary.all().size() == 38, Bestiary.all().size());
+        MazePanel mp2 = new MazePanel();
+        mp2.startNewRun(777L);
+        check("wolves stalk depths", mp2.wolves.size() == 2, mp2.wolves.size());
+        check("portals bridge depths", mp2.portals.size() == 2, mp2.portals.size());
+        // fire bolts point-blank: two rounds, ghost reset adjacent each round
+        long gold0 = mp2.gold;
+        // find an open cell with an open +x neighbor for a clean bolt lane
+        int[] lane = null;
+        outer2:
+        for (Engine.Cell cell : mp2.maze.open()) {
+            if (mp2.maze.open().contains(new Engine.Cell(cell.x() + 1, cell.z()))) {
+                lane = new int[]{cell.x(), cell.z()};
+                break outer2;
+            }
+        }
+        check("bolt lane exists", lane != null, "");
+        mp2.state = "play";
+        for (int round = 0; round < 2; round++) {
+            mp2.state = "play";
+            mp2.px = lane[0] + 0.5;
+            mp2.pz = lane[1] + 0.5;
+            mp2.setGhost(lane[0] + 1.5, lane[1] + 0.5);
+            mp2.dirX = 1;
+            mp2.dirZ = 0;
+            mp2.fireBolt();
+            for (int i = 0; i < 8; i++) mp2.step(0.016, Set.of());
+        }
+        check("bolts blast ghost for gold", mp2.gold > gold0, mp2.gold);
+        // wolf bite + kill (ghost parked far away)
+        mp2.state = "play";
+        mp2.setGhost(12.5, 12.5);
+        World.Wolf w = mp2.wolves.get(0);
+        w.x = mp2.px;
+        w.z = mp2.pz;
+        int hp0 = mp2.vitals.hp;
+        for (int i = 0; i < 10 && mp2.vitals.hp == hp0; i++) mp2.step(0.05, Set.of());
+        check("wolf bites", mp2.vitals.hp < hp0, mp2.vitals.hp);
+        long gold1 = mp2.gold;
+        w.hp = 1;
+        mp2.bolts.add(new World.Bolt(w.x, w.z, 0, 0.01));
+        for (int i = 0; i < 40 && mp2.wolves.contains(w); i++) mp2.step(0.016, Set.of());
+        check("wolf driven off pays", !mp2.wolves.contains(w) && mp2.gold > gold1, mp2.gold);
+        // portal travel
+        mp2.state = "play";
+        World.Portal pt = mp2.portals.get(0);
+        int depth0 = mp2.depth;
+        mp2.px = pt.x();
+        mp2.pz = pt.z();
+        mp2.step(0.016, Set.of());
+        check("portal teleports", mp2.depth == pt.toLevel() && mp2.depth != depth0, mp2.depth);
+        // heal + bolt upgrade path
+        mp2.state = "play";
+        mp2.vitals.hp = 40;
+        check("heal works", mp2.heal() && mp2.vitals.hp == 90, mp2.vitals.hp);
+        mp2.vitals.hp = 100;
+        check("heal capped", !mp2.heal(), "");
         System.out.println("PASSED: " + pass + " FAILED: " + fail);
         System.out.flush();
         System.exit(fail > 0 ? 1 : 0); // EDT/Timer threads are non-daemon

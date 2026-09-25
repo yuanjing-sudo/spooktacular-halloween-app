@@ -3,6 +3,7 @@ package spooktacular.game;
 import spooktacular.data.Data;
 import spooktacular.engine.Engine;
 import spooktacular.engine.Engine.Cell;
+import spooktacular.combat.World;
 import spooktacular.quests.EEvent;
 import spooktacular.quests.ExpeditionBoard;
 import spooktacular.engine.Engine.Maze;
@@ -66,10 +67,20 @@ public class MazePanel extends JPanel implements KeyListener {
     private int[][] wallTex = new int[64][64];
     private int ghostType = 0;
     private final javax.swing.Timer loop;
+    private boolean automap;
     /** Expedition board fed by maze play (distance, score, treasure). Set by host. */
     public ExpeditionBoard expeditions;
     private long lastExpScore;
     private double distAcc;
+    /** Avatar-world combat state (bolts, wolves, portals, vitals). */
+    public final World.Vitals vitals = new World.Vitals();
+    public final List<World.Wolf> wolves = new ArrayList<>();
+    public final List<World.Bolt> bolts = new ArrayList<>();
+    public final List<World.Portal> portals = new ArrayList<>();
+    private final Set<String> portalHinted = new HashSet<>();
+    private int ghostHp = 2;
+    private double ghostSpawnX = 1.5, ghostSpawnZ = 1.5;
+    private final Random combatRng = new Random();
 
     public MazePanel() {
         setPreferredSize(new Dimension(VW * 2, VH * 2));
@@ -89,6 +100,8 @@ public class MazePanel extends JPanel implements KeyListener {
     /** Test hooks (same package): inspect live lists without a display. */
     List<double[]> candies() { return candies; }
     double[] ghostPos() { return new double[]{ghostX, ghostZ}; }
+    int ghostHp() { return ghostHp; }
+    void setGhost(double x, double z) { ghostX = x; ghostZ = z; }
 
     // ================= world =================
     private boolean walkable(int x, int z) { return maze.open().contains(new Cell(x, z)); }
@@ -120,11 +133,29 @@ public class MazePanel extends JPanel implements KeyListener {
             if (dist > best) { best = dist; bx = r.x() + 0.5; bz = r.z() + 0.5; }
         }
         ghostX = bx; ghostZ = bz;
+        ghostSpawnX = bx;
+        ghostSpawnZ = bz;
+        ghostHp = 2;
         ghostPath.clear();
         ghostThink = 0;
         px = 1.5; pz = 1.5;
         dirX = -1; dirZ = 0; planeX = 0; planeY = 0.66;
         ghostType = (int) ((seed + depth) % Data.GHOSTS.length);
+        // wolves stalk the far rooms; portals bridge depths
+        wolves.clear();
+        bolts.clear();
+        portals.clear();
+        portalHinted.clear();
+        List<Cell> byDist = new ArrayList<>(rooms);
+        byDist.sort((a, b) -> Integer.compare(
+                Math.abs(b.x() - 1) + Math.abs(b.z() - 1), Math.abs(a.x() - 1) + Math.abs(a.z() - 1)));
+        for (int i = 1; i <= 2 && i < byDist.size(); i++)
+            wolves.add(new World.Wolf(byDist.get(i).x() + 0.5, byDist.get(i).z() + 0.5));
+        if (rooms.size() > 6) {
+            Cell p1 = rooms.get(rooms.size() / 3), p2 = rooms.get(2 * rooms.size() / 3);
+            portals.add(new World.Portal(p1.x() + 0.5, p1.z() + 0.5, (depth + 1) % 3, "forward"));
+            portals.add(new World.Portal(p2.x() + 0.5, p2.z() + 0.5, (depth + 2) % 3, "back"));
+        }
         genWallTex();
     }
 
@@ -153,6 +184,7 @@ public class MazePanel extends JPanel implements KeyListener {
     private void unlock(String id) { ach.add(id); }
 
     private void flash(String m, double d) { flashMsg = m; flashT = d; }
+    private void flash(String m) { flash(m, 2.2); }
 
     private void gainXP(int n) {
         xp += n;
@@ -248,6 +280,93 @@ public class MazePanel extends JPanel implements KeyListener {
             if (step >= dist - 1e-6) ghostPath.remove(0);
         }
         if (Math.hypot(px - ghostX, pz - ghostZ) < 0.6) die();
+        updateCombat(dt);
+    }
+
+    /** Bolt flight, wolf AI, portal travel — AvatarWorld combat in the maze. */
+    private void updateCombat(double dt) {
+        // bolts fly
+        Iterator<World.Bolt> bi = bolts.iterator();
+        while (bi.hasNext()) {
+            World.Bolt b = bi.next();
+            b.step(dt);
+            boolean dead = !b.alive() || hitsWall(b.x, b.z, 0.1);
+            if (!dead) {
+                // wolves first (they body-block)
+                for (Iterator<World.Wolf> wi = wolves.iterator(); wi.hasNext();) {
+                    World.Wolf w = wi.next();
+                    if ((w.x - b.x) * (w.x - b.x) + (w.z - b.z) * (w.z - b.z) < 0.64) {
+                        dead = true;
+                        w.hp -= vitals.boltDmg;
+                        if (w.hp <= 0) {
+                            int reward = World.wolfReward(combatRng);
+                            gold += reward;
+                            flash("Wolf driven off! +" + reward + " gold");
+                            wi.remove();
+                        }
+                        break;
+                    }
+                }
+            }
+            if (!dead && (ghostX - b.x) * (ghostX - b.x) + (ghostZ - b.z) * (ghostZ - b.z) < 0.64) {
+                dead = true;
+                ghostHp -= vitals.boltDmg;
+                if (ghostHp <= 0) {
+                    int reward = World.ghostReward(combatRng);
+                    gold += reward;
+                    score += 100;
+                    flash("Ghost blasted! +" + reward + " gold");
+                    ghostX = ghostSpawnX;
+                    ghostZ = ghostSpawnZ;
+                    ghostHp = 2;
+                    ghostPath.clear();
+                    ghostThink = 1.0;
+                } else {
+                    flash("Ghost hit! (" + ghostHp + " hp left)");
+                }
+            }
+            if (dead) bi.remove();
+        }
+        // wolves stalk
+        for (World.Wolf w : new ArrayList<>(wolves)) {
+            World.Wolf.Event ev = w.update(px, pz, dt, time,
+                    (wx, wz) -> !hitsWall(wx, wz, 0.3));
+            if (ev == World.Wolf.Event.NOTICED) flash("Wolves are stalking you!");
+            else if (ev == World.Wolf.Event.BITE) {
+                vitals.hurt(6);
+                flash("Wolf bite! -6 HP (" + Math.max(0, vitals.hp) + " left)");
+                if (!vitals.alive()) die();
+            }
+        }
+        // portals hum then hop
+        for (World.Portal p : portals) {
+            double d = Math.hypot(px - p.x(), pz - p.z());
+            String key = depth + ":" + p.x() + "," + p.z();
+            if (d < 3 && portalHinted.add(key)) flash("A glowing portal hums nearby...");
+            if (d < 1.0) {
+                depth = p.toLevel();
+                buildDepth();
+                flash("Stepped through! Now: " + Data.LAYERS[depth]);
+                return;
+            }
+        }
+    }
+
+    /** Fire a bolt in the facing direction (SPACE). */
+    public void fireBolt() {
+        if (!state.equals("play")) return;
+        bolts.add(new World.Bolt(px, pz, dirX, dirZ));
+    }
+
+    /** Heal +50 (H key). Returns true if healed. */
+    public boolean heal() {
+        if (!state.equals("play")) return false;
+        if (vitals.heal()) {
+            flash("Healed +50 HP");
+            return true;
+        }
+        flash("HP already full!");
+        return false;
     }
 
     private boolean near(double ax, double az, double bx, double bz, double r) {
@@ -378,9 +497,18 @@ public class MazePanel extends JPanel implements KeyListener {
             if (state.equals("title") || state.equals("dead") || state.equals("win")) startNewRun(new Random().nextLong() & Long.MAX_VALUE);
             else if (state.equals("shop")) state = "play";
         }
+        if (e.getKeyCode() == KeyEvent.VK_SPACE) fireBolt();
+        if (e.getKeyCode() == KeyEvent.VK_H) heal();
+        if (e.getKeyCode() == KeyEvent.VK_M) automap = !automap;
         if (state.equals("shop")) {
             if (e.getKeyCode() == KeyEvent.VK_B) { buyPick(); }
             if (e.getKeyCode() == KeyEvent.VK_N) state = "play";
+            if (e.getKeyCode() == KeyEvent.VK_U) {
+                if (gold >= 150) {
+                    gold -= 150;
+                    vitals.boltDmg++;
+                }
+            }
         }
     }
     @Override public void keyReleased(KeyEvent e) { keys.remove(e.getKeyCode()); }
@@ -393,15 +521,16 @@ public class MazePanel extends JPanel implements KeyListener {
         g0.drawImage(frame, 0, 0, getWidth(), getHeight(), null);
         g0.setColor(Color.WHITE);
         g0.setFont(new Font(Font.MONOSPACED, Font.BOLD, 13));
-        String hud = String.format("Score %s  %s  Left %d  Gold %s  Lv %d  %s",
+        String hud = String.format("Score %s  %s  Left %d  Gold %s  Lv %d  %s  HP %d  [SPACE zap/H heal]",
                 Engine.compact(score), Data.LAYERS[depth], candies.size() + gems.size(),
-                Engine.compact(gold), level, Data.PICKS[pickIdx].name());
+                Engine.compact(gold), level, Data.PICKS[pickIdx].name(), Math.max(0, vitals.hp));
         g0.drawString(hud, 8, 18);
         if (flashT > 0) {
             g0.setColor(Color.YELLOW);
             g0.drawString(flashMsg, 8, 36);
         }
         drawMinimap(g0);
+        if (automap) drawAutomap(g0);
         g0.setColor(Color.LIGHT_GRAY);
         g0.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         if (state.equals("title"))
@@ -411,9 +540,10 @@ public class MazePanel extends JPanel implements KeyListener {
         else if (state.equals("win"))
             centerText(g0, "SPOOKTACULAR! All depths cleared: " + Engine.compact(score) + " — ENTER", 0);
         else if (state.equals("shop")) {
+            String bolt = "U: bolt damage +" + vitals.boltDmg + "->" + (vitals.boltDmg + 1) + " (150g)";
             String offer = pickIdx + 1 < Data.PICKS.length
-                    ? ("B: buy " + Data.PICKS[pickIdx + 1].name() + " (" + Data.PICKS[pickIdx + 1].cost() + "g, you have " + gold + ")   N: descend")
-                    : "Max pick! N: descend";
+                    ? ("B: buy " + Data.PICKS[pickIdx + 1].name() + " (" + Data.PICKS[pickIdx + 1].cost() + "g, you have " + gold + ")   " + bolt + "   N: descend")
+                    : "Max pick! " + bolt + "   N: descend";
             centerText(g0, "MINE SHOP — " + offer, 0);
         }
     }
@@ -471,7 +601,7 @@ public class MazePanel extends JPanel implements KeyListener {
     }
 
     private record Sprite(double x, double z, int kind, double size) {}
-    // kinds: 0 candy, 1 gem, 2 relic, 3 pond, 4 ghost
+    // kinds: 0 candy, 1 gem, 2 relic, 3 pond, 4 ghost, 5 bolt, 6 wolf, 7 portal
 
     private void drawSprites(int[] px2) {
         List<Sprite> spr = new ArrayList<>();
@@ -480,6 +610,9 @@ public class MazePanel extends JPanel implements KeyListener {
         if (relicSpot != null) spr.add(new Sprite(relicSpot[0], relicSpot[1], 2, 0.6));
         if (pond != null && !pondUsed) spr.add(new Sprite(pond[0], pond[1], 3, 0.8));
         spr.add(new Sprite(ghostX, ghostZ, 4, 0.9));
+        for (World.Bolt b : bolts) spr.add(new Sprite(b.x, b.z, 5, 0.35));
+        for (World.Wolf w : wolves) spr.add(new Sprite(w.x, w.z, 6, 0.8));
+        for (World.Portal p : portals) spr.add(new Sprite(p.x(), p.z(), 7, 1.0));
         double invDet = 1.0 / (planeX * dirZ - dirX * planeY);
         spr.sort((a, b) -> Double.compare(dist2(b), dist2(a)));
         for (Sprite s : spr) {
@@ -537,6 +670,22 @@ public class MazePanel extends JPanel implements KeyListener {
                 if (d > 0.48) return -1;
                 r = 40; g = 120; b = 255;
             }
+            case 5 -> { // bolt: cyan streak
+                if (Math.abs(dx) > 0.1) return -1;
+                r = 160; g = 255; b = 255;
+            }
+            case 6 -> { // wolf: dark beast with ears
+                boolean ear = v < 0.28 && Math.abs(Math.abs(dx) - 0.24) < 0.1;
+                if (d > 0.42 && !ear) return -1;
+                if (ear) { r = 60; g = 40; b = 30; }
+                else { r = 110; g = 80; b = 55; }
+            }
+            case 7 -> { // portal: violet swirl ring
+                if (d < 0.12 || d > 0.46) return -1;
+                double band = ((d * 9 + time * 2) % 1.0);
+                if (band < 0.5) { r = 190; g = 90; b = 255; }
+                else { r = 255; g = 90; b = 220; }
+            }
             default -> { // ghost: pale body + dark eyes
                 if (d > 0.45 || v > 0.9) return -1;
                 boolean eye = Math.hypot(dx - 0.15, dy + 0.08) < 0.09 || Math.hypot(dx + 0.15, dy + 0.08) < 0.09;
@@ -545,6 +694,30 @@ public class MazePanel extends JPanel implements KeyListener {
             }
         }
         return rgb(r * shade, g * shade, b * shade);
+    }
+
+    private void drawAutomap(Graphics g0) {
+        int n = Math.max(maze.w(), maze.d());
+        double k = Math.min(getWidth(), getHeight() - 40) / (n + 2);
+        int ox = (int) ((getWidth() - maze.w() * k) / 2), oy = 30;
+        g0.setColor(new Color(5, 2, 14, 230));
+        g0.fillRect(0, 0, getWidth(), getHeight());
+        g0.setColor(new Color(120, 80, 200));
+        g0.drawString("AUTOMAP — " + Data.LAYERS[depth] + " (M to close)", ox, 18);
+        for (Cell c : maze.open())
+            g0.fillRect(ox + (int) (c.x() * k), oy + (int) (c.z() * k), Math.max(1, (int) k), Math.max(1, (int) k));
+        g0.setColor(Color.ORANGE);
+        for (double[] c : candies) g0.fillRect(ox + (int) ((c[0] - 0.5) * k), oy + (int) ((c[1] - 0.5) * k), 4, 4);
+        g0.setColor(Color.CYAN);
+        for (double[] c : gems) g0.fillRect(ox + (int) ((c[0] - 0.5) * k), oy + (int) ((c[1] - 0.5) * k), 4, 4);
+        g0.setColor(new Color(139, 92, 46));
+        for (World.Wolf w : wolves) g0.fillOval(ox + (int) (w.x * k) - 3, oy + (int) (w.z * k) - 3, 6, 6);
+        g0.setColor(new Color(190, 90, 255));
+        for (World.Portal p : portals) g0.fillOval(ox + (int) (p.x() * k) - 3, oy + (int) (p.z() * k) - 3, 6, 6);
+        g0.setColor(Color.RED);
+        g0.fillOval(ox + (int) (ghostX * k) - 3, oy + (int) (ghostZ * k) - 3, 6, 6);
+        g0.setColor(Color.YELLOW);
+        g0.fillOval(ox + (int) (px * k) - 3, oy + (int) (pz * k) - 3, 6, 6);
     }
 
     private void drawMinimap(Graphics g0) {
@@ -561,6 +734,12 @@ public class MazePanel extends JPanel implements KeyListener {
         for (double[] c : gems) g0.fillRect(ox + (int) ((c[0] - 0.5) * k), oy + (int) ((c[1] - 0.5) * k), 3, 3);
         g0.setColor(Color.RED);
         g0.fillOval(ox + (int) (ghostX * k) - 3, oy + (int) (ghostZ * k) - 3, 6, 6);
+        g0.setColor(new Color(139, 92, 46));
+        for (World.Wolf w : wolves)
+            g0.fillOval(ox + (int) (w.x * k) - 2, oy + (int) (w.z * k) - 2, 4, 4);
+        g0.setColor(new Color(190, 90, 255));
+        for (World.Portal p : portals)
+            g0.fillOval(ox + (int) (p.x() * k) - 2, oy + (int) (p.z() * k) - 2, 4, 4);
         g0.setColor(Color.YELLOW);
         g0.fillOval(ox + (int) (px * k) - 3, oy + (int) (pz * k) - 3, 6, 6);
     }

@@ -31,8 +31,7 @@ public class Tabs {
         tabs.addTab("Maze", maze);
         tabs.addTab("Candy", candyPanel());
         tabs.addTab("Mine", sim);
-        tabs.addTab("World", listPanel("Avatar World — Companions",
-                ghostNames(8), "Your boxy companions from the ghost cast:"));
+        tabs.addTab("World", worldPanel());
         tabs.addTab("Explore", explorePanel());
         tabs.addTab("Games", gamesPanel());
         tabs.addTab("Achieve", achPanel());
@@ -83,6 +82,23 @@ public class Tabs {
         candyLabel.setText("Candy Vault — collected: " + maze.collectedCandy + "  (18 kinds from the app)");
     }
 
+    private JComponent worldPanel() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.add(new JLabel("Avatar World — worlds, bestiary, combat", SwingConstants.CENTER), BorderLayout.NORTH);
+        DefaultListModel<String> m = new DefaultListModel<>();
+        m.addElement("WORLDS (portals travel between maze depths):");
+        for (String w : spooktacular.combat.World.levels()) m.addElement("  " + w);
+        m.addElement("COMBAT: SPACE fires a bolt (dmg " + maze.vitals.boltDmg + "), H heals +50, U in shop upgrades bolts.");
+        m.addElement("Wolves stalk within earshot: 2 bolts drive one off (+8-12 gold). Ghost blasts pay 5-15 gold.");
+        m.addElement("COMPANIONS:");
+        ghostNames(8).forEach(n -> m.addElement("  " + n));
+        m.addElement("BESTIARY (" + spooktacular.combat.Bestiary.all().size() + " field notes):");
+        for (spooktacular.combat.Bestiary.Note n : spooktacular.combat.Bestiary.all())
+            m.addElement("  " + n.monster() + " @ " + n.habitat() + " — " + n.tactic());
+        p.add(new JScrollPane(new JList<>(m)), BorderLayout.CENTER);
+        return p;
+    }
+
     private JComponent explorePanel() {
         JPanel p = new JPanel(new BorderLayout());
         DefaultListModel<String> m = new DefaultListModel<>();
@@ -90,7 +106,8 @@ public class Tabs {
         for (String r : new String[]{"Northgate Warren", "Ember Deeps", "The Heart", "Lantern Row",
                 "Tangle Warrens", "Gilded Warrens", "Far Reaches", "Howling Deeps"}) m.addElement("  " + r);
         m.addElement("WORLDS:");
-        m.addElement("  Maze 3D (this tab!)");
+        m.addElement("  Maze 3D (this tab! " + maze.portals.size() + " portals hum here)");
+        m.addElement("  Portals step you between depths — walk into the violet swirl");
         m.addElement("  Graveyard 3D (press M in Maze for full automap)");
         p.add(new JScrollPane(new JList<>(m)), BorderLayout.CENTER);
         return p;
