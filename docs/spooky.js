@@ -197,6 +197,69 @@
   /* XP curve (mirrors ProScoringEngine.xpNext). */
   function xpNext(lv) { return Math.max(50, Math.round(80 * Math.pow(1.28, Math.max(1, lv) - 1))); }
 
+  /* ---- App catalogs (verbatim from iOS sources) ---- */
+  var GHOSTS = [
+    { key: "poltergeist", name: "👻 Poltergeist", rarity: "common" },
+    { key: "specter", name: "👻 Specter", rarity: "common" },
+    { key: "phantom", name: "👻 Phantom", rarity: "common" },
+    { key: "wraith", name: "👻 Wraith", rarity: "common" },
+    { key: "banshee", name: "👻 Banshee", rarity: "common" },
+    { key: "ghoul", name: "🧟 Ghoul", rarity: "common" },
+    { key: "zombie", name: "🧟 Zombie", rarity: "common" },
+    { key: "mummy", name: "🧟 Mummy", rarity: "common" },
+    { key: "vampire", name: "🧛 Vampire", rarity: "uncommon" },
+    { key: "werewolf", name: "🐺 Werewolf", rarity: "uncommon" },
+    { key: "witch", name: "🧙 Witch", rarity: "uncommon" },
+    { key: "ghostKnight", name: "⚔️ Ghost Knight", rarity: "uncommon" },
+    { key: "shadowDemon", name: "🌑 Shadow Demon", rarity: "uncommon" },
+    { key: "demonLord", name: "👿 Demon Lord", rarity: "rare" },
+    { key: "ancientSpirit", name: "🏛️ Ancient Spirit", rarity: "rare" },
+    { key: "dragonGhost", name: "🐉 Dragon Ghost", rarity: "rare" },
+    { key: "necromancer", name: "💀 Necromancer", rarity: "rare" },
+    { key: "lichKing", name: "👑 Lich King", rarity: "epic" },
+    { key: "voidBeast", name: "🌀 Void Beast", rarity: "epic" },
+    { key: "timeWraith", name: "⏳ Time Wraith", rarity: "epic" },
+    { key: "chaosDemon", name: "🔥 Chaos Demon", rarity: "epic" },
+    { key: "halloweenKing", name: "🎃 Halloween King", rarity: "legendary" },
+    { key: "pumpkinLord", name: "🎃 Pumpkin Lord", rarity: "legendary" },
+    { key: "nightmare", name: "🌙 Nightmare", rarity: "legendary" },
+    { key: "voidEntity", name: "🌌 Void Entity", rarity: "legendary" },
+  ];
+  var CANDIES = [
+    { key: "chocolate", name: "🍫 Chocolate", points: 3 },
+    { key: "lollipop", name: "🍭 Lollipop", points: 3 },
+    { key: "gummi", name: "🐻 Gummi", points: 3 },
+    { key: "candyCorn", name: "🌽 Candy Corn", points: 2 },
+    { key: "licorice", name: "🖤 Licorice", points: 2 },
+    { key: "jawbreaker", name: "🔴 Jawbreaker", points: 2 },
+    { key: "taffy", name: "🍬 Taffy", points: 2 },
+    { key: "peppermint", name: "🍬 Peppermint", points: 2 },
+    { key: "truffle", name: "🍫 Truffle", points: 5 },
+    { key: "caramel", name: "🍬 Caramel", points: 5 },
+    { key: "fudge", name: "🍫 Fudge", points: 5 },
+    { key: "toffee", name: "🍬 Toffee", points: 5 },
+    { key: "goldenCandy", name: "⭐ Golden Candy", points: 15 },
+    { key: "magicalCandy", name: "✨ Magical Candy", points: 20 },
+    { key: "rainbowCandy", name: "🌈 Rainbow Candy", points: 25 },
+    { key: "candycornKing", name: "👑 Candy Corn King", points: 50 },
+    { key: "chocolateDragon", name: "🐉 Chocolate Dragon", points: 60 },
+    { key: "lollipopTower", name: "🗼 Lollipop Tower", points: 70 },
+  ];
+  var MINIGAMES = [
+    { key: "memoryMatch", name: "🧠 Memory Match" },
+    { key: "pumpkinSmash", name: "🎃 Pumpkin Smash" },
+    { key: "ghostRace", name: "👻 Ghost Race" },
+    { key: "candySort", name: "🍬 Candy Sort" },
+    { key: "spellDuel", name: "✨ Spell Duel" },
+    { key: "mazeEscape", name: "🌀 Maze Escape" },
+    { key: "trivia", name: "🧠 Trivia" },
+    { key: "rhythm", name: "🎵 Rhythm" },
+    { key: "voxelRun", name: "🧱 Voxel Run 3D" },
+    { key: "graveyard3D", name: "🪦 Graveyard 3D" },
+    { key: "abandonedMine", name: "🦇 Abandoned Mine" },
+  ];
+  var REGIONS = ["Northgate Warren", "Ember Deeps", "The Heart", "Lantern Row",
+    "Tangle Warrens", "Gilded Warrens", "Far Reaches", "Howling Deeps"];
   /* ---- Minimal mat4 core (column-major, WebGL-ready, pure) ---- */
   function mIdentity() { return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; }
   function mMul(a, b) {
@@ -228,7 +291,7 @@
 
   var api = { SeededRNG: SeededRNG, carveDFS: carveDFS, connected: connected, astar: astar, ease: ease, comboMult: comboMult, streakBonus: streakBonus, compact: compact, key: key,
     PICKS: PICKS, LAYERS: LAYERS, RELICS: RELICS, FISH: FISH, FISH_WEIGHT: FISH_WEIGHT, xpNext: xpNext,
-    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform };
+    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Spooky = api;
 })(typeof self !== 'undefined' ? self : this);

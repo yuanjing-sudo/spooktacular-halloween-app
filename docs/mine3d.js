@@ -32,12 +32,20 @@
     return p;
   }
   var worldProg = program(
-    'attribute vec3 aPos; attribute vec3 aCol; attribute float aShade; attribute float aEmis;' +
-    'uniform mat4 uMVP; uniform mat4 uMV; uniform float uFlick; uniform vec3 uFog; varying vec3 vC; varying float vD; varying float vE;' +
-    'void main(){ vec4 mv = uMV * vec4(aPos,1.0); gl_Position = uMVP * vec4(aPos,1.0);' +
-    ' vC = aCol * mix(aShade * uFlick, 1.0, aEmis); vD = -mv.z; vE = aEmis; }',
-    'precision mediump float; varying vec3 vC; varying float vD; varying float vE; uniform vec3 uFog;' +
-    'void main(){ float f = smoothstep(6.0, 26.0, vD); vec3 c = mix(vC, uFog, f * (1.0 - vE * 0.7)); gl_FragColor = vec4(c, 1.0); }');
+    'attribute vec3 aPos; attribute vec3 aCol; attribute vec2 aUV; attribute float aEmis;' +
+    'uniform mat4 uMVP; uniform mat4 uMV; varying vec3 vC; varying vec2 vUV; varying float vD; varying float vE; varying vec3 vW;' +
+    'void main(){ vec4 wp = vec4(aPos,1.0); vec4 mv = uMV * wp; gl_Position = uMVP * wp;' +
+    ' vC = aCol; vUV = aUV; vD = -mv.z; vE = aEmis; vW = aPos; }',
+    'precision mediump float; varying vec3 vC; varying vec2 vUV; varying float vD; varying float vE; varying vec3 vW;' +
+    'uniform sampler2D uTex; uniform vec3 uFog; uniform float uFlick; uniform vec4 uTorches[6]; uniform int uTorchCount;' +
+    'void main(){ vec3 tex = texture2D(uTex, vUV).rgb;' +
+    ' float li = 0.30;' +
+    ' for (int i = 0; i < 6; i++) { if (i >= uTorchCount) break;' +
+    '  vec3 dv = uTorches[i].xyz - vW; li += uTorches[i].w / (1.0 + dot(dv, dv) * 0.30); }' +
+    ' li *= uFlick;' +
+    ' vec3 lit = mix(tex * vC * li, tex * vC, vE);' +
+    ' float f = smoothstep(7.0, 30.0, vD);' +
+    ' gl_FragColor = vec4(mix(lit, uFog, f * (1.0 - vE * 0.7)), 1.0); }');
   var sprProg = program(
     'attribute vec3 aPos; attribute vec2 aUV; uniform mat4 uMVP; varying vec2 vUV;' +
     'void main(){ gl_Position = uMVP * vec4(aPos,1.0); vUV = aUV; }',
@@ -58,6 +66,44 @@
     return t;
   }
   var TEX = { ghost: makeTex('👻'), candy: makeTex('🍬', 44), gem: makeTex('💎'), relic: makeTex('🗿'), pond: makeTex('🎣'), torch: makeTex('🔥') };
+
+  /* Procedural grayscale masonry: tint comes from vertex color, so one
+   * texture serves every depth palette. */
+  function makePattern(kind) {
+    var c = document.createElement('canvas'); c.width = c.height = 64;
+    var g = c.getContext('2d');
+    var img = g.createImageData(64, 64);
+    var rng = new S.SeededRNG(kind === 'floor' ? 77 : kind === 'ceil' ? 913 : 1234);
+    for (var y = 0; y < 64; y++) for (var x = 0; x < 64; x++) {
+      var v;
+      if (kind === 'white') {
+        v = 1.0;
+      } else if (kind === 'brick') {
+        var mortar = (y % 16 === 0) || (((x + ((y / 16) | 0) * 32) | 0) % 64 === 0);
+        v = mortar ? 0.45 : 0.78 + rng.nextDouble() * 0.28;
+        if (y < 3) v *= 1.15; // top highlight
+      } else if (kind === 'floor') {
+        v = ((x >> 4) + (y >> 4)) % 2 ? 0.42 : 0.55;
+        v *= 0.9 + rng.nextDouble() * 0.2;
+      } else {
+        v = 0.30 + rng.nextDouble() * 0.12;
+      }
+      var o = (y * 64 + x) * 4, b = Math.max(0, Math.min(255, Math.round(v * 255)));
+      img.data[o] = b; img.data[o + 1] = b; img.data[o + 2] = b; img.data[o + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    var t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    return t;
+  }
+  var TEXWALL = makePattern('brick'), TEXFLOOR = makePattern('floor'),
+      TEXCEIL = makePattern('ceil'), TEXWHITE = makePattern('white');
+  TEXWHITE._white = true;
 
   function buf(data, size, prog, name) {
     var b = gl.createBuffer();
@@ -85,7 +131,7 @@
   function newGame(seed) {
     var best = 0;
     try { best = +localStorage.getItem('spooky_best3d') || 0; } catch (e) {}
-    G = { seed: seed, depth: 0, score: 0, combo: 0, streak: 0, state: 'title', time: 0,
+    G = { seed: seed, depth: 0, score: 0, combo: 0, streak: 0, state: 'title', time: 0, tab: 0, picked: 0,
       meta: { gold: 0, level: 1, xp: 0, pickIdx: 0, relics: [], ach: {}, best: best },
       px: 1.5, pz: 1.5, yaw: 0, pitch: 0, orbit: false,
       ghost: { x: 1, y: 1, fx: 1, fz: 1, t: 1, path: [], think: 0 },
@@ -125,29 +171,38 @@
     return !walkable(cx, cz);
   }
 
-  // ---------- world geometry (merged static buffer) ----------
+  // ---------- world geometry (merged static buffers per material) ----------
+  function newGroup() { return { P: [], C: [], U: [], E: [] }; }
+  function quad(G8, ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, col, emis, uRep, vRep) {
+    uRep = uRep || 1; vRep = vRep || 1;
+    G8.P.push(ax, ay, az, bx, by, bz, cx, cy, cz, ax, ay, az, cx, cy, cz, dx, dy, dz);
+    var uvs = [0, 0, uRep, 0, uRep, vRep, 0, 0, uRep, vRep, 0, vRep];
+    for (var i = 0; i < 6; i++) {
+      G8.C.push(col[0], col[1], col[2]);
+      G8.U.push(uvs[i * 2], uvs[i * 2 + 1]);
+      G8.E.push(emis);
+    }
+  }
   function buildWorld() {
     var cfg = DEPTHS[G.depth];
-    var P = [], C = [], Sh = [], E = [];
-    function quad(ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, col, shade, emis) {
-      P.push(ax, ay, az, bx, by, bz, cx, cy, cz, ax, ay, az, cx, cy, cz, dx, dy, dz);
-      for (var i = 0; i < 6; i++) { C.push(col[0], col[1], col[2]); Sh.push(shade); E.push(emis); }
-    }
+    var wall = newGroup(), floor = newGroup(), ceil = newGroup(), glow = newGroup();
     var w0 = cfg.wall, w1 = cfg.wallTop;
-    var x, z;
+    var x, z, len;
     for (x = 0; x < G.maze.w; x++) for (z = 0; z < G.maze.d; z++) {
       var open = walkable(x, z);
       if (!open) {
         // top
-        quad(x, WALL_H, z, x + 1, WALL_H, z, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w1, 1.0, 0);
+        quad(wall, x, WALL_H, z, x + 1, WALL_H, z, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w1, 0, 1, 1);
         // sides facing open neighbors (plus outer shell)
-        if (walkable(x + 1, z)) quad(x + 1, 0, z, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x + 1, WALL_H, z, w0, 0.72, 0);
-        if (walkable(x - 1, z)) quad(x, 0, z + 1, x, 0, z, x, WALL_H, z, x, WALL_H, z + 1, w0, 0.72, 0);
-        if (walkable(x, z + 1)) quad(x, 0, z + 1, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w0, 0.6, 0);
-        if (walkable(x, z - 1)) quad(x + 1, 0, z, x, 0, z, x, WALL_H, z, x + 1, WALL_H, z, w0, 0.6, 0);
+        if (walkable(x + 1, z)) quad(wall, x + 1, 0, z, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x + 1, WALL_H, z, w0, 0, 1, WALL_H / 1);
+        if (walkable(x - 1, z)) quad(wall, x, 0, z + 1, x, 0, z, x, WALL_H, z, x, WALL_H, z + 1, w0, 0, 1, WALL_H / 1);
+        if (walkable(x, z + 1)) quad(wall, x, 0, z + 1, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w0, 0, 1, WALL_H / 1);
+        if (walkable(x, z - 1)) quad(wall, x + 1, 0, z, x, 0, z, x, WALL_H, z, x + 1, WALL_H, z, w0, 0, 1, WALL_H / 1);
       } else {
-        var f = ((x + z) % 2) ? [0.07, 0.05, 0.14] : [0.05, 0.04, 0.11];
-        quad(x, 0, z, x, 0, z + 1, x + 1, 0, z + 1, x + 1, 0, z, f, 1.0, 0);
+        // ceiling over open cells (enclosed mine) + checkered floor
+        quad(ceil, x, WALL_H, z + 1, x + 1, WALL_H, z + 1, x + 1, WALL_H, z, x, WALL_H, z, [0.10, 0.07, 0.16], 0, 1, 1);
+        var f = ((x + z) % 2) ? [0.16, 0.11, 0.28] : [0.11, 0.08, 0.20];
+        quad(floor, x, 0, z, x, 0, z + 1, x + 1, 0, z + 1, x + 1, 0, z, f, 0, 1, 1);
       }
     }
     // glowing crystal clusters on some wall tops
@@ -157,13 +212,15 @@
       if (walkable(x, z)) continue;
       var s = 0.18 + rng.nextDouble() * 0.22, ox = x + 0.2 + rng.nextDouble() * 0.6, oz = z + 0.2 + rng.nextDouble() * 0.6;
       var cc = rng.nextDouble() < 0.5 ? [0.3, 0.85, 1.0] : [0.75, 0.45, 1.0];
-      quad(ox - s, WALL_H, oz - s, ox + s, WALL_H, oz - s, ox + s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz, cc, 1.0, 0.9);
-      quad(ox - s, WALL_H, oz + s, ox - s, WALL_H, oz - s, ox - s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz + s, cc, 1.0, 0.9);
+      quad(glow, ox - s, WALL_H, oz - s, ox + s, WALL_H, oz - s, ox + s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz, cc, 0.9, 1, 1);
+      quad(glow, ox - s, WALL_H, oz + s, ox - s, WALL_H, oz - s, ox - s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz + s, cc, 0.9, 1, 1);
     }
-    var n = P.length / 3;
-    G.world = { n: n,
-      pos: buf(P, 3, worldProg, 'aPos'), col: buf(C, 3, worldProg, 'aCol'),
-      sh: buf(Sh, 1, worldProg, 'aShade'), em: buf(E, 1, worldProg, 'aEmis') };
+    function freeze(G8, tex) {
+      return { n: G8.P.length / 3, tex: tex,
+        pos: buf(G8.P, 3, worldProg, 'aPos'), col: buf(G8.C, 3, worldProg, 'aCol'),
+        uv: buf(G8.U, 2, worldProg, 'aUV'), em: buf(G8.E, 1, worldProg, 'aEmis') };
+    }
+    G.world = [freeze(wall, TEXWALL), freeze(floor, TEXFLOOR), freeze(ceil, TEXCEIL), freeze(glow, TEXWHITE)];
   }
 
   // ---------- sprites ----------
@@ -248,7 +305,7 @@
 
   var keys = {};
   function update(dt) {
-    if (G.state !== 'play') return;
+    if (G.state !== 'play' || G.tab !== 0) return;
     G.time += dt;
     var m = meta(), cfg = DEPTHS[G.depth], g = G.ghost;
     // move
@@ -281,7 +338,7 @@
     for (i = G.candies.length - 1; i >= 0; i--) {
       var c = G.candies[i];
       if (near(G.px, G.pz, c.x, c.z, 0.7)) {
-        G.candies.splice(i, 1); G.combo++; G.streak++;
+        G.candies.splice(i, 1); G.combo++; G.streak++; G.picked++;
         G.score += Math.round((10 * S.comboMult(G.combo) + S.streakBonus(G.streak)) * dmgMult());
         m.gold += Math.round(2 * goldMult()); gainXP(8);
         if (G.score >= 1000) ach('score-1k', 'Score Legend — 1,000 points');
@@ -435,16 +492,31 @@
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
-    var flick = 0.88 + 0.08 * Math.sin(G.time * 7) + 0.04 * Math.sin(G.time * 13);
+    var flick = 0.9 + 0.07 * Math.sin(G.time * 7) + 0.03 * Math.sin(G.time * 13);
     var mvp = currentMVP(), mv = currentView();
     gl.useProgram(worldProg);
     gl.uniformMatrix4fv(gl.getUniformLocation(worldProg, 'uMVP'), false, new Float32Array(mvp));
     gl.uniformMatrix4fv(gl.getUniformLocation(worldProg, 'uMV'), false, new Float32Array(mv));
     gl.uniform1f(gl.getUniformLocation(worldProg, 'uFlick'), flick);
     gl.uniform3fv(gl.getUniformLocation(worldProg, 'uFog'), new Float32Array(cfg.fog));
-    bindAttr(G.world.pos, 3, 0); bindAttr(G.world.col, 3, 0);
-    bindAttr(G.world.sh, 1, 0); bindAttr(G.world.em, 1, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, G.world.n);
+    // 6 nearest torches as point lights
+    var sorted = G.torches.map(function (t) {
+      var dx = t.x - G.px, dz = t.z - G.pz;
+      return { t: t, d: dx * dx + dz * dz };
+    }).sort(function (a, b) { return a.d - b.d; }).slice(0, 6);
+    var tarr = [];
+    sorted.forEach(function (o) { tarr.push(o.t.x, 1.9, o.t.z, 1.5); });
+    while (tarr.length < 24) tarr.push(0, -10, 0, 0);
+    gl.uniform4fv(gl.getUniformLocation(worldProg, 'uTorches'), new Float32Array(tarr));
+    gl.uniform1i(gl.getUniformLocation(worldProg, 'uTorchCount'), sorted.length);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(gl.getUniformLocation(worldProg, 'uTex'), 0);
+    G.world.forEach(function (grp) {
+      gl.bindTexture(gl.TEXTURE_2D, grp.tex);
+      bindAttr(grp.pos, 3, 0); bindAttr(grp.col, 3, 0);
+      bindAttr(grp.uv, 2, 0); bindAttr(grp.em, 1, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, grp.n);
+    });
     // sprites
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -567,6 +639,21 @@
   newGame(20261031);
   G.state = 'title';
   renderHUD();
+  window.SpookyTabs.init({
+    tabsId: 'tabs', panelsId: 'tabpanels',
+    snapshot: function () {
+      var m = meta();
+      return { score: G.score, layer: DEPTHS[G.depth].layer, left: G.candies.length + G.crystals.length,
+        gold: m.gold, level: m.level, pick: S.PICKS[m.pickIdx].name, seed: G.seed,
+        relics: m.relics.length, ach: m.ach, collected: G.picked };
+    },
+    onSelect: function (i) { G.tab = i; },
+    actions: {
+      openShop: function () { if (G.state === 'play') openShop(); },
+      newMaze: function () { document.getElementById('newmaze').click(); }
+    },
+    host: { onUnlock: function (id, name) { meta().ach[id] = name; } }
+  });
   showOverlay('🎃 Spooktacular Mine 3D',
     'Same mine, real 3D. WASD + drag to walk the ' + DEPTHS[0].layer + '. Grab 🍬💎, find 🗿, fish 🎣, buy picks 🛒, dodge the 👻. Press O for the AR-style diorama orbit.',
     'Descend ⛏️', null, null);

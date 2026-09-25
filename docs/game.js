@@ -42,7 +42,7 @@
     try { best = +localStorage.getItem('spooky_best') || 0; } catch (e) {}
     G = {
       seed: seed, depth: 0, score: 0, combo: 0, streak: 0,
-      state: 'title',
+      state: 'title', tab: 0, picked: 0,
       meta: { gold: 0, level: 1, xp: 0, pickIdx: 0, relics: [], ach: {}, best: best },
       player: { x: 1, y: 1, px: 1, py: 1, t: 1 },
       ghost: { x: 1, y: 1, px: 1, py: 1, t: 1, path: [], think: 0 },
@@ -114,7 +114,7 @@
   }
 
   function update(dt) {
-    if (G.state !== 'play') return;
+    if (G.state !== 'play' || G.tab !== 0) return;
     G.time += dt;
     var p = G.player, g = G.ghost, cfg = DEPTHS[G.depth], m = meta();
     p.t = Math.min(1, p.t + dt / stepTime());
@@ -136,7 +136,7 @@
       c = G.candies[i];
       if (c.x === p.x && c.y === p.y) {
         G.candies.splice(i, 1);
-        G.combo++; G.streak++;
+        G.combo++; G.streak++; G.picked++;
         G.score += Math.round((10 * S.comboMult(G.combo) + S.streakBonus(G.streak)) * dmgMult());
         m.gold += Math.round(2 * goldMult());
         gainXP(8);
@@ -344,6 +344,21 @@
   newGame(20261031);
   G.state = 'title';
   renderHUD();
+  window.SpookyTabs.init({
+    tabsId: 'tabs', panelsId: 'tabpanels',
+    snapshot: function () {
+      var m = meta();
+      return { score: G.score, layer: 'Depth ' + (G.depth + 1) + '/3', left: G.candies.length + G.crystals.length,
+        gold: m.gold, level: m.level, pick: S.PICKS[m.pickIdx].name, seed: G.seed,
+        relics: m.relics.length, ach: m.ach, collected: G.picked };
+    },
+    onSelect: function (i) { G.tab = i; },
+    actions: {
+      openShop: function () { if (G.state === 'play') openShop(); },
+      newMaze: function () { document.getElementById('newmaze').click(); }
+    },
+    host: { onUnlock: function (id, name) { meta().ach[id] = name; } }
+  });
   showOverlay('🎃 Spooktacular Ultimate',
     'Mine 3 depths (Dirt Tunnels → Crystal Hollows → Magma Core). Grab 🍬💎, find 🗿 relics, fish 🎣 ponds, earn gold, buy all 7 picks up to the Void Drill. The 👻 hunts with real A*.',
     'Start haunting', null, null);

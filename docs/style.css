@@ -35,3 +35,31 @@ canvas {
 #overlay-btn:hover, #overlay-btn2:hover, #newmaze:hover, #shopbtn:hover { background: #ffa63d; }
 #newmaze, #shopbtn { background: #3b1d5e; color: #ffd166; border: 1px solid #6d28a8; }
 footer { opacity: .6; font-size: .8rem; margin: 10px 0 4px; }
+/* ---- 7-tab shell (mirrors the iOS tab bar) ---- */
+#tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+.tabbtn {
+  background: #1a1038; color: #cfc3ee; border: 1px solid #4b2b7a; border-radius: 8px;
+  padding: 6px 12px; font-size: .8rem; cursor: pointer; line-height: 1.25;
+}
+.tabbtn.active { background: #ff7518; color: #1a0b00; border-color: #ff7518; font-weight: 700; }
+#tabpanels {
+  position: absolute; inset: 0; display: none; align-items: stretch; justify-content: center;
+  background: rgba(11, 6, 32, .96); border-radius: 8px; z-index: 5;
+}
+#tabpanels .panel {
+  overflow-y: auto; padding: 16px; max-width: 560px; width: 100%; text-align: center;
+}
+.phead h2 { margin: 0 0 4px; }
+.psub { opacity: .8; font-size: .85rem; margin: 8px 0; }
+.plist { text-align: left; font-size: .85rem; max-height: 40vh; overflow-y: auto; margin: 6px auto; max-width: 480px; }
+.pitem { padding: 3px 8px; border-bottom: 1px solid #2a1a55; }
+.prow { display: flex; gap: 10px; justify-content: center; margin: 10px 0; flex-wrap: wrap; }
+.memwrap { margin: 8px auto; max-width: 420px; }
+.memstatus { margin-bottom: 6px; font-size: .9rem; }
+.memgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.memcard {
+  background: #3b1d5e; color: #ffd166; border: 1px solid #6d28a8; border-radius: 6px;
+  padding: 10px 2px; font-size: .72rem; cursor: pointer; min-height: 44px;
+}
+.memcard.open { background: #6d28a8; color: #fff; }
+.memcard.done { background: #1d5e2b; color: #c6ffcc; }
