@@ -32,18 +32,29 @@
     return p;
   }
   var worldProg = program(
-    'attribute vec3 aPos; attribute vec3 aCol; attribute vec2 aUV; attribute float aEmis;' +
-    'uniform mat4 uMVP; uniform mat4 uMV; varying vec3 vC; varying vec2 vUV; varying float vD; varying float vE; varying vec3 vW;' +
+    'attribute vec3 aPos; attribute vec3 aCol; attribute vec2 aUV; attribute vec3 aNrm; attribute float aEmis;' +
+    'uniform mat4 uMVP; uniform mat4 uMV; varying vec3 vC; varying vec2 vUV; varying vec3 vN; varying float vD; varying float vE; varying vec3 vW;' +
     'void main(){ vec4 wp = vec4(aPos,1.0); vec4 mv = uMV * wp; gl_Position = uMVP * wp;' +
-    ' vC = aCol; vUV = aUV; vD = -mv.z; vE = aEmis; vW = aPos; }',
-    'precision mediump float; varying vec3 vC; varying vec2 vUV; varying float vD; varying float vE; varying vec3 vW;' +
-    'uniform sampler2D uTex; uniform vec3 uFog; uniform float uFlick; uniform vec4 uTorches[6]; uniform int uTorchCount;' +
+    ' vC = aCol; vUV = aUV; vN = aNrm; vD = -mv.z; vE = aEmis; vW = aPos; }',
+    'precision mediump float; varying vec3 vC; varying vec2 vUV; varying vec3 vN; varying float vD; varying float vE; varying vec3 vW;' +
+    'uniform sampler2D uTex; uniform sampler2D uNrm; uniform vec3 uFog; uniform vec3 uCam; uniform float uFlick; uniform vec4 uTorches[6]; uniform int uTorchCount;' +
     'void main(){ vec3 tex = texture2D(uTex, vUV).rgb;' +
+    ' vec3 N = normalize(vN);' +
+    ' vec3 T = abs(N.x) > 0.9 ? vec3(0.0, 0.0, N.x) : (abs(N.z) > 0.9 ? vec3(N.z, 0.0, 0.0) : vec3(1.0, 0.0, 0.0));' +
+    ' vec3 B = normalize(cross(N, T)); T = normalize(cross(B, N));' +
+    ' vec3 tn = texture2D(uNrm, vUV).rgb * 2.0 - 1.0;' +
+    ' vec3 Np = normalize(T * tn.x + B * tn.y + N * tn.z);' +
+    ' vec3 V = normalize(uCam - vW);' +
     ' float li = 0.30;' +
+    ' float spec = 0.0;' +
     ' for (int i = 0; i < 6; i++) { if (i >= uTorchCount) break;' +
-    '  vec3 dv = uTorches[i].xyz - vW; li += uTorches[i].w / (1.0 + dot(dv, dv) * 0.30); }' +
+    '  vec3 Lv = uTorches[i].xyz - vW; float d2 = dot(Lv, Lv); Lv = Lv / sqrt(d2);' +
+    '  float att = uTorches[i].w / (1.0 + d2 * 0.30);' +
+    '  li += att * max(dot(Np, Lv), 0.0);' +
+    '  vec3 H = normalize(Lv + V); spec += att * pow(max(dot(Np, H), 0.0), 24.0); }' +
     ' li *= uFlick;' +
-    ' vec3 lit = mix(tex * vC * li, tex * vC, vE);' +
+    ' vec3 lit = tex * vC * li + tex * spec * 0.35;' +
+    ' lit = mix(lit, tex * vC, vE);' +
     ' float f = smoothstep(7.0, 30.0, vD);' +
     ' gl_FragColor = vec4(mix(lit, uFog, f * (1.0 - vE * 0.7)), 1.0); }');
   var sprProg = program(
@@ -52,23 +63,89 @@
     'precision mediump float; varying vec2 vUV; uniform sampler2D uTex; uniform vec3 uFog;' +
     'void main(){ vec4 t = texture2D(uTex, vUV); if (t.a < 0.15) discard; gl_FragColor = vec4(t.rgb, t.a); }');
 
-  function makeTex(emoji, size) {
-    var c = document.createElement('canvas'); c.width = c.height = 64;
-    var g = c.getContext('2d'); g.font = (size || 48) + 'px serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(emoji, 32, 36);
+  function glTex(canvas, repeat) {
     var t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    var w = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, w);
     return t;
   }
-  var TEX = { ghost: makeTex('👻'), candy: makeTex('🍬', 44), gem: makeTex('💎'), relic: makeTex('🗿'), pond: makeTex('🎣'), torch: makeTex('🔥') };
 
+  /* Hand-drawn sprite art (no emoji font needed): ghost, candy, gem,
+   * relic, pond, torch flame. */
+  function makeArt(kind) {
+    var c = document.createElement('canvas'); c.width = c.height = 64;
+    var g = c.getContext('2d');
+    g.clearRect(0, 0, 64, 64);
+    if (kind === 'ghost') {
+      g.fillStyle = '#f2f2fa';
+      g.beginPath();
+      g.arc(32, 26, 18, Math.PI, 0);
+      g.lineTo(50, 52);
+      for (var i = 0; i < 3; i++) { g.arc(50 - 6 - i * 12, 52, 6, 0, Math.PI); }
+      g.closePath(); g.fill();
+      g.fillStyle = '#1a1a2e';
+      g.beginPath(); g.ellipse(25, 24, 4, 6, 0, 0, 7); g.fill();
+      g.beginPath(); g.ellipse(39, 24, 4, 6, 0, 0, 7); g.fill();
+    } else if (kind === 'candy') {
+      g.fillStyle = '#ffbe5a';
+      g.beginPath(); g.moveTo(8, 32); g.lineTo(20, 22); g.lineTo(20, 42); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(56, 32); g.lineTo(44, 22); g.lineTo(44, 42); g.closePath(); g.fill();
+      g.fillStyle = '#ff8c1a';
+      g.beginPath(); g.ellipse(32, 32, 13, 11, 0, 0, 7); g.fill();
+      g.strokeStyle = '#fff2d9'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(26, 24); g.lineTo(38, 40); g.stroke();
+    } else if (kind === 'gem') {
+      g.fillStyle = '#59e6ff';
+      g.beginPath(); g.moveTo(32, 6); g.lineTo(52, 28); g.lineTo(32, 58); g.lineTo(12, 28); g.closePath(); g.fill();
+      g.fillStyle = '#b8f4ff';
+      g.beginPath(); g.moveTo(32, 6); g.lineTo(52, 28); g.lineTo(32, 28); g.closePath(); g.fill();
+      g.fillStyle = '#1fa8c9';
+      g.beginPath(); g.moveTo(32, 58); g.lineTo(52, 28); g.lineTo(32, 28); g.closePath(); g.fill();
+      g.fillStyle = '#ffffff';
+      g.beginPath(); g.arc(26, 20, 3, 0, 7); g.fill();
+    } else if (kind === 'relic') {
+      g.fillStyle = '#9aa0b0';
+      g.beginPath();
+      if (g.roundRect) g.roundRect(20, 8, 24, 48, 6); else g.rect(20, 8, 24, 48);
+      g.fill();
+      g.strokeStyle = '#565b68'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(26, 20); g.lineTo(38, 32); g.lineTo(26, 44); g.stroke();
+      g.fillStyle = '#c9cede';
+      g.fillRect(20, 8, 24, 5);
+    } else if (kind === 'pond') {
+      g.fillStyle = '#2f7bff';
+      g.beginPath(); g.ellipse(32, 34, 24, 16, 0, 0, 7); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2;
+      g.beginPath(); g.ellipse(32, 34, 15, 9, 0, 0, 7); g.stroke();
+      g.beginPath(); g.ellipse(32, 34, 7, 4, 0, 0, 7); g.stroke();
+    } else if (kind === 'torch') {
+      g.fillStyle = '#7a4a21';
+      g.fillRect(29, 38, 6, 22);
+      g.fillStyle = '#ff7518';
+      g.beginPath(); g.moveTo(32, 4);
+      g.bezierCurveTo(48, 22, 44, 38, 32, 44);
+      g.bezierCurveTo(20, 38, 16, 22, 32, 4);
+      g.fill();
+      g.fillStyle = '#ffd166';
+      g.beginPath(); g.moveTo(32, 18);
+      g.bezierCurveTo(40, 28, 38, 38, 32, 41);
+      g.bezierCurveTo(26, 38, 24, 28, 32, 18);
+      g.fill();
+    }
+    return glTex(c, false);
+  }
+  var TEX = { ghost: makeArt('ghost'), candy: makeArt('candy'), gem: makeArt('gem'),
+    relic: makeArt('relic'), pond: makeArt('pond'), torch: makeArt('torch') };
+
+  var brickHeight = null;
   /* Procedural grayscale masonry: tint comes from vertex color, so one
-   * texture serves every depth palette. */
+   * texture serves every depth palette. Brick heights are kept for the
+   * normal map built just below. */
   function makePattern(kind) {
     var c = document.createElement('canvas'); c.width = c.height = 64;
     var g = c.getContext('2d');
@@ -88,22 +165,41 @@
       } else {
         v = 0.30 + rng.nextDouble() * 0.12;
       }
+      if (kind === 'brick') brickHeight = brickHeight || [];
+      if (kind === 'brick') brickHeight[y * 64 + x] = v;
       var o = (y * 64 + x) * 4, b = Math.max(0, Math.min(255, Math.round(v * 255)));
       img.data[o] = b; img.data[o + 1] = b; img.data[o + 2] = b; img.data[o + 3] = 255;
     }
     g.putImageData(img, 0, 0);
-    var t = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    return t;
+    return glTex(c, true);
   }
   var TEXWALL = makePattern('brick'), TEXFLOOR = makePattern('floor'),
       TEXCEIL = makePattern('ceil'), TEXWHITE = makePattern('white');
-  TEXWHITE._white = true;
+
+  /* Tangent-space normal map from the brick heights (Sobel). Flat normal
+   * for floor/ceiling/glow. */
+  function makeNormalTex(height, strength) {
+    var c = document.createElement('canvas'); c.width = c.height = 64;
+    var g = c.getContext('2d');
+    var img = g.createImageData(64, 64);
+    function h(x, y) {
+      x = (x + 64) % 64; y = (y + 64) % 64;
+      return height ? height[y * 64 + x] : 0.5;
+    }
+    for (var y = 0; y < 64; y++) for (var x = 0; x < 64; x++) {
+      var dx = (h(x + 1, y) - h(x - 1, y)) * (strength || 2);
+      var dy = (h(x, y + 1) - h(x, y - 1)) * (strength || 2);
+      var inv = 1 / Math.sqrt(dx * dx + dy * dy + 1);
+      var o = (y * 64 + x) * 4;
+      img.data[o] = Math.round((-dx * inv * 0.5 + 0.5) * 255);
+      img.data[o + 1] = Math.round((-dy * inv * 0.5 + 0.5) * 255);
+      img.data[o + 2] = Math.round(inv * 255);
+      img.data[o + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return glTex(c, true);
+  }
+  var NRMWALL = makeNormalTex(brickHeight, 2.2), NRMFLAT = makeNormalTex(null, 0);
 
   function buf(data, size, prog, name) {
     var b = gl.createBuffer();
@@ -172,14 +268,15 @@
   }
 
   // ---------- world geometry (merged static buffers per material) ----------
-  function newGroup() { return { P: [], C: [], U: [], E: [] }; }
-  function quad(G8, ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, col, emis, uRep, vRep) {
+  function newGroup() { return { P: [], C: [], U: [], N: [], E: [] }; }
+  function quad(G8, ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, col, emis, uRep, vRep, nx, ny, nz) {
     uRep = uRep || 1; vRep = vRep || 1;
     G8.P.push(ax, ay, az, bx, by, bz, cx, cy, cz, ax, ay, az, cx, cy, cz, dx, dy, dz);
     var uvs = [0, 0, uRep, 0, uRep, vRep, 0, 0, uRep, vRep, 0, vRep];
     for (var i = 0; i < 6; i++) {
       G8.C.push(col[0], col[1], col[2]);
       G8.U.push(uvs[i * 2], uvs[i * 2 + 1]);
+      G8.N.push(nx, ny, nz);
       G8.E.push(emis);
     }
   }
@@ -192,17 +289,17 @@
       var open = walkable(x, z);
       if (!open) {
         // top
-        quad(wall, x, WALL_H, z, x + 1, WALL_H, z, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w1, 0, 1, 1);
+        quad(wall, x, WALL_H, z, x + 1, WALL_H, z, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w1, 0, 1, 1, 0, 1, 0);
         // sides facing open neighbors (plus outer shell)
-        if (walkable(x + 1, z)) quad(wall, x + 1, 0, z, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x + 1, WALL_H, z, w0, 0, 1, WALL_H / 1);
-        if (walkable(x - 1, z)) quad(wall, x, 0, z + 1, x, 0, z, x, WALL_H, z, x, WALL_H, z + 1, w0, 0, 1, WALL_H / 1);
-        if (walkable(x, z + 1)) quad(wall, x, 0, z + 1, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w0, 0, 1, WALL_H / 1);
-        if (walkable(x, z - 1)) quad(wall, x + 1, 0, z, x, 0, z, x, WALL_H, z, x + 1, WALL_H, z, w0, 0, 1, WALL_H / 1);
+        if (walkable(x + 1, z)) quad(wall, x + 1, 0, z, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x + 1, WALL_H, z, w0, 0, 1, 2, 1, 0, 0);
+        if (walkable(x - 1, z)) quad(wall, x, 0, z + 1, x, 0, z, x, WALL_H, z, x, WALL_H, z + 1, w0, 0, 1, 2, -1, 0, 0);
+        if (walkable(x, z + 1)) quad(wall, x, 0, z + 1, x + 1, 0, z + 1, x + 1, WALL_H, z + 1, x, WALL_H, z + 1, w0, 0, 1, 2, 0, 0, 1);
+        if (walkable(x, z - 1)) quad(wall, x + 1, 0, z, x, 0, z, x, WALL_H, z, x + 1, WALL_H, z, w0, 0, 1, 2, 0, 0, -1);
       } else {
         // ceiling over open cells (enclosed mine) + checkered floor
-        quad(ceil, x, WALL_H, z + 1, x + 1, WALL_H, z + 1, x + 1, WALL_H, z, x, WALL_H, z, [0.10, 0.07, 0.16], 0, 1, 1);
+        quad(ceil, x, WALL_H, z + 1, x + 1, WALL_H, z + 1, x + 1, WALL_H, z, x, WALL_H, z, [0.10, 0.07, 0.16], 0, 1, 1, 0, -1, 0);
         var f = ((x + z) % 2) ? [0.16, 0.11, 0.28] : [0.11, 0.08, 0.20];
-        quad(floor, x, 0, z, x, 0, z + 1, x + 1, 0, z + 1, x + 1, 0, z, f, 0, 1, 1);
+        quad(floor, x, 0, z, x, 0, z + 1, x + 1, 0, z + 1, x + 1, 0, z, f, 0, 1, 1, 0, 1, 0);
       }
     }
     // glowing crystal clusters on some wall tops
@@ -212,15 +309,17 @@
       if (walkable(x, z)) continue;
       var s = 0.18 + rng.nextDouble() * 0.22, ox = x + 0.2 + rng.nextDouble() * 0.6, oz = z + 0.2 + rng.nextDouble() * 0.6;
       var cc = rng.nextDouble() < 0.5 ? [0.3, 0.85, 1.0] : [0.75, 0.45, 1.0];
-      quad(glow, ox - s, WALL_H, oz - s, ox + s, WALL_H, oz - s, ox + s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz, cc, 0.9, 1, 1);
-      quad(glow, ox - s, WALL_H, oz + s, ox - s, WALL_H, oz - s, ox - s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz + s, cc, 0.9, 1, 1);
+      quad(glow, ox - s, WALL_H, oz - s, ox + s, WALL_H, oz - s, ox + s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz, cc, 0.9, 1, 1, 0, 0, 1);
+      quad(glow, ox - s, WALL_H, oz + s, ox - s, WALL_H, oz - s, ox - s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz + s, cc, 0.9, 1, 1, 0, 0, -1);
     }
-    function freeze(G8, tex) {
-      return { n: G8.P.length / 3, tex: tex,
+    function freeze(G8, tex, nrm) {
+      return { n: G8.P.length / 3, tex: tex, nrm: nrm,
         pos: buf(G8.P, 3, worldProg, 'aPos'), col: buf(G8.C, 3, worldProg, 'aCol'),
-        uv: buf(G8.U, 2, worldProg, 'aUV'), em: buf(G8.E, 1, worldProg, 'aEmis') };
+        uv: buf(G8.U, 2, worldProg, 'aUV'), nrmA: buf(G8.N, 3, worldProg, 'aNrm'),
+        em: buf(G8.E, 1, worldProg, 'aEmis') };
     }
-    G.world = [freeze(wall, TEXWALL), freeze(floor, TEXFLOOR), freeze(ceil, TEXCEIL), freeze(glow, TEXWHITE)];
+    G.world = [freeze(wall, TEXWALL, NRMWALL), freeze(floor, TEXFLOOR, NRMFLAT),
+      freeze(ceil, TEXCEIL, NRMFLAT), freeze(glow, TEXWHITE, NRMFLAT)];
   }
 
   // ---------- sprites ----------
@@ -511,10 +610,17 @@
     gl.uniform1i(gl.getUniformLocation(worldProg, 'uTorchCount'), sorted.length);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(gl.getUniformLocation(worldProg, 'uTex'), 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.uniform1i(gl.getUniformLocation(worldProg, 'uNrm'), 1);
+    var eye = eyePos();
+    gl.uniform3fv(gl.getUniformLocation(worldProg, 'uCam'), new Float32Array(eye));
     G.world.forEach(function (grp) {
+      gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, grp.tex);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, grp.nrm);
       bindAttr(grp.pos, 3, 0); bindAttr(grp.col, 3, 0);
-      bindAttr(grp.uv, 2, 0); bindAttr(grp.em, 1, 0);
+      bindAttr(grp.uv, 2, 0); bindAttr(grp.nrmA, 3, 0); bindAttr(grp.em, 1, 0);
       gl.drawArrays(gl.TRIANGLES, 0, grp.n);
     });
     // sprites

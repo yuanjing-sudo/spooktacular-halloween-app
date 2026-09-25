@@ -2,6 +2,7 @@ package spooktacular.game;
 
 import spooktacular.data.Data;
 import spooktacular.engine.Engine;
+import spooktacular.quests.*;
 
 import javax.swing.*;
 import java.awt.*;
@@ -13,17 +14,23 @@ import java.util.List;
  *  Games tab hosts two playable minigames (Memory Match, Pumpkin Smash). */
 public class Tabs {
     private final MazePanel maze = new MazePanel();
+    private final QuestBoard quests = new QuestBoard();
+    private final ExpeditionBoard expeditions = new ExpeditionBoard();
+    private final AchievementBoard achBoard = new AchievementBoard();
+    private MineSim sim;
     private final JLabel candyLabel = new JLabel();
-    private final JLabel mineLabel = new JLabel();
     private final JLabel achLabel = new JLabel();
     private final JLabel smashLabel = new JLabel("Smashes: 0  (+25 each)");
+    private final DefaultListModel<String> achModel = new DefaultListModel<>();
     private int smashes;
 
     public JTabbedPane build() {
+        maze.expeditions = expeditions;
+        sim = new MineSim(quests, achBoard, expeditions);
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("Maze", maze);
         tabs.addTab("Candy", candyPanel());
-        tabs.addTab("Mine", minePanel());
+        tabs.addTab("Mine", sim);
         tabs.addTab("World", listPanel("Avatar World — Companions",
                 ghostNames(8), "Your boxy companions from the ghost cast:"));
         tabs.addTab("Explore", explorePanel());
@@ -32,14 +39,12 @@ public class Tabs {
         tabs.addChangeListener(e -> {
             maze.setPaused(tabs.getSelectedIndex() != 0);
             if (tabs.getSelectedIndex() == 1) refreshCandy();
-            if (tabs.getSelectedIndex() == 2) refreshMine();
             if (tabs.getSelectedIndex() == 6) refreshAch();
             maze.requestFocusInWindow();
         });
         maze.setPaused(false);
         javax.swing.Timer poll = new javax.swing.Timer(500, e -> {
             if (tabs.getSelectedIndex() == 1) refreshCandy();
-            if (tabs.getSelectedIndex() == 2) refreshMine();
             if (tabs.getSelectedIndex() == 6) refreshAch();
         });
         poll.start();
@@ -76,30 +81,6 @@ public class Tabs {
 
     private void refreshCandy() {
         candyLabel.setText("Candy Vault — collected: " + maze.collectedCandy + "  (18 kinds from the app)");
-    }
-
-    private JComponent minePanel() {
-        JPanel p = new JPanel(new BorderLayout());
-        mineLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        p.add(mineLabel, BorderLayout.NORTH);
-        DefaultListModel<String> m = new DefaultListModel<>();
-        for (Data.Pick pk : Data.PICKS) m.addElement(pk.name() + " — " + pk.cost() + " gold");
-        p.add(new JScrollPane(new JList<>(m)), BorderLayout.CENTER);
-        JButton buy = new JButton("Buy next pick");
-        buy.addActionListener(e -> {
-            if (!maze.buyPick())
-                JOptionPane.showMessageDialog(p, "Need more gold! Clear maze rooms for gold.");
-            refreshMine();
-        });
-        p.add(buy, BorderLayout.SOUTH);
-        refreshMine();
-        return p;
-    }
-
-    private void refreshMine() {
-        mineLabel.setText(String.format("Gold %s  Lv %d  Wielding: %s  Relics %d/12",
-                Engine.compact(maze.gold), maze.level,
-                Data.PICKS[maze.pickIdx].name(), maze.relics.size()));
     }
 
     private JComponent explorePanel() {
@@ -191,6 +172,7 @@ public class Tabs {
                     btns[idx].setText("");
                     smashes++;
                     maze.score += 25;
+                    quests.record(new QEvent.MonsterSlain());
                     if (smashes >= 10) maze.ach.add("smash-10");
                     smashLabel.setText("Smashes: " + smashes + "  (+25 each)");
                     spawnPumpkin(btns);
@@ -217,16 +199,22 @@ public class Tabs {
         JPanel p = new JPanel(new BorderLayout());
         achLabel.setHorizontalAlignment(SwingConstants.CENTER);
         p.add(achLabel, BorderLayout.NORTH);
-        DefaultListModel<String> m = new DefaultListModel<>();
-        for (String a : new String[]{"first-candy: First Bite", "clear-1: Pathfinder",
-                "first-pick: New Edge", "void-drill: Maximum Spin", "level-5: Living Myth",
-                "score-1k: Score Legend", "smash-10: Pumpkin Pro"}) m.addElement(a);
-        p.add(new JScrollPane(new JList<>(m)), BorderLayout.CENTER);
+        p.add(new JScrollPane(new JList<>(achModel)), BorderLayout.CENTER);
         refreshAch();
         return p;
     }
 
     private void refreshAch() {
-        achLabel.setText("Unlocked " + maze.ach.size() + "/7 tracked here: " + maze.ach);
+        achModel.clear();
+        achModel.addElement("Maze run: score " + Engine.compact(maze.score) + ", unlocked " + maze.ach.size());
+        int n = 0;
+        for (Achievement a : AchievementCatalog.all()) {
+            boolean u = achBoard.isUnlocked(a.id());
+            if (u) n++;
+            achModel.addElement((u ? "[x] " : "[ ] ") + a.title() + " — " + a.detail());
+        }
+        achLabel.setText("Mine achievements unlocked: " + n + "/" + AchievementCatalog.all().size()
+                + "   Quests done: " + quests.doneCount() + "/" + quests.totalCount()
+                + "   Expeditions done: " + expeditions.doneCount());
     }
 }

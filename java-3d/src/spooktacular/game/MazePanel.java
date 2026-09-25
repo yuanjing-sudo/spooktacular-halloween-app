@@ -3,6 +3,8 @@ package spooktacular.game;
 import spooktacular.data.Data;
 import spooktacular.engine.Engine;
 import spooktacular.engine.Engine.Cell;
+import spooktacular.quests.EEvent;
+import spooktacular.quests.ExpeditionBoard;
 import spooktacular.engine.Engine.Maze;
 
 import javax.swing.*;
@@ -64,6 +66,10 @@ public class MazePanel extends JPanel implements KeyListener {
     private int[][] wallTex = new int[64][64];
     private int ghostType = 0;
     private final javax.swing.Timer loop;
+    /** Expedition board fed by maze play (distance, score, treasure). Set by host. */
+    public ExpeditionBoard expeditions;
+    private long lastExpScore;
+    private double distAcc;
 
     public MazePanel() {
         setPreferredSize(new Dimension(VW * 2, VH * 2));
@@ -195,10 +201,18 @@ public class MazePanel extends JPanel implements KeyListener {
 
     private void moveWithCollision(double dx, double dz) {
         double r = 0.22, nx = px + dx, nz = pz + dz;
+        double ox = px, oz = pz;
         if (!hitsWall(nx, pz, r)) px = nx;
         if (!hitsWall(px, nz, r)) pz = nz;
         px = Math.max(0.4, Math.min(maze.w() - 0.4, px));
         pz = Math.max(0.4, Math.min(maze.d() - 0.4, pz));
+        if (expeditions != null) {
+            distAcc += Math.hypot(px - ox, pz - oz);
+            while (distAcc >= 1) {
+                expeditions.record(new EEvent.DistanceBanked(1));
+                distAcc -= 1;
+            }
+        }
     }
 
     private boolean hitsWall(double wx, double wz, double r) {
@@ -265,6 +279,7 @@ public class MazePanel extends JPanel implements KeyListener {
                 score += Math.round(50 * Engine.comboMult(combo) * dmgMult());
                 gold += Math.round(5 * goldMult());
                 gainXP(20);
+                if (expeditions != null) expeditions.record(new EEvent.TreasureFound());
             }
         }
         if (relicSpot != null && near(px, pz, relicSpot[0], relicSpot[1], 0.5)) {
@@ -294,6 +309,13 @@ public class MazePanel extends JPanel implements KeyListener {
             flash("Caught " + f.name() + " (+" + gv + " gold)", 3);
         }
         if (candies.isEmpty() && gems.isEmpty()) depthCleared();
+        if (expeditions != null) {
+            long gained = score - lastExpScore;
+            if (gained > 0) {
+                expeditions.record(new EEvent.ScoreEarned((int) Math.min(gained, 1_000_000)));
+                lastExpScore = score;
+            }
+        }
     }
 
     // ================= flow =================
@@ -311,6 +333,8 @@ public class MazePanel extends JPanel implements KeyListener {
         ach.clear();
         collectedCandy = 0;
         state = "play";
+        lastExpScore = 0;
+        distAcc = 0;
         buildDepth();
     }
 
