@@ -148,7 +148,57 @@
     var m = v / 1000000; return (m === Math.floor(m) ? String(m) : m.toFixed(1)) + 'M';
   }
 
-  var api = { SeededRNG: SeededRNG, carveDFS: carveDFS, connected: connected, astar: astar, ease: ease, comboMult: comboMult, streakBonus: streakBonus, compact: compact, key: key };
+  /* ---- Real data tables ported from the Swift sources ---- */
+  /* MNPickTier (AbandonedMine.swift): display names, speeds, gold costs. */
+  var PICKS = [
+    { name: 'Wooden Pick', speed: 1.5, cost: 0 },
+    { name: 'Stone Pick', speed: 2.0, cost: 8 },
+    { name: 'Iron Pick', speed: 2.5, cost: 20 },
+    { name: 'Golden Pick', speed: 3.0, cost: 35 },
+    { name: 'Diamond Pick', speed: 4.5, cost: 60 },
+    { name: 'Crystal Pick', speed: 6.0, cost: 100 },
+    { name: 'Void Drill', speed: 8.5, cost: 160 }
+  ];
+  /* MNDepthLayer titles (AbandonedMine.swift) used for web depths. */
+  var LAYERS = ['Sunlit Tops', 'Dirt Tunnels', 'Stone Depths', 'Deepstone', 'Crystal Hollows', 'Magma Core'];
+  /* MNRelic catalog (MineRelics.swift): 12 relics. */
+  var RELICS = [
+    { name: "Mole's Knuckle", effect: 'Damage', value: 0.15 },
+    { name: 'Sledge of Echoes', effect: 'Damage', value: 0.25 },
+    { name: 'Core Drill Bit', effect: 'Damage', value: 0.4 },
+    { name: "Rabbit's Foot", effect: 'Luck', value: 0.08 },
+    { name: 'Four-Leaf Pick', effect: 'Luck', value: 0.12 },
+    { name: 'Wisp in a Jar', effect: 'Luck', value: 0.2 },
+    { name: 'Gilded Scale', effect: 'Gold', value: 0.15 },
+    { name: "Merchant's Smile", effect: 'Gold', value: 0.25 },
+    { name: 'Crown Fragment', effect: 'Gold', value: 0.4 },
+    { name: 'Swift Boots', effect: 'Speed', value: 0.15 },
+    { name: 'Hummingbird Charm', effect: 'Speed', value: 0.25 },
+    { name: 'Bottomless Pocket', effect: 'Pack', value: 25 }
+  ];
+  /* MNFish catalog (MineFishing.swift): 14 fish. */
+  var FISH = [
+    { name: 'Cave Minnow', rarity: 'Common', value: 6 },
+    { name: 'Lantern Guppy', rarity: 'Common', value: 8 },
+    { name: 'Blind Barb', rarity: 'Common', value: 7 },
+    { name: 'Moss Carp', rarity: 'Common', value: 9 },
+    { name: 'Echo Trout', rarity: 'Rare', value: 22 },
+    { name: 'Mirror Koi', rarity: 'Rare', value: 28 },
+    { name: 'Axolotl Pal', rarity: 'Epic', value: 60 },
+    { name: 'Ember Eel', rarity: 'Common', value: 14 },
+    { name: 'Cinder Carp', rarity: 'Common', value: 16 },
+    { name: 'Magma Jelly', rarity: 'Rare', value: 34 },
+    { name: 'Obsidian Bass', rarity: 'Rare', value: 40 },
+    { name: 'Phoenix Fry', rarity: 'Epic', value: 85 },
+    { name: 'Core Serpent', rarity: 'Legendary', value: 220 },
+    { name: 'Golden Walleye', rarity: 'Legendary', value: 180 }
+  ];
+  var FISH_WEIGHT = { Common: 60, Rare: 28, Epic: 10, Legendary: 2 };
+  /* XP curve (mirrors ProScoringEngine.xpNext). */
+  function xpNext(lv) { return Math.max(50, Math.round(80 * Math.pow(1.28, Math.max(1, lv) - 1))); }
+
+  var api = { SeededRNG: SeededRNG, carveDFS: carveDFS, connected: connected, astar: astar, ease: ease, comboMult: comboMult, streakBonus: streakBonus, compact: compact, key: key,
+    PICKS: PICKS, LAYERS: LAYERS, RELICS: RELICS, FISH: FISH, FISH_WEIGHT: FISH_WEIGHT, xpNext: xpNext };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Spooky = api;
 })(typeof self !== 'undefined' ? self : this);

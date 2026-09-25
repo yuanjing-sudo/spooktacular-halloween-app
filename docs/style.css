@@ -27,11 +27,11 @@ canvas {
 #overlay.hidden { display: none; }
 #overlay-title { margin: 0 0 8px; }
 #overlay-text { max-width: 420px; opacity: .9; }
-#overlay-btn, #newmaze {
+#overlay-btn, #overlay-btn2, #newmaze, #shopbtn {
   margin-top: 12px; background: #ff7518; color: #1a0b00; border: none;
   border-radius: 8px; padding: 10px 22px; font-size: 1rem; font-weight: 700;
   cursor: pointer;
 }
-#overlay-btn:hover, #newmaze:hover { background: #ffa63d; }
-#newmaze { background: #3b1d5e; color: #ffd166; border: 1px solid #6d28a8; }
+#overlay-btn:hover, #overlay-btn2:hover, #newmaze:hover, #shopbtn:hover { background: #ffa63d; }
+#newmaze, #shopbtn { background: #3b1d5e; color: #ffd166; border: 1px solid #6d28a8; }
 footer { opacity: .6; font-size: .8rem; margin: 10px 0 4px; }
