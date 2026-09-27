@@ -487,31 +487,7 @@
     return -0.7 + 1.2 * Math.sin(Math.PI * t);
   }
   function buildAvatar(P, C) {
-    var sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
-    var R = [cy, 0, sy], U = [0, 1, 0], B = [-sy, 0, cy]; // right, up, backward
-    var o = [G.px, G.py, G.pz];
-    emitBox(P, C, o, R, U, B, -0.14, 0.35, 0, 0.22, 0.7, 0.25, PANTS, 1.1);
-    emitBox(P, C, o, R, U, B, 0.14, 0.35, 0, 0.22, 0.7, 0.25, PANTS, 1.1);
-    emitBox(P, C, o, R, U, B, 0, 1.05, 0, 0.55, 0.7, 0.32, SHIRT, 1.1);
-    emitBox(P, C, o, R, U, B, 0, 1.62, 0, 0.42, 0.42, 0.42, SKIN, 1.15);
-    emitBox(P, C, o, R, U, B, 0, 1.78, 0.03, 0.44, 0.14, 0.44, HAIR, 1.1);
-    emitBox(P, C, o, R, U, B, -0.38, 1.05, 0, 0.18, 0.65, 0.2, SHIRT, 1.1);
-    var a = swingAngle(), S = [0.38, 1.35, 0];
-    function arm(p) {
-      var r = rotX(p, a);
-      return [S[0] + r[0], S[1] + r[1], S[2] + r[2]];
-    }
-    function armBox(c, s, col) {
-      var cc = arm(c);
-      // re-emit centered box: translate local box by (cc - S) in basis = just offset origin
-      emitBox(P, C, [o[0] + R[0] * cc[0] + U[0] * cc[1] + B[0] * cc[2],
-                     o[1] + R[1] * cc[0] + U[1] * cc[1] + B[1] * cc[2],
-                     o[2] + R[2] * cc[0] + U[2] * cc[1] + B[2] * cc[2]],
-              R, U, B, 0, 0, 0, s[0], s[1], s[2], col, 1.1);
-    }
-    armBox([0, -0.32, 0], [0.18, 0.6, 0.2], SHIRT);
-    armBox([0, -0.78, 0.06], [0.08, 0.72, 0.08], WOODC);
-    armBox([0, -1.08, 0.1], [0.5, 0.1, 0.1], STEEL);
+    // No character model (cleaner view): third-person is camera-only.
   }
   function buildViewmodel(P, C) {
     var d = lookDir(), e = playerEye();
