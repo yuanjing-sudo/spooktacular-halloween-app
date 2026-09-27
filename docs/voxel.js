@@ -120,7 +120,7 @@
     var noise = S.makeNoise2D(G.seed + G.world * 977);
     G.blocks = {}; G.torches = [];
     if (G.world === 0) {
-      G.W = 48; G.H = 8; G.D = 48;
+      G.W = 48; G.H = 12; G.D = 48; // tall enough for full tree crowns
       var hmap = [];
       for (var x = 0; x < G.W; x++) for (var z = 0; z < G.D; z++) {
         var h = 2 + Math.floor(noise(x * 0.08, z * 0.08) * 4);
@@ -167,16 +167,28 @@
         else key2 = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'gold', 'emerald', 'ruby', 'diamond', 'crystal', 'lapis'].indexOf(o.key) >= 0; })).key;
         G.blocks[K(x2, y2, z2)] = key2;
       }
-      // entrance shaft + torches
-      var cx = G.W >> 1, cz = G.D >> 1, ti;
-      for (ti = 2; ti <= 9; ti++) delete G.blocks[K(cx, ti, cz)];
-      for (ti = 0; ti < 8; ti++) {
-        var a = ti * 0.785, rr = 3 + (ti % 3);
-        var qx = Math.max(1, Math.min(G.W - 2, Math.round(cx + Math.cos(a) * rr)));
-        var qz = Math.max(1, Math.min(G.D - 2, Math.round(cz + Math.sin(a) * rr)));
-        G.torches.push({ x: qx + 0.5, y: 4.5, z: qz + 0.5 });
+      // entrance stairwell (2x2, down to the works) + torches
+      var cx = G.W >> 1, cz = G.D >> 1;
+      for (var sx = 0; sx < 2; sx++) for (var sz = 0; sz < 2; sz++)
+        for (var ti = 1; ti <= 9; ti++) delete G.blocks[K(cx + sx, ti, cz + sz)];
+      // starter cavern hall around the stair foot (first view: lit rock + ores)
+      var hx, hy, hz;
+      for (hx = -2; hx <= 3; hx++) for (hz = -2; hz <= 3; hz++) for (hy = 1; hy <= 4; hy++) {
+        if (hx >= 0 && hx < 2 && hz >= 0 && hz < 2 && hy <= 9) continue; // stair shaft
+        delete G.blocks[K(cx + hx, hy, cz + hz)];
       }
-      G.px = cx + 0.5; G.pz = cz + 0.5; G.py = 9.5;
+      // mineshaft supports: wood pillars where the hall stands tall + beam ring
+      // (real breakable wood blocks: they light, collide and chop like timber)
+      [[-2, -2], [3, -2], [-2, 3], [3, 3]].forEach(function (c) {
+        for (var yy = 1; yy <= 4; yy++) G.blocks[K(cx + c[0], yy, cz + c[1])] = 'wood';
+      });
+      for (var bx = -2; bx <= 3; bx++) {
+        G.blocks[K(cx + bx, 4, cz - 2)] = 'wood';
+        G.blocks[K(cx + bx, 4, cz + 3)] = 'wood';
+      }
+      G.torches.push({ x: cx - 1.5, y: 2.5, z: cz - 1.5 });
+      G.torches.push({ x: cx + 2.5, y: 2.5, z: cz + 2.5 });
+      G.px = cx + 1; G.pz = cz + 1; G.py = 2.05;
     }
     G.yaw = 0; G.pitch = -0.05; G.vx = G.vy = G.vz = 0;
   }
@@ -202,13 +214,13 @@
   function skyLight(x, y, z) {
     if (G.world === 1) return 0;
     var f = 1.0;
-    for (var yy = y + 1; yy < G.H + 6; yy++) {
+    for (var yy = y + 1; ; yy++) {
+      if (yy >= G.H) return f; // open sky above the world (out-of-bounds is NOT rock here)
       var b = get(x, yy, z);
       if (b === null) continue;
       if (b === 'leaves') { f *= 0.55; if (f < 0.22) return 0.22; continue; }
       return 0.30;
     }
-    return f;
   }
   function torchGlow(x, y, z) {
     var li = 0;
@@ -259,7 +271,11 @@
       var leaf = key === 'leaves';
       for (var f = 0; f < 6; f++) {
         var F = FACES[f];
-        if (opaqueAt(x + F.d[0], y + F.d[1], z + F.d[2])) continue;
+        var nx = x + F.d[0], ny = y + F.d[1], nz = z + F.d[2];
+        // cull only against in-bounds opaque neighbors: border faces draw
+        // so you never see through the edge of the world into the void
+        if (nx >= 0 && ny >= 0 && nz >= 0 && nx < G.W && ny < G.H && nz < G.D
+            && opaqueAt(nx, ny, nz)) continue;
         var nAxis = F.d[0] !== 0 ? 0 : (F.d[1] !== 0 ? 1 : 2);
         var bcell = [x + F.d[0], y + F.d[1], z + F.d[2]];
         var quad = [F.c[0], F.c[1], F.c[2], F.c[5]];
@@ -267,6 +283,8 @@
         var order = [0, 1, 2, 0, 2, 3];
         for (var v = 0; v < 6; v++) {
           var cn2 = quad[order[v]], li = ore.emis ? 1.5 : ls[order[v]] * F.s;
+          // embedded-gem glint: deterministic sparkle verts on valuable ores
+          if (!ore.emis && ore.gold > 0 && ((x * 7 + y * 13 + z * 17 + f * 3 + v) % 6) < 2) li *= 1.9;
           (leaf ? TP : P).push(x + cn2[0], y + cn2[1], z + cn2[2]);
           var carr = leaf ? TC : C;
           carr.push(Math.min(1.5, base[0] * li), Math.min(1.5, base[1] * li), Math.min(1.5, base[2] * li));
@@ -305,19 +323,23 @@
     if (z % CH === CH - 1) need(cx, cy, cz + 1);
   }
   function buildGlow() {
-    // emissive torch cubes at torch spots (decor, non-solid)
+    // torch stick (dark timber) + flame cube (hot emissive); decor, non-solid
     var P = [], C = [];
-    G.torches.forEach(function (T) {
-      var s = 0.16, y = T.y;
-      var verts = [[-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s], [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]];
-      var faces = [[0, 1, 2, 3], [4, 6, 5, 7], [0, 4, 5, 1], [2, 6, 7, 3], [1, 5, 6, 2], [0, 3, 7, 4]];
-      faces.forEach(function (f) {
+    function box(cx, cy, cz, sx, sy, sz, r, g, b) {
+      var v = [[-sx, -sy, -sz], [sx, -sy, -sz], [sx, sy, -sz], [-sx, sy, -sz],
+               [-sx, -sy, sz], [sx, -sy, sz], [sx, sy, sz], [-sx, sy, sz]];
+      [[0, 1, 2, 3], [4, 6, 5, 7], [0, 4, 5, 1], [2, 6, 7, 3], [1, 5, 6, 2], [0, 3, 7, 4]].forEach(function (f) {
         [f[0], f[1], f[2], f[0], f[2], f[3]].forEach(function (vi) {
-          P.push(T.x + verts[vi][0], y + verts[vi][1], T.z + verts[vi][2]);
-          C.push(1.4, 0.75, 0.25);
+          P.push(cx + v[vi][0], cy + v[vi][1], cz + v[vi][2]);
+          C.push(r, g, b);
         });
       });
+    }
+    G.torches.forEach(function (T) {
+      box(T.x, T.y - 0.35, T.z, 0.05, 0.35, 0.05, 0.35, 0.22, 0.1);
+      box(T.x, T.y + 0.08, T.z, 0.15, 0.15, 0.15, 1.5, 0.8, 0.25);
     });
+    G.glow = P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') } : { n: 0 };
     G.glow = P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') } : { n: 0 };
   }
   function frustumPlanes(m) {
@@ -502,8 +524,8 @@
     gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'uMV'), false, new Float32Array(V));
     gl.uniform3fv(gl.getUniformLocation(prog, 'uFog'), new Float32Array(fogC));
     gl.uniform2fv(gl.getUniformLocation(prog, 'uFogR'), new Float32Array(forest ? [20, 70] : [6, 30]));
-    function bind(a, size, name) {
-      gl.bindBuffer(gl.ARRAY_BUFFER, a);
+    function bind(w, size, name) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, w.b);
       var loc = gl.getAttribLocation(prog, name);
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);

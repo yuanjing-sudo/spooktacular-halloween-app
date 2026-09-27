@@ -38,13 +38,30 @@
     ' vC = aCol; vUV = aUV; vN = aNrm; vD = -mv.z; vE = aEmis; vW = aPos; }',
     'precision mediump float; varying vec3 vC; varying vec2 vUV; varying vec3 vN; varying float vD; varying float vE; varying vec3 vW;' +
     'uniform sampler2D uTex; uniform sampler2D uNrm; uniform vec3 uFog; uniform vec3 uCam; uniform float uFlick; uniform vec4 uTorches[6]; uniform int uTorchCount;' +
-    'void main(){ vec3 tex = texture2D(uTex, vUV).rgb;' +
+    'void main(){' +
     ' vec3 N = normalize(vN);' +
     ' vec3 T = abs(N.x) > 0.9 ? vec3(0.0, 0.0, N.x) : (abs(N.z) > 0.9 ? vec3(N.z, 0.0, 0.0) : vec3(1.0, 0.0, 0.0));' +
     ' vec3 B = normalize(cross(N, T)); T = normalize(cross(B, N));' +
-    ' vec3 tn = texture2D(uNrm, vUV).rgb * 2.0 - 1.0;' +
-    ' vec3 Np = normalize(T * tn.x + B * tn.y + N * tn.z);' +
     ' vec3 V = normalize(uCam - vW);' +
+    ' vec2 uv = vUV;' +
+    ' if (vE < 0.5) {' +
+    '  vec3 Vts = vec3(dot(V, T), dot(V, B), dot(V, N));' +
+    '  float layers = 8.0, ld = 1.0 / layers;' +
+    '  vec2 duv = Vts.xy / max(Vts.z, 0.2) * 0.035 / layers;' +
+    '  float cd = 0.0;' +
+    '  float h = texture2D(uTex, uv).r;' +
+    '  for (int i = 0; i < 8; i++) {' +
+    '   if (cd >= h) break;' +
+    '   cd += ld; uv -= duv; h = texture2D(uTex, uv).r;' +
+    '  }' +
+    '  vec2 prev = uv + duv;' +
+    '  float after = h - cd, before = texture2D(uTex, prev).r - cd + ld;' +
+    '  uv = mix(uv, prev, clamp(after / max(after - before, 0.001), 0.0, 1.0));' +
+    '  uv = clamp(uv, vec2(0.001), vec2(0.999));' +
+    ' }' +
+    ' vec3 tex = texture2D(uTex, uv).rgb;' +
+    ' vec3 tn = texture2D(uNrm, uv).rgb * 2.0 - 1.0;' +
+    ' vec3 Np = normalize(T * tn.x + B * tn.y + N * tn.z);' +
     ' float li = 0.30;' +
     ' float spec = 0.0;' +
     ' for (int i = 0; i < 6; i++) { if (i >= uTorchCount) break;' +
