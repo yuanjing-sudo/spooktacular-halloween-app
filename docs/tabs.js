@@ -373,8 +373,15 @@
     var themePumpkins = { corn: 15, king: 12, gold: 8, crack: 6 };
     function spawnBats(n) {
       for (var i = 0; i < n; i++) {
-        var side = Math.random() < 0.5 ? -20 : W + 20;
-        bats.push({ x: side, y: Math.random() * H, vx: (side < 0 ? 1 : -1) * (2 + Math.random() * 4), vy: (Math.random() - 0.5) * 3, size: 8 + Math.random() * 12, flap: Math.random() * Math.PI * 2, flapSpeed: 0.15 + Math.random() * 0.15 });
+        var angle = (i / n) * Math.PI * 4 + Math.random() * 0.5;
+        var speed = 2 + Math.random() * 3;
+        bats.push({
+          x: cx, y: cy,
+          vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+          size: 8 + Math.random() * 12,
+          flap: Math.random() * Math.PI * 2, flapSpeed: 0.15 + Math.random() * 0.15,
+          spiral: true, angle: angle, speed: speed
+        });
       }
     }
     function spawnGhosts(n) {
@@ -618,34 +625,70 @@
     function drawRevealCandy(t) {
       ctx.save();
       ctx.translate(cx, cy);
-      var pulse = 1 + Math.sin(t * 5) * 0.04;
-      ctx.scale(revealScale * pulse, revealScale * pulse);
-      var glowR = 90 + rarityGlow[rarity];
+      var growScale = revealScale * (1.8 + Math.sin(t * 5) * 0.08);
+      ctx.scale(growScale, growScale);
+      ctx.rotate(t * 2.5);
+      var glowR = 120 + rarityGlow[rarity];
       var glow = ctx.createRadialGradient(0, 0, 5, 0, 0, glowR);
       glow.addColorStop(0, candyColor);
-      glow.addColorStop(0.4, candyColor + '88');
+      glow.addColorStop(0.3, candyColor + 'aa');
+      glow.addColorStop(0.7, candyColor + '44');
       glow.addColorStop(1, 'transparent');
       ctx.fillStyle = glow;
       ctx.beginPath();
       ctx.arc(0, 0, glowR, 0, Math.PI * 2);
       ctx.fill();
-      var bodyGrad = ctx.createRadialGradient(-12, -12, 3, 0, 0, 40);
+      for (var ri = 0; ri < 3; ri++) {
+        ctx.save();
+        ctx.rotate(t * (1.5 + ri * 0.5) + ri * 2.1);
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.15 - ri * 0.04) + ')';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 12]);
+        ctx.beginPath();
+        ctx.arc(0, 0, 55 + ri * 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+      var bodyGrad = ctx.createRadialGradient(-15, -15, 3, 0, 0, 50);
       bodyGrad.addColorStop(0, '#fff');
-      bodyGrad.addColorStop(0.3, candyColor);
-      bodyGrad.addColorStop(1, candyColor);
+      bodyGrad.addColorStop(0.25, candyColor);
+      bodyGrad.addColorStop(1, shadeColor(candyColor, -30));
       ctx.fillStyle = bodyGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, 38, 0, Math.PI * 2);
+      ctx.arc(0, 0, 48, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(-12, -14, 10, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.arc(0, 0, 48, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.beginPath();
-      ctx.arc(10, 8, 6, 0, Math.PI * 2);
+      ctx.arc(-14, -16, 12, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath();
+      ctx.arc(12, 10, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.save();
+      ctx.rotate(-t * 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      for (var si = 0; si < 4; si++) {
+        var sa = si * Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(Math.cos(sa) * 30, Math.sin(sa) * 30, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
+      ctx.restore();
+    }
+    function shadeColor(hex, percent) {
+      var num = parseInt(hex.slice(1), 16);
+      var r = Math.max(0, Math.min(255, (num >> 16) + percent));
+      var g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + percent));
+      var b = Math.max(0, Math.min(255, (num & 0xff) + percent));
+      return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
     }
     function drawText(t) {
       if (textAlpha <= 0) return;
@@ -789,7 +832,7 @@
           shakeMag = 0;
         }
       } else if (stage === 'burst') {
-        revealScale = Math.min(1, st * 3);
+        revealScale = Math.min(1.5, st * 4);
         textAlpha = Math.max(0, Math.min(1, (st - 0.3) * 2));
         textScale = 0.5 + Math.min(1, (st - 0.3) * 2) * 0.5;
         drawRevealCandy(now / 1000);
@@ -849,8 +892,17 @@
       sparkles.forEach(function (s) { s.life -= s.decay; s.rot += s.vr; });
       sparkles = sparkles.filter(function (s) { return s.life > 0; });
       confetti.forEach(function (c) { c.x += c.vx; c.y += c.vy; c.rot += c.vr; if (c.y > H + 20) { c.y = -10; c.x = Math.random() * W; } });
-      bats.forEach(function (b) { b.x += b.vx; b.y += b.vy; });
-      bats = bats.filter(function (b) { return b.x > -60 && b.x < W + 60; });
+      bats.forEach(function (b) {
+        if (b.spiral) {
+          b.angle += 0.08;
+          b.speed += 0.05;
+          b.x = cx + Math.cos(b.angle) * b.speed * 8;
+          b.y = cy + Math.sin(b.angle) * b.speed * 8;
+        } else {
+          b.x += b.vx; b.y += b.vy;
+        }
+      });
+      bats = bats.filter(function (b) { return b.x > -80 && b.x < W + 80 && b.y > -80 && b.y < H + 80; });
       ghosts.forEach(function (g) { g.x += g.vx; });
       ghosts = ghosts.filter(function (g) { return g.x > -80 && g.x < W + 80; });
       pumpkins.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.rot += p.vr; });
