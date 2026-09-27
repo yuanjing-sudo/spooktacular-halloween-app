@@ -32,8 +32,8 @@
     'void main(){ vec4 mv = uMV * vec4(aPos,1.0); gl_Position = uMVP * vec4(aPos,1.0); vC = aCol; vD = -mv.z; }'));
   gl.attachShader(prog, shader(gl.FRAGMENT_SHADER,
     'precision mediump float; varying vec3 vC; varying float vD;' +
-    'uniform vec3 uFog; uniform vec2 uFogR;' +
-    'void main(){ float f = smoothstep(uFogR.x, uFogR.y, vD); gl_FragColor = vec4(mix(vC, uFog, f), 1.0); }'));
+    'uniform vec3 uFog; uniform vec2 uFogR; uniform float uAlpha;' +
+    'void main(){ float f = smoothstep(uFogR.x, uFogR.y, vD); gl_FragColor = vec4(mix(vC, uFog, f), uAlpha); }'));
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
@@ -69,11 +69,10 @@
       pack: 0, packCap: 50, sellValue: 0,
       px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, onGround: false,
       blocks: {}, torches: [], W: 0, H: 0, D: 0,
-      dmg: {},
-      mesh: null, state: 'title'
+      dmg: {}, chunks: null, glow: null, state: 'title'
     };
     genWorld();
-    buildMesh();
+    buildAll();
     renderHUD();
   }
   function meta() { return G.meta; }
@@ -182,7 +181,7 @@
     G.yaw = 0; G.pitch = -0.05; G.vx = G.vy = G.vz = 0;
   }
 
-  // ---------- mesh (exposed faces, baked light) ----------
+  // ---------- mesh: chunks, smooth light, AO, leaf transparency ----------
   var FACES = [
     { d: [1, 0, 0], s: 0.8, c: [[1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 0, 0], [1, 1, 1], [1, 1, 0]] },
     { d: [-1, 0, 0], s: 0.8, c: [[0, 0, 1], [0, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1]] },
@@ -191,39 +190,154 @@
     { d: [0, 0, 1], s: 0.7, c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 0, 1], [1, 1, 1], [0, 1, 1]] },
     { d: [0, 0, -1], s: 0.7, c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]] }
   ];
+  var CH = 16;
+  var AO_CURVE = [0.42, 0.62, 0.8, 1.0];
   function hexRGB(h) {
     return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
   }
-  function buildMesh() {
-    var P = [], C = [];
-    var sun = G.world === 0 ? 1.0 : 0.0;
+  function opaqueAt(x, y, z) {
+    var b = get(x, y, z);
+    return b !== null && b !== 'leaves';
+  }
+  function skyLight(x, y, z) {
+    if (G.world === 1) return 0;
+    var f = 1.0;
+    for (var yy = y + 1; yy < G.H + 6; yy++) {
+      var b = get(x, yy, z);
+      if (b === null) continue;
+      if (b === 'leaves') { f *= 0.55; if (f < 0.22) return 0.22; continue; }
+      return 0.30;
+    }
+    return f;
+  }
+  function torchGlow(x, y, z) {
+    var li = 0;
+    for (var i = 0; i < G.torches.length; i++) {
+      var T = G.torches[i];
+      var dx = x - T.x, dy = y - T.y, dz = z - T.z;
+      li += 2.6 / (1 + (dx * dx + dy * dy + dz * dz) * 0.18);
+    }
+    return li;
+  }
+  function cellLight(x, y, z) {
+    if (G.world === 1) return 0.16 + Math.min(1.3, torchGlow(x + 0.5, y + 0.5, z + 0.5));
+    return Math.min(1.2, skyLight(x, y, z));
+  }
+  // AO + smooth light for one face corner. n = face normal axis (0/1/2),
+  // corner = [ox,oy,oz] offset, base = adjacent air cell coords.
+  function cornerLight(bx, by, bz, n, corner, base) {
+    var axes = [0, 1, 2].filter(function (a) { return a !== n; });
+    var u = axes[0], v = axes[1];
+    var co = [corner[0], corner[1], corner[2]];
+    var su = co[u] ? 1 : -1, sv = co[v] ? 1 : -1;
+    var b = base;
+    function S_(du, dv) {
+      var p = [b[0], b[1], b[2]];
+      p[u] += du * su; p[v] += dv * sv;
+      return solidAt(p[0], p[1], p[2]) ? 1 : 0;
+    }
+    function L_(du, dv) {
+      var p = [b[0], b[1], b[2]];
+      p[u] += du * su; p[v] += dv * sv;
+      return cellLight(p[0], p[1], p[2]);
+    }
+    var s1 = S_(1, 0), s2 = S_(0, 1), cc = S_(1, 1);
+    var ao = (s1 && s2) ? 0 : 3 - (s1 + s2 + cc);
+    var li = (L_(0, 0) + L_(1, 0) + L_(0, 1) + L_(1, 1)) / 4;
+    return li * AO_CURVE[ao];
+  }
+  function chunkKey(cx, cy, cz) { return cx + ',' + cy + ',' + cz; }
+  function buildChunk(cx, cy, cz) {
+    var P = [], C = [], TP = [], TC = [];
+    var x0 = cx * CH, y0 = cy * CH, z0 = cz * CH;
     for (var k in G.blocks) {
       var p = k.split(','), x = +p[0], y = +p[1], z = +p[2];
-      var ore = VOX[G.blocks[k]] || VOX.stone;
+      if (x < x0 || x >= x0 + CH || y < y0 || y >= y0 + CH || z < z0 || z >= z0 + CH) continue;
+      var key = G.blocks[k];
+      var ore = VOX[key] || VOX.stone;
       var base = hexRGB(ore.color);
+      var leaf = key === 'leaves';
       for (var f = 0; f < 6; f++) {
         var F = FACES[f];
-        if (solidAt(x + F.d[0], y + F.d[1], z + F.d[2])) continue;
-        var li;
-        if (ore.emis) li = 1.4;
-        else {
-          li = sun * F.s;
-          for (var ti = 0; ti < G.torches.length; ti++) {
-            var T = G.torches[ti];
-            var dx = x + 0.5 - T.x, dy = y + 0.5 - T.y, dz = z + 0.5 - T.z;
-            li += 2.4 / (1 + (dx * dx + dy * dy + dz * dz) * 0.25);
-          }
-          if (G.world === 1) li += 0.18;
-          li *= F.s;
-        }
+        if (opaqueAt(x + F.d[0], y + F.d[1], z + F.d[2])) continue;
+        var nAxis = F.d[0] !== 0 ? 0 : (F.d[1] !== 0 ? 1 : 2);
+        var bcell = [x + F.d[0], y + F.d[1], z + F.d[2]];
+        var quad = [F.c[0], F.c[1], F.c[2], F.c[5]];
+        var ls = quad.map(function (cn) { return cornerLight(x, y, z, nAxis, cn, bcell); });
+        var order = [0, 1, 2, 0, 2, 3];
         for (var v = 0; v < 6; v++) {
-          P.push(x + F.c[v][0], y + F.c[v][1], z + F.c[v][2]);
-          C.push(Math.min(1.4, base[0] * li), Math.min(1.4, base[1] * li), Math.min(1.4, base[2] * li));
+          var cn2 = quad[order[v]], li = ore.emis ? 1.5 : ls[order[v]] * F.s;
+          (leaf ? TP : P).push(x + cn2[0], y + cn2[1], z + cn2[2]);
+          var carr = leaf ? TC : C;
+          carr.push(Math.min(1.5, base[0] * li), Math.min(1.5, base[1] * li), Math.min(1.5, base[2] * li));
         }
       }
     }
-    var n = P.length / 3;
-    G.mesh = { n: n, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') };
+    return {
+      x0: x0, y0: y0, z0: z0,
+      op: P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') } : { n: 0 },
+      tr: TP.length ? { n: TP.length / 3, pos: buf(TP, 3, 'aPos'), col: buf(TC, 3, 'aCol') } : { n: 0 }
+    };
+  }
+  function buildAll() {
+    G.chunks = {};
+    for (var cx = 0; cx * CH < G.W; cx++)
+      for (var cy = 0; cy * CH < G.H + 2; cy++)
+        for (var cz = 0; cz * CH < G.D; cz++)
+          G.chunks[chunkKey(cx, cy, cz)] = buildChunk(cx, cy, cz);
+    buildGlow();
+  }
+  function rebuildAround(x, y, z) {
+    var cx = Math.floor(x / CH), cy = Math.floor(y / CH), cz = Math.floor(z / CH);
+    function need(ix, iy, iz) {
+      if (ix < 0 || iy < 0 || iz < 0) return false;
+      var key = chunkKey(ix, iy, iz);
+      if (!G.chunks[key]) return false;
+      G.chunks[key] = buildChunk(ix, iy, iz);
+      return true;
+    }
+    need(cx, cy, cz);
+    if (x % CH === 0) need(cx - 1, cy, cz);
+    if (x % CH === CH - 1) need(cx + 1, cy, cz);
+    if (y % CH === 0) need(cx, cy - 1, cz);
+    if (y % CH === CH - 1) need(cx, cy + 1, cz);
+    if (z % CH === 0) need(cx, cy, cz - 1);
+    if (z % CH === CH - 1) need(cx, cy, cz + 1);
+  }
+  function buildGlow() {
+    // emissive torch cubes at torch spots (decor, non-solid)
+    var P = [], C = [];
+    G.torches.forEach(function (T) {
+      var s = 0.16, y = T.y;
+      var verts = [[-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s], [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]];
+      var faces = [[0, 1, 2, 3], [4, 6, 5, 7], [0, 4, 5, 1], [2, 6, 7, 3], [1, 5, 6, 2], [0, 3, 7, 4]];
+      faces.forEach(function (f) {
+        [f[0], f[1], f[2], f[0], f[2], f[3]].forEach(function (vi) {
+          P.push(T.x + verts[vi][0], y + verts[vi][1], T.z + verts[vi][2]);
+          C.push(1.4, 0.75, 0.25);
+        });
+      });
+    });
+    G.glow = P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') } : { n: 0 };
+  }
+  function frustumPlanes(m) {
+    function row(i) { return [m[i], m[i + 4], m[i + 8], m[i + 12]]; }
+    var r0 = row(0), r1 = row(1), r2 = row(2), r3 = row(3);
+    function comb(a, b, s) {
+      var p = [a[0] + s * b[0], a[1] + s * b[1], a[2] + s * b[2], a[3] + s * b[3]];
+      var l = Math.sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]) || 1;
+      return [p[0] / l, p[1] / l, p[2] / l, p[3] / l];
+    }
+    return [comb(r3, r0, 1), comb(r3, r0, -1), comb(r3, r1, 1), comb(r3, r1, -1), comb(r3, r2, 1), comb(r3, r2, -1)];
+  }
+  function chunkVisible(ch, planes) {
+    var x0 = ch.x0, y0 = ch.y0, z0 = ch.z0, x1 = x0 + CH, y1 = y0 + CH, z1 = z0 + CH;
+    for (var i = 0; i < 6; i++) {
+      var p = planes[i];
+      var px = p[0] >= 0 ? x1 : x0, py = p[1] >= 0 ? y1 : y0, pz = p[2] >= 0 ? z1 : z0;
+      if (p[0] * px + p[1] * py + p[2] * pz + p[3] < 0) return false;
+    }
+    return true;
   }
 
   // ---------- physics ----------
@@ -274,7 +388,7 @@
       m0.coal = (m0.coal || 0) + 1;
       G.broken++;
       if (m0.coal >= 20) ach('coal-20', 'Coal Baron');
-      saveMeta(); renderHUD(); buildMesh();
+      saveMeta(); renderHUD(); rebuildAround(hit.x, hit.y, hit.z);
       return;
     }
     if ((ore.gold > 0 || ore.xp > 0) && G.pack >= G.packCap) {
@@ -291,7 +405,7 @@
       G.score += ore.gold;
     } else gainXP(1);
     if (G.broken >= 10) ach('mine-10', 'Ore Hauled');
-    saveMeta(); renderHUD(); buildMesh();
+    saveMeta(); renderHUD(); rebuildAround(hit.x, hit.y, hit.z);
   }
   function sellPack() {
     if (G.sellValue <= 0) { flash('Backpack empty — break some ore!'); return; }
@@ -394,9 +508,29 @@
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
     }
-    bind(G.mesh.pos.b, 3, 'aPos');
-    bind(G.mesh.col.b, 3, 'aCol');
-    gl.drawArrays(gl.TRIANGLES, 0, G.mesh.n);
+    function drawBuf(g) {
+      if (!g || !g.n) return;
+      bind(g.pos, 3, 'aPos');
+      bind(g.col, 3, 'aCol');
+      gl.drawArrays(gl.TRIANGLES, 0, g.n);
+    }
+    var planes = frustumPlanes(mvp);
+    // pass 1: opaque (Z-buffer fills)
+    gl.uniform1f(gl.getUniformLocation(prog, 'uAlpha'), 1);
+    for (var key in G.chunks) {
+      var ch = G.chunks[key];
+      if (chunkVisible(ch, planes)) drawBuf(ch.op);
+    }
+    drawBuf(G.glow);
+    // pass 2: translucent leaves (alpha blend, tested against the Z-buffer)
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1f(gl.getUniformLocation(prog, 'uAlpha'), 0.72);
+    for (var key2 in G.chunks) {
+      var ch2 = G.chunks[key2];
+      if (chunkVisible(ch2, planes)) drawBuf(ch2.tr);
+    }
+    gl.disable(gl.BLEND);
   }
 
   // ---------- input ----------
@@ -488,7 +622,7 @@
     if ((keys[' '] ) && G.onGround) { G.vy = 7.6; G.onGround = false; }
     moveAxis(0, G.vy * dt, 0);
     if (G.py < -5) { // fell out: respawn
-      genWorld(); buildMesh();
+      genWorld(); buildAll();
     }
   }
   function loop(ts) {
@@ -497,7 +631,7 @@
     if (flashT > 0) { flashT -= dt; if (flashT <= 0) document.title = '⛏️ Spooktacular Voxel Worlds'; }
     if (G.tab === 0) update(dt);
     if (flashT > 0) document.title = '⛏️ ' + flashMsg;
-    if (G.mesh) render();
+    if (G.chunks) render();
     requestAnimationFrame(loop);
   }
 
@@ -531,6 +665,8 @@
   hud('overlay-btn').textContent = 'Start digging';
   hud('overlay-btn').onclick = function () { hideOverlay(); };
   hud('overlay-btn2').style.display = 'none';
-  window.__voxel = { swing: swing, target: targetBlock, state: function () { return G; }, meta: meta };
+  window.__voxel = { swing: swing, target: targetBlock, state: function () { return G; }, meta: meta,
+    cornerLight: cornerLight, cellLight: cellLight, opaqueAt: opaqueAt,
+    frustumPlanes: frustumPlanes, chunkVisible: chunkVisible, rebuildAround: rebuildAround };
   requestAnimationFrame(loop);
 })();
