@@ -14,6 +14,20 @@
   VOX.bedrock = { key: 'bedrock', name: 'Bedrock', emoji: '⬛', color: '#1a1a1e', hp: 1e9, gold: 0, xp: 0, tier: 99, portalTarget: null, gravity: 0.0 };
   VOX.lava = { key: 'lava', name: 'Lava', emoji: '🔥', color: '#ff6a00', hp: 1e9, gold: 0, xp: 0, tier: 99, emis: 1, portalTarget: 1, gravity: 2.5 };
   VOX.torchcube = { key: 'torchcube', name: 'Torch', emoji: '🔥', color: '#ffB545', hp: 1e9, gold: 0, xp: 0, tier: 99, emis: 1, portalTarget: null, gravity: 1.0 };
+  VOX.snow = { key: 'snow', name: 'Snow', emoji: '⬜', color: '#e8eef7', hp: 1, gold: 0, xp: 0, tier: 0 };
+  VOX.ice = { key: 'ice', name: 'Ice', emoji: '🧊', color: '#9fd8ff', hp: 2, gold: 0, xp: 1, tier: 0 };
+  VOX.vine = { key: 'vine', name: 'Vine', emoji: '🌿', color: '#3f9142', hp: 1, gold: 0, xp: 0, tier: 0, leafy: true };
+  VOX.glowcrystal = { key: 'glowcrystal', name: 'Glow Crystal', emoji: '🔮', color: '#c98fff', hp: 4, gold: 22, xp: 26, tier: 1, emis: 1 };
+
+  /* Per-world physics + mood. Frost is slippery, Crystal is floaty. */
+  var PHYS = [
+    { name: 'Forest', grav: 22, jump: 7.6, grip: 1, day: true, fog: [0.53, 0.71, 0.88], fogR: [20, 70] },
+    { name: 'Deep Mine', grav: 22, jump: 7.6, grip: 1, day: false, fog: [0.02, 0.01, 0.04], fogR: [6, 30] },
+    { name: 'Frost Depths', grav: 22, jump: 7.6, grip: 0.14, day: true, fog: [0.75, 0.83, 0.92], fogR: [18, 60] },
+    { name: 'Crystal Caverns', grav: 9, jump: 7.0, grip: 1, day: false, fog: [0.09, 0.03, 0.16], fogR: [8, 34] }
+  ];
+  /* Portal ring: each world gates forward/back through all four worlds. */
+  function portalTargets(w) { return [(w + 1) % 4, (w + 3) % 4]; }
 
   var canvas = document.getElementById('gamev');
   var gl = canvas.getContext('webgl', { antialias: true }) || canvas.getContext('experimental-webgl');
@@ -28,8 +42,12 @@
   var prog = gl.createProgram();
   gl.attachShader(prog, shader(gl.VERTEX_SHADER,
     'attribute vec3 aPos; attribute vec3 aCol; attribute vec3 aSun; uniform mat4 uMVP; uniform mat4 uMV;' +
+    'uniform float uTime; uniform float uSway;' +
     'varying vec3 vC; varying vec3 vS; varying float vD;' +
-    'void main(){ vec4 mv = uMV * vec4(aPos,1.0); gl_Position = uMVP * vec4(aPos,1.0); vC = aCol; vS = aSun; vD = -mv.z; }'));
+    'void main(){ vec3 p = aPos;' +
+    ' p.x += sin(uTime * 1.4 + aPos.y * 0.8 + aPos.z * 0.6) * uSway;' +
+    ' p.z += cos(uTime * 1.1 + aPos.x * 0.5 + aPos.y * 0.4) * uSway * 0.7;' +
+    ' vec4 mv = uMV * vec4(p,1.0); gl_Position = uMVP * vec4(p,1.0); vC = aCol; vS = aSun; vD = -mv.z; }'));
   gl.attachShader(prog, shader(gl.FRAGMENT_SHADER,
     'precision mediump float; varying vec3 vC; varying vec3 vS; varying float vD;' +
     'uniform vec3 uFog; uniform vec2 uFogR; uniform float uAlpha; uniform vec3 uSun;' +
@@ -69,12 +87,13 @@
       score: 0, tab: 0, time: 0, broken: 0,
       meta: (old && world === undefined) ? old.m : { gold: 0, coal: 0, level: 1, xp: 0, pickIdx: 0, ach: {} },
       pack: 0, packCap: 50, sellValue: 0,
-      px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, onGround: false,
+      px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, vxh: 0, vzh: 0, yaw: 0, pitch: 0, onGround: false,
       blocks: {}, torches: [], W: 0, H: 0, D: 0,
       dmg: {}, chunks: null, glow: null, state: 'title',
       third: false, swingT: 1, parts: [], dayT: 0.12,
       mobs: [], mobT: 5, kills: 0, apples: 0, wood: 0,
-      torchesInv: 4, fallPeak: null, stats: null
+      torchesInv: 4, fallPeak: null, stats: null,
+      gates: [], gateHinted: {}, gateCD: 0
     };
     genWorld();
     buildAll();
@@ -148,6 +167,58 @@
   };
   // note: only keys present in S.ORES are rolled here
 
+  function groundY(x, z) {
+    for (var y = Math.min(G.H - 1, 20); y >= 0; y--) {
+      if (G.blocks[K(Math.floor(x), y, Math.floor(z))]) return y + 1;
+    }
+    return 1;
+  }
+  var GATE_COLORS = [[1, 0.35, 0.9], [0.3, 0.9, 1], [0.55, 0.85, 1], [0.75, 0.45, 1]];
+  /* Portal gates: two per world, stepping through travels the ring.
+   * Coexists with (not replacing) any block-level portal experiments. */
+  function buildGates() {
+    G.gates = [];
+    G.gateHinted = {};
+    var cx = G.W / 2, cz = G.D / 2, tos = portalTargets(G.world), i;
+    if (G.world === 0 || G.world === 2) {
+      var spots = [[cx + 9, cz + 2], [cx - 9, cz - 2]];
+      for (i = 0; i < 2; i++) {
+        var gx = Math.max(2, Math.min(G.W - 3, Math.round(spots[i][0])));
+        var gz = Math.max(2, Math.min(G.D - 3, Math.round(spots[i][1])));
+        G.gates.push({ x: gx + 0.5, y: groundY(gx, gz), z: gz + 0.5, to: tos[i] });
+      }
+    } else {
+      var hx = G.W >> 1, hz = G.D >> 1;
+      G.gates.push({ x: hx - 1.5, y: 2, z: hz + 0.5, to: tos[0] });
+      G.gates.push({ x: hx + 2.5, y: 2, z: hz + 0.5, to: tos[1] });
+      if (G.world === 3) {
+        var rng = new S.SeededRNG(G.seed + 555);
+        for (i = 0; i < 10; i++) {
+          G.torches.push({ x: 2 + rng.nextDouble() * (G.W - 4), y: 3 + rng.nextDouble() * 4, z: 2 + rng.nextDouble() * (G.D - 4) });
+        }
+      }
+    }
+  }
+  function updateGates(dt) {
+    if (G.gateCD > 0) { G.gateCD -= dt; return; }
+    for (var i = 0; i < G.gates.length; i++) {
+      var g = G.gates[i];
+      var dx = G.px - g.x, dz = G.pz - g.z;
+      if (dx * dx + dz * dz < 1.21 && Math.abs(G.py - g.y) < 2.2) {
+        var key = G.world + '>' + g.to;
+        if (!G.gateHinted[key]) {
+          G.gateHinted[key] = true;
+          flash('🌀 Portal to ' + PHYS[g.to].name + '!', 2);
+        }
+        if (dx * dx + dz * dz < 0.45) {
+          switchWorld(g.to);
+          G.gateCD = 1.5;
+          return;
+        }
+      }
+    }
+  }
+
   function genWorld() {
     var rng = new S.SeededRNG(G.seed + G.world * 131071);
     var noise = S.makeNoise2D(G.seed + G.world * 977);
@@ -191,7 +262,53 @@
       for (var w = 0; w < 3; w++) {
         carveWorm(rng, 8 + rng.nextInt(G.W - 16), 1, 8 + rng.nextInt(G.D - 16), 22, 0);
       }
-    } else {
+      // hanging vines under dense canopies
+      for (var vx = 2; vx < G.W - 2; vx++) for (var vz = 2; vz < G.D - 2; vz++) {
+        if (G.blocks[K(vx, 6, vz)] === 'leaves' && !G.blocks[K(vx, 5, vz)] && rng.nextDouble() < 0.25) {
+          var vl = 1 + rng.nextInt(3);
+          for (var vy = 0; vy < vl; vy++) {
+            if (G.blocks[K(vx, 5 - vy, vz)]) break;
+            G.blocks[K(vx, 5 - vy, vz)] = 'vine';
+          }
+        }
+      }
+    } else if (G.world === 2) {
+      // Frost Depths: snowy surface, ice sheets, snow pines, slippery everywhere
+      G.W = 48; G.H = 12; G.D = 48;
+      var hmap2 = [];
+      for (var fx = 0; fx < G.W; fx++) for (var fz = 0; fz < G.D; fz++) {
+        var fh = 2 + Math.floor(noise(fx * 0.08, fz * 0.08) * 4);
+        hmap2[fx * G.D + fz] = fh;
+        var icy = noise(fx * 0.2 + 40, fz * 0.2) > 0.68;
+        for (var fy = 0; fy <= fh; fy++) {
+          var fkey;
+          if (fy === fh) fkey = icy ? 'ice' : 'snow';
+          else if (fy >= fh - 1) fkey = icy ? 'ice' : 'dirt';
+          else if (fy >= fh - 2) fkey = 'dirt';
+          else {
+            var ft = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'coal', 'iron', 'gold', 'emerald', 'crystal'].indexOf(o.key) >= 0; }));
+            fkey = ft.key;
+          }
+          G.blocks[K(fx, fy, fz)] = fkey;
+        }
+      }
+      var fplaced = 0, fguard = 0;
+      while (fplaced < 8 && fguard++ < 200) {
+        var ftx = 4 + rng.nextInt(G.W - 8), ftz = 4 + rng.nextInt(G.D - 8);
+        if (Math.abs(ftx - G.W / 2) < 5 && Math.abs(ftz - G.D / 2) < 5) continue;
+        var fth = hmap2[ftx * G.D + ftz];
+        var fi, fj, fk;
+        for (fi = 1; fi <= 3; fi++) G.blocks[K(ftx, fth + fi, ftz)] = 'wood';
+        for (fi = -2; fi <= 2; fi++) for (fj = 0; fj <= 1; fj++) for (fk = -2; fk <= 2; fk++) {
+          if (Math.abs(fi) + Math.abs(fk) + fj > 3) continue;
+          var fkk = K(ftx + fi, fth + 3 + fj, ftz + fk);
+          if (!G.blocks[fkk]) G.blocks[fkk] = 'leaves';
+        }
+        fplaced++;
+      }
+      var fsh = hmap2[(G.W / 2 | 0) * G.D + (G.D / 2 | 0)];
+      G.px = G.W / 2 + 0.5; G.pz = G.D / 2 + 0.5; G.py = fsh + 1.01;
+    } else if (G.world === 1) {
       G.W = 36; G.H = 11; G.D = 36;
       for (var x2 = 0; x2 < G.W; x2++) for (var z2 = 0; z2 < G.D; z2++) for (var y2 = 0; y2 <= 9; y2++) {
         if (y2 === 0) { G.blocks[K(x2, y2, z2)] = 'bedrock'; continue; }
@@ -258,8 +375,35 @@
           G.blocks[K(px, py, pz + 1)].portalTarget = 0;
         }
       }
+    } } else {
+      // Crystal Caverns: big glowing caverns, rich crystal veins, floaty air
+      G.W = 36; G.H = 11; G.D = 36;
+      for (var gx = 0; gx < G.W; gx++) for (var gz = 0; gz < G.D; gz++) for (var gy = 0; gy <= 9; gy++) {
+        if (gy === 0) { G.blocks[K(gx, gy, gz)] = 'bedrock'; continue; }
+        var gcv = noise(gx * 0.12, gz * 0.12 + gy * 0.3);
+        if (gcv < 0.45 && gy > 1 && gy < 9) continue; // wide caverns
+        var gkey, gdepth = 9 - gy;
+        if (gy === 1 && noise(gx * 0.3 + 9, gz * 0.3) > 0.78) gkey = 'lava';
+        else if (gdepth <= 3) gkey = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'coal', 'iron', 'crystal'].indexOf(o.key) >= 0; })).key;
+        else gkey = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'emerald', 'diamond', 'crystal', 'lapis'].indexOf(o.key) >= 0; })).key;
+        if (rng.nextDouble() < 0.04) gkey = 'glowcrystal';
+        G.blocks[K(gx, gy, gz)] = gkey;
+      }
+      var ccx = G.W >> 1, ccz = G.D >> 1;
+      for (var csx = 0; csx < 2; csx++) for (var csz = 0; csz < 2; csz++)
+        for (var cti = 1; cti <= 9; cti++) delete G.blocks[K(ccx + csx, cti, ccz + csz)];
+      var chx, chy, chz;
+      for (chx = -2; chx <= 3; chx++) for (chz = -2; chz <= 3; chz++) for (chy = 1; chy <= 4; chy++) {
+        if (chx >= 0 && chx < 2 && chz >= 0 && chz < 2 && chy <= 9) continue;
+        delete G.blocks[K(ccx + chx, chy, ccz + chz)];
+      }
+      for (var cw = 0; cw < 5; cw++) {
+        carveWorm(rng, ccx + (rng.nextDouble() - 0.5) * 4, 3, ccz + (rng.nextDouble() - 0.5) * 4, 40 + rng.nextInt(40), 1);
+      }
+      G.px = ccx + 1; G.pz = ccz + 1; G.py = 2.05;
     }
-    }
+    // portal gates for every world (decor frames + travel)
+    buildGates();
     G.yaw = 0; G.pitch = -0.05; G.vx = G.vy = G.vz = 0;
   }
 
@@ -279,16 +423,16 @@
   }
   function opaqueAt(x, y, z) {
     var b = get(x, y, z);
-    return b !== null && b !== 'leaves';
+    return b !== null && b !== 'leaves' && b !== 'vine';
   }
   function skyLight(x, y, z) {
-    if (G.world === 1) return 0;
+    if (G.world === 1 || G.world === 3) return 0;
     var f = 1.0;
     for (var yy = y + 1; ; yy++) {
       if (yy >= G.H) return f; // open sky above the world (out-of-bounds is NOT rock here)
       var b = get(x, yy, z);
       if (b === null) continue;
-      if (b === 'leaves') { f *= 0.55; if (f < 0.22) return 0.22; continue; }
+      if (b === 'leaves' || b === 'vine') { f *= 0.55; if (f < 0.22) return 0.22; continue; }
       return 0.30;
     }
   }
@@ -302,11 +446,11 @@
     return li;
   }
   function cellSun(x, y, z) {
-    if (G.world === 1) return 0;
+    if (G.world === 1 || G.world === 3) return 0;
     return Math.min(1.2, skyLight(x, y, z));
   }
   function cellLamp(x, y, z) {
-    var amb = G.world === 1 ? 0.16 : 0.14;
+    var amb = G.world === 1 ? 0.16 : G.world === 3 ? 0.30 : 0.14;
     return amb + Math.min(1.3, torchGlow(x + 0.5, y + 0.5, z + 0.5));
   }
   function cellLight(x, y, z) { return cellSun(x, y, z) + cellLamp(x, y, z); }
@@ -351,7 +495,7 @@
       var key = G.blocks[k];
       var ore = VOX[key] || VOX.stone;
       var base = hexRGB(ore.color);
-      var leaf = key === 'leaves';
+      var leaf = key === 'leaves' || key === 'vine';
       for (var f = 0; f < 6; f++) {
         var F = FACES[f];
         // cull only against in-bounds opaque neighbors: border faces draw
@@ -424,6 +568,14 @@
     G.torches.forEach(function (T) {
       box(T.x, T.y - 0.35, T.z, 0.05, 0.35, 0.05, 0.35, 0.22, 0.1);
       box(T.x, T.y + 0.08, T.z, 0.15, 0.15, 0.15, 1.5, 0.8, 0.25);
+    });
+    // portal gates: dark pillars + destination-hued core
+    (G.gates || []).forEach(function (gt) {
+      var col = GATE_COLORS[gt.to % GATE_COLORS.length];
+      box(gt.x - 0.45, gt.y + 0.9, gt.z, 0.12, 1.8, 0.12, 0.25, 0.12, 0.35);
+      box(gt.x + 0.45, gt.y + 0.9, gt.z, 0.12, 1.8, 0.12, 0.25, 0.12, 0.35);
+      box(gt.x, gt.y + 1.85, gt.z, 1.0, 0.12, 0.12, 0.25, 0.12, 0.35);
+      box(gt.x, gt.y + 0.95, gt.z, 0.62, 1.5, 0.1, col[0] * 1.3, col[1] * 1.3, col[2] * 1.3);
     });
     G.glow = P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') } : { n: 0 };
     G.glow = P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') } : { n: 0 };
@@ -510,16 +662,27 @@
       var a = Math.random() * Math.PI * 2, up = 1 + Math.random() * 3, sp = 1 + Math.random() * 2.5;
       G.parts.push({ x: x, y: y, z: z,
         vx: Math.cos(a) * sp, vy: up, vz: Math.sin(a) * sp,
-        life: 0.5 + Math.random() * 0.3, col: base });
+        life: 0.5 + Math.random() * 0.3, col: base, grav: 1 });
     }
     if (G.parts.length > 240) G.parts.splice(0, G.parts.length - 240);
+  }
+  function spawnMote() {
+    var a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 7;
+    G.parts.push({ x: G.px + Math.cos(a) * r, y: G.py + Math.random() * 3, z: G.pz + Math.sin(a) * r,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.15, vz: (Math.random() - 0.5) * 0.3,
+      life: 3 + Math.random() * 2, col: [0.95, 0.88, 0.62], grav: 0.02, mote: true });
+  }
+  function moteCount() {
+    var n = 0;
+    for (var i = 0; i < G.parts.length; i++) if (G.parts[i].mote) n++;
+    return n;
   }
   function updateParts(dt) {
     for (var i = G.parts.length - 1; i >= 0; i--) {
       var p = G.parts[i];
       p.life -= dt;
       if (p.life <= 0) { G.parts.splice(i, 1); continue; }
-      p.vy -= 9 * dt;
+      p.vy -= 9 * (p.grav === undefined ? 1 : p.grav) * dt;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
     }
   }
@@ -544,7 +707,10 @@
     gl.vertexAttribPointer(lC, 3, gl.FLOAT, false, 0, 0);
     gl.drawArrays(gl.TRIANGLES, 0, P.length / 3);
   }
-  function playerEye() { return [G.px, G.py + EYE, G.pz]; }
+  function playerEye() {
+    var bobY = Math.sin((G.bob || 0) * 2) * 0.045 * (G.bobAmt || 0);
+    return [G.px, G.py + EYE + bobY, G.pz];
+  }
   function thirdEye() {
     var e = playerEye(), d = lookDir();
     var bx = -d[0], bz = -d[2], bl = Math.hypot(bx, bz) || 1;
@@ -628,8 +794,8 @@
   // ---------- mobs: wolves stalk, wisps drift (night forest / dark mine) ----------
   function mobCap() { return 4; }
   function wantMobs() {
-    if (G.world === 1) return true;
-    return dayFactor() < 0.15; // night forest
+    if (G.world === 1 || G.world === 3) return true;
+    return dayFactor() < 0.15; // night forest + frost
   }
   function spawnMob(force) {
     var rng = new S.SeededRNG((Math.random() * 1e9) | 0);
@@ -901,7 +1067,7 @@
   function renderHUD() {
     var m = meta();
     hud('score').textContent = S.compact(G.score);
-    hud('depth').textContent = G.world === 0 ? 'Forest' : 'Deep Mine';
+    hud('depth').textContent = (PHYS[G.world] || PHYS[0]).name;
     hud('gold').textContent = S.compact(m.gold);
     var co = hud('coal'); if (co) co.textContent = m.coal || 0;
     hud('level').textContent = m.level;
@@ -913,9 +1079,9 @@
     if (ap) ap.textContent = m.apples || 0;
     if (tc) tc.textContent = m.torchesInv || 0;
     if (ck) {
-      var day = G.world === 0;
+      var PH = PHYS[G.world] || PHYS[0];
       var t = G.dayT;
-      var icon = !day ? '⛏️' : (dayFactor() > 0.6 ? '☀️' : (dayFactor() > 0.05 ? '🌤️' : '🌙'));
+      var icon = !PH.day ? (G.world === 3 ? '🔮' : '⛏️') : (dayFactor() > 0.6 ? '☀️' : (dayFactor() > 0.05 ? '🌤️' : '🌙'));
       ck.textContent = icon + ' ' + Math.floor(t * 24) + ':00';
     }
   }
@@ -980,12 +1146,14 @@
     var day = [0.53, 0.71, 0.88], night = [0.015, 0.02, 0.06], dusk = [0.45, 0.22, 0.35];
     var warm = 1 - Math.min(1, e * 2.5);
     var base = [day[0] * e + night[0] * (1 - e), day[1] * e + night[1] * (1 - e), day[2] * e + night[2] * (1 - e)];
-    return [base[0] + (dusk[0] - base[0]) * warm * 0.7, base[1] + (dusk[1] - base[1]) * warm * 0.7, base[2] + (dusk[2] - base[2]) * warm * 0.7];
+    var sky = [base[0] + (dusk[0] - base[0]) * warm * 0.7, base[1] + (dusk[1] - base[1]) * warm * 0.7, base[2] + (dusk[2] - base[2]) * warm * 0.7];
+    if (G.world === 2) return [Math.min(1, sky[0] + 0.18), Math.min(1, sky[1] + 0.16), Math.min(1, sky[2] + 0.12)]; // icy glare
+    return sky;
   }
   function render() {
     resize();
-    var forest = G.world === 0;
-    var fogC = forest ? skyColor() : [0.02, 0.01, 0.04];
+    var PH = PHYS[G.world] || PHYS[0];
+    var fogC = PH.day ? skyColor() : PH.fog;
     gl.clearColor(fogC[0], fogC[1], fogC[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
@@ -996,7 +1164,7 @@
     gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'uMVP'), false, new Float32Array(mvp));
     gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'uMV'), false, new Float32Array(V));
     gl.uniform3fv(gl.getUniformLocation(prog, 'uFog'), new Float32Array(fogC));
-    gl.uniform2fv(gl.getUniformLocation(prog, 'uFogR'), new Float32Array(forest ? [20, 70] : [6, 30]));
+    gl.uniform2fv(gl.getUniformLocation(prog, 'uFogR'), new Float32Array(PH.fogR));
     function bind(w, size, name) {
       gl.bindBuffer(gl.ARRAY_BUFFER, w.b);
       var loc = gl.getAttribLocation(prog, name);
@@ -1013,7 +1181,9 @@
     var planes = frustumPlanes(mvp);
     var sc = sunColor();
     gl.uniform3fv(gl.getUniformLocation(prog, 'uSun'), new Float32Array(sc));
-    // pass 1: opaque (Z-buffer fills)
+    gl.uniform1f(gl.getUniformLocation(prog, 'uTime'), G.time);
+    // pass 1: opaque (Z-buffer fills, no wind)
+    gl.uniform1f(gl.getUniformLocation(prog, 'uSway'), 0);
     gl.uniform1f(gl.getUniformLocation(prog, 'uAlpha'), 1);
     for (var key in G.chunks) {
       var ch = G.chunks[key];
@@ -1023,6 +1193,7 @@
     // pass 2: translucent leaves (alpha blend, tested against the Z-buffer)
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1f(gl.getUniformLocation(prog, 'uSway'), 0.06); // wind in the canopy
     gl.uniform1f(gl.getUniformLocation(prog, 'uAlpha'), 0.72);
     for (var key2 in G.chunks) {
       var ch2 = G.chunks[key2];
@@ -1136,6 +1307,8 @@
 
   document.getElementById('worldf').addEventListener('click', function () { switchWorld(0); });
   document.getElementById('worldm').addEventListener('click', function () { switchWorld(1); });
+  document.getElementById('worldfr').addEventListener('click', function () { switchWorld(2); });
+  document.getElementById('worldc').addEventListener('click', function () { switchWorld(3); });
   document.getElementById('newmaze').addEventListener('click', function () {
     newGame(G.world, (Math.random() * 1e9) | 0);
     hideOverlay();
@@ -1164,17 +1337,38 @@
   var last = 0;
   function update(dt) {
     G.time += dt;
-    if (G.world === 0) G.dayT = (G.dayT + dt / 360) % 1; // 6-minute days
+    var PH = PHYS[G.world] || PHYS[0];
+    if (PH.day) G.dayT = (G.dayT + dt / 360) % 1; // 6-minute days
     if (G.swingT < 1) G.swingT = Math.min(1, G.swingT + dt / 0.28);
     updateParts(dt);
     updateMobs(dt);
+    updateGates(dt);
+    // dust motes drift in dark air (fireflies at night, dust in caves)
+    var dark = (PHYS[G.world] || PHYS[0]).day ? 1 - Math.max(0, dayFactor()) : 1;
+    G.moteT = (G.moteT || 0) - dt;
+    if (G.moteT <= 0) {
+      G.moteT = 0.4;
+      if (Math.random() < dark && moteCount() < 24) spawnMote();
+    }
+    // head-bob while walking grounded
+    var hsp = Math.hypot(G.vxh, G.vzh);
+    G.bobAmt = G.bobAmt === undefined ? 0 : G.bobAmt + (((hsp > 0.5 && G.onGround) ? 1 : 0) - G.bobAmt) * Math.min(1, dt * 8);
+    G.bob = (G.bob || 0) + hsp * dt * 2.4;
     var sp = 4.6 * dt;
     var fw = ((keys.w || keys.arrowup) ? 1 : 0) - ((keys.s || keys.arrowdown) ? 1 : 0) + joy.y;
     var st = ((keys.d ? 1 : 0) - (keys.a ? 1 : 0)) + joy.x;
     var sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
-    moveAxis((sy * fw + cy * st) * sp, 0, (-cy * fw + sy * st) * sp);
-    G.vy -= (G.world === 1 ? 30 : 22) * dt; // Mine has heavier gravity
-    if ((keys[' '] ) && G.onGround) { G.vy = 7.6; G.onGround = false; }
+    // velocity smoothing: ice (low grip) slides, others snap
+    var dvx = (sy * fw + cy * st) * sp, dvz = (-cy * fw + sy * st) * sp;
+    if (PH.grip >= 1) { G.vxh = dvx; G.vzh = dvz; }
+    else {
+      var k = Math.min(1, PH.grip * dt * 8);
+      G.vxh += (dvx - G.vxh) * k;
+      G.vzh += (dvz - G.vzh) * k;
+    }
+    moveAxis(G.vxh, 0, G.vzh);
+    G.vy -= PH.grav * dt;
+    if ((keys[' '] ) && G.onGround) { G.vy = PH.jump; G.onGround = false; }
     var wasAir = !G.onGround;
     if (!G.onGround) G.fallPeak = Math.max(G.fallPeak === undefined ? -99 : G.fallPeak, G.py);
     moveAxis(0, G.vy * dt, 0);
@@ -1208,7 +1402,8 @@
 
   // ---------- boot ----------
   var hash = (window.location.hash || '').replace('#', '');
-  newGame(hash === 'mine' ? 1 : 0);
+  var startWorld = { mine: 1, frost: 2, crystal: 3 }[hash] || 0;
+  newGame(startWorld);
   renderHUD();
   window.SpookyTabs.init({
     tabsId: 'tabs', panelsId: 'tabpanels',
@@ -1218,7 +1413,7 @@
         var o = VOX[G.blocks[k]];
         if (o && (o.gold > 0 || o.coal)) left++;
       }
-      return { score: G.score, layer: G.world === 0 ? 'Forest' : 'Deep Mine', left: left,
+      return { score: G.score, layer: (PHYS[G.world] || PHYS[0]).name, left: left,
         gold: m.gold, level: m.level, pick: S.PICKS[m.pickIdx].name, seed: G.seed,
         relics: 0, ach: m.ach, collected: G.broken };
     },

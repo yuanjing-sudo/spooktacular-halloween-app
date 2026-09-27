@@ -280,6 +280,8 @@
         row2.appendChild(btn('Maze 2D', function () { window.location.href = 'index.html'; }));
         row2.appendChild(btn('Voxel Forest', function () { window.location.href = 'voxel.html#forest'; }));
         row2.appendChild(btn('Voxel Mine', function () { window.location.href = 'voxel.html#mine'; }));
+        row2.appendChild(btn('❄️ Frost', function () { window.location.href = 'voxel.html#frost'; }));
+        row2.appendChild(btn('🔮 Crystal', function () { window.location.href = 'voxel.html#crystal'; }));
         box.appendChild(row2);
       } else if (i === 5) {
         box.appendChild(head('🎮 Games', snap));
