@@ -237,12 +237,29 @@
       if (i === 1) {
         box.appendChild(head('🍬 Candy Vault', snap));
         box.appendChild(el('div', 'psub', 'Collected: ' + snap.collected + ' · 18 kinds from the app'));
-        box.appendChild(list(S.CANDIES.map(function (c) { return c.name + ' — ' + c.points + ' pts'; })));
+        var candyGrid = el('div', 'candy-grid');
+        box.appendChild(candyGrid);
+        S.CANDIES.forEach(function (c, ci) {
+          var card = el('div', 'candy-card', c.name + '<br>' + c.points + ' pts');
+          card.dataset.key = c.key;
+          card.onclick = function () { projectCandy3D(c.key, c.points, c.name); };
+          candyGrid.appendChild(card);
+        });
+        var mysteryBtn = el('button', 'mystery-btn', '🎁 Mystery Candy');
+        mysteryBtn.onclick = function () { unpackMysteryCandy(); };
+        candyGrid.appendChild(mysteryBtn);
       } else if (i === 2) {
         box.appendChild(head('⛏️ Mine — Dig Site', snap));
         box.appendChild(el('div', 'psub', 'Click blocks to swing. Coal banks picks (never sold). Relics: ' + snap.relics + '/12 · Seed ' + snap.seed));
         var mstatus = el('div', 'psub', '');
+        // Add 3D mine view button
+        var btn3d = el('button', '', '👁️ 3D View');
+        btn3d.onclick = function () { window.location.href = 'mine3d.html'; };
+        box.appendChild(btn3d);
         buildMine(box, snap, opts, mstatus);
+        // Add instruction
+        var inst = el('div', 'psub', '💡 Tip: Press O for orbit mode, or click "👁️ 3D View" for full 3D mine');
+        box.appendChild(inst);
         var row = el('div', 'prow');
         row.appendChild(btn('Open Shop', function () { select(0); if (opts.actions.openShop) opts.actions.openShop(); }));
         row.appendChild(btn('New Maze', function () { select(0); opts.actions.newMaze(); }));
@@ -318,4 +335,84 @@
   }
 
   window.SpookyTabs = { init: init, hasMatch: hasMatch, setMatch: setMatch };
+
+  function projectCandy3D(key, points, name) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 300; canvas.height = 300;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#1a1038';
+    ctx.fillRect(0, 0, 300, 300);
+    var size = 30;
+    var x = 150, y = 150;
+    var isDark = name && (name.includes('🍫') || name.includes('🍫'));
+    ctx.fillStyle = isDark ? '#59e6ff' : '#ffbe5a';
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a1038';
+    ctx.fillText(name || key, x, y + 12);
+    var panel = document.querySelector('#tabpanels .panel');
+    var overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.cssText = 'inset:0;background:rgba(11,6,32,.9);display:flex;align-items:center;justify-content:center;z-index:100';
+    overlay.appendChild(canvas);
+    document.body.appendChild(overlay);
+    var start = performance.now();
+    function animate() {
+      var now = performance.now();
+      var t = (now - start) / 500;
+      if (t > 1) { document.body.removeChild(overlay); return; }
+      var progress = Math.sin(t * Math.PI) * 0.3 + t;
+      var angle = t * 180;
+      var scale = 1 + progress * 0.5;
+      ctx.clearRect(0, 0, 300, 300);
+      ctx.fillStyle = '#1a1038';
+      ctx.fillRect(0, 0, 300, 300);
+      ctx.save();
+      ctx.translate(150, 150);
+      ctx.rotate(angle * Math.PI / 180);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = points >= 5 ? '#59e6ff' : '#ffbe5a';
+      ctx.beginPath();
+      ctx.arc(0, 0, size * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = Math.round(24 * scale) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#1a1038';
+      ctx.fillText(name || key, 0, 12 * scale);
+      ctx.restore();
+      requestAnimationFrame(animate);
+    }
+    animate();
+    setTimeout(function () { alert('Got ' + (name || key) + '! +' + points + ' points'); }, 500);
+  }
+
+  function unpackMysteryCandy() {
+    var surprises = [
+      'Chocolate Bar 🍫',
+      'Lollipop Pop 🍭',
+      'Gummi Bear 🐻',
+      'Candy Corn 🌽',
+      'Licorice Twist 🖤',
+      'Jawbreaker 🔴',
+      'Taffy Pull 🍬',
+      'Peppermint Twist 🍬',
+      'Truffle Delight 🍫',
+      'Caramel Swirl 🍬',
+      'Fudge Square 🍫',
+      'Toffee Crunch 🍬',
+      'Golden Candy ⭐',
+      'Magical Candy ✨',
+      'Rainbow Candy 🌈',
+      'Candy Corn King 👑',
+      'Chocolate Dragon 🐉',
+      'Lollipop Tower 🗼'
+    ];
+    var surprise = surprises[(Math.random() * surprises.length) | 0];
+    var points = [3, 3, 3, 2, 2, 2, 2, 2, 5, 5, 5, 5, 15, 20, 25, 50, 60, 70][Math.floor(Math.random() * 18)];
+    alert('🎁 Mystery Candy: ' + surprise + '!\n+ ' + points + ' points');
+  }
+
 })();

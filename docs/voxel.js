@@ -8,12 +8,12 @@
 
   var VOX = {};
   S.ORES.forEach(function (o) { VOX[o.key] = o; });
-  VOX.grass = { key: 'grass', name: 'Grass', emoji: '🟩', color: '#4da63c', hp: 1, gold: 0, xp: 0, tier: 0 };
-  VOX.wood = { key: 'wood', name: 'Wood', emoji: '🪵', color: '#7a5230', hp: 2, gold: 1, xp: 2, tier: 0 };
-  VOX.leaves = { key: 'leaves', name: 'Leaves', emoji: '🌿', color: '#2e7d32', hp: 1, gold: 0, xp: 0, tier: 0 };
-  VOX.bedrock = { key: 'bedrock', name: 'Bedrock', emoji: '⬛', color: '#1a1a1e', hp: 1e9, gold: 0, xp: 0, tier: 99 };
-  VOX.lava = { key: 'lava', name: 'Lava', emoji: '🔥', color: '#ff6a00', hp: 1e9, gold: 0, xp: 0, tier: 99, emis: 1 };
-  VOX.torchcube = { key: 'torchcube', name: 'Torch', emoji: '🔥', color: '#ffB545', hp: 1e9, gold: 0, xp: 0, tier: 99, emis: 1 };
+  VOX.grass = { key: 'grass', name: 'Grass', emoji: '🟩', color: '#4da63c', hp: 1, gold: 0, xp: 0, tier: 0, portalTarget: null, gravity: 1.0 };
+  VOX.wood = { key: 'wood', name: 'Wood', emoji: '🪵', color: '#7a5230', hp: 2, gold: 1, xp: 2, tier: 0, portalTarget: null, gravity: 1.0 };
+  VOX.leaves = { key: 'leaves', name: 'Leaves', emoji: '🌿', color: '#2e7d32', hp: 1, gold: 0, xp: 0, tier: 0, portalTarget: null, gravity: 1.0 };
+  VOX.bedrock = { key: 'bedrock', name: 'Bedrock', emoji: '⬛', color: '#1a1a1e', hp: 1e9, gold: 0, xp: 0, tier: 99, portalTarget: null, gravity: 0.0 };
+  VOX.lava = { key: 'lava', name: 'Lava', emoji: '🔥', color: '#ff6a00', hp: 1e9, gold: 0, xp: 0, tier: 99, emis: 1, portalTarget: 1, gravity: 2.5 };
+  VOX.torchcube = { key: 'torchcube', name: 'Torch', emoji: '🔥', color: '#ffB545', hp: 1e9, gold: 0, xp: 0, tier: 99, emis: 1, portalTarget: null, gravity: 1.0 };
 
   var canvas = document.getElementById('gamev');
   var gl = canvas.getContext('webgl', { antialias: true }) || canvas.getContext('experimental-webgl');
@@ -230,6 +230,35 @@
         carveWorm(rng, cx + (rng.nextDouble() - 0.5) * 4, 2, cz + (rng.nextDouble() - 0.5) * 4, 45 + rng.nextInt(40), 1);
       }
       G.px = cx + 1; G.pz = cz + 1; G.py = 2.05;
+    // Generate portal blocks in mine world
+    if (G.world === 1) {
+      var portalRng = new S.SeededRNG(G.seed + 8191);
+      // Place portals in random cavern ceilings
+      for (var pi = 0; pi < 3; pi++) {
+        var px = 2 + portalRng.nextInt(G.W - 4);
+        var pz = 2 + portalRng.nextInt(G.D - 4);
+        var py = 8 + portalRng.nextInt(2); // at ceiling level
+        // Check space is clear
+        var isClear = true;
+        for (var dx = -1; dx <= 1; dx++) {
+          for (var dz = -1; dz <= 1; dz++) {
+            for (var dy = 0; dy <= 1; dy++) {
+              if (G.blocks[K(px + dx, py + dy, pz + dz)]) { isClear = false; }
+            }
+          }
+        }
+        if (isClear) {
+          // Place portal (glowing bedrock portal)
+          for (var dy = 0; dy <= 2; dy++) {
+            G.blocks[K(px, py + dy, pz)] = 'bedrock';
+            G.blocks[K(px, py + dy, pz + 1)] = 'bedrock';
+          }
+          // Mark as portal
+          G.blocks[K(px, py, pz)].portalTarget = 0;
+          G.blocks[K(px, py, pz + 1)].portalTarget = 0;
+        }
+      }
+    }
     }
     G.yaw = 0; G.pitch = -0.05; G.vx = G.vy = G.vz = 0;
   }
@@ -458,32 +487,11 @@
     return -0.7 + 1.2 * Math.sin(Math.PI * t);
   }
   function buildAvatar(P, C) {
-    var sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
-    var R = [cy, 0, sy], U = [0, 1, 0], B = [-sy, 0, cy]; // right, up, backward
-    var o = [G.px, G.py, G.pz];
-    emitBox(P, C, o, R, U, B, -0.14, 0.35, 0, 0.22, 0.7, 0.25, PANTS, 1.1);
-    emitBox(P, C, o, R, U, B, 0.14, 0.35, 0, 0.22, 0.7, 0.25, PANTS, 1.1);
-    emitBox(P, C, o, R, U, B, 0, 1.05, 0, 0.55, 0.7, 0.32, SHIRT, 1.1);
-    emitBox(P, C, o, R, U, B, 0, 1.62, 0, 0.42, 0.42, 0.42, SKIN, 1.15);
-    emitBox(P, C, o, R, U, B, 0, 1.78, 0.03, 0.44, 0.14, 0.44, HAIR, 1.1);
-    emitBox(P, C, o, R, U, B, -0.38, 1.05, 0, 0.18, 0.65, 0.2, SHIRT, 1.1);
-    var a = swingAngle(), S = [0.38, 1.35, 0];
-    function arm(p) {
-      var r = rotX(p, a);
-      return [S[0] + r[0], S[1] + r[1], S[2] + r[2]];
-    }
-    function armBox(c, s, col) {
-      var cc = arm(c);
-      // re-emit centered box: translate local box by (cc - S) in basis = just offset origin
-      emitBox(P, C, [o[0] + R[0] * cc[0] + U[0] * cc[1] + B[0] * cc[2],
-                     o[1] + R[1] * cc[0] + U[1] * cc[1] + B[1] * cc[2],
-                     o[2] + R[2] * cc[0] + U[2] * cc[1] + B[2] * cc[2]],
-              R, U, B, 0, 0, 0, s[0], s[1], s[2], col, 1.1);
-    }
-    armBox([0, -0.32, 0], [0.18, 0.6, 0.2], SHIRT);
-    armBox([0, -0.78, 0.06], [0.08, 0.72, 0.08], WOODC);
-    armBox([0, -1.08, 0.1], [0.5, 0.1, 0.1], STEEL);
-  }
+    // Avatar removed - user requested cleaner view
+    // Third-person character model disabled for cleaner forest view
+    // G.third now only affects camera distance, not character model
+    G.third = false;
+}
   function buildViewmodel(P, C) {
     var d = lookDir(), e = playerEye();
     // camera basis from yaw/pitch
@@ -559,6 +567,26 @@
     return false;
   }
   function moveAxis(dx, dy, dz) {
+    // Check for portal interaction
+    var portalKey = G.px + ',' + G.py + ',' + G.pz;
+    if (G.blocks[portalKey] && G.blocks[portalKey].portalTarget !== undefined) {
+      var targetWorld = G.blocks[portalKey].portalTarget;
+      var m = meta();
+      newGame(targetWorld, (Math.random() * 1e9) | 0);
+      meta().gold = m.gold;
+      meta().coal = m.coal;
+      meta().level = m.level;
+      meta().xp = m.xp;
+      meta().pickIdx = m.pickIdx;
+      meta().ach = m.ach;
+      meta().stats = m.stats;
+      meta().wood = m.wood;
+      meta().apples = m.apples;
+      meta().torchesInv = m.torchesInv;
+      renderHUD();
+      flash('Entered new world!', 2);
+      return;
+    }
     if (dx && !collide(G.px + dx, G.py, G.pz)) G.px += dx;
     if (dz && !collide(G.px, G.py, G.pz + dz)) G.pz += dz;
     if (dy) {
@@ -1117,8 +1145,8 @@
   });
   document.getElementById('shopbtn').addEventListener('click', function () { showShop(); });
   document.getElementById('viewbtn').addEventListener('click', function () {
-    G.third = !G.third;
-    flash(G.third ? '👤 Third person' : '⛏️ First person', 1.5);
+    // View mode stays first-person since avatar was removed
+    flash('⛏️ First person view', 1.5);
   });
   document.getElementById('craftbtn').addEventListener('click', function () { craftTorch(); });
   document.getElementById('objbtn').addEventListener('click', function () {
@@ -1148,7 +1176,7 @@
     var st = ((keys.d ? 1 : 0) - (keys.a ? 1 : 0)) + joy.x;
     var sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
     moveAxis((sy * fw + cy * st) * sp, 0, (-cy * fw + sy * st) * sp);
-    G.vy -= 22 * dt;
+    G.vy -= (G.world === 1 ? 30 : 22) * dt; // Mine has heavier gravity
     if ((keys[' '] ) && G.onGround) { G.vy = 7.6; G.onGround = false; }
     var wasAir = !G.onGround;
     if (!G.onGround) G.fallPeak = Math.max(G.fallPeak === undefined ? -99 : G.fallPeak, G.py);
@@ -1183,7 +1211,22 @@
 
   // ---------- boot ----------
   var hash = (window.location.hash || '').replace('#', '');
+  // Restore previous game state if switching worlds
+  var oldWorld = G.world;
+  var oldMeta = meta();
   newGame(hash === 'mine' ? 1 : 0);
+  // Restore gold, level, pick, and score from previous world if switching
+  if (G.world !== oldWorld && oldMeta.gold !== undefined) {
+    meta().gold = oldMeta.gold;
+    meta().level = oldMeta.level;
+    meta().pickIdx = oldMeta.pickIdx;
+    meta().ach = oldMeta.ach;
+    meta().wood = oldMeta.wood;
+    meta().apples = oldMeta.apples;
+    meta().torchesInv = oldMeta.torchesInv;
+    meta().stats = oldMeta.stats;
+    renderHUD();
+  }
   renderHUD();
   window.SpookyTabs.init({
     tabsId: 'tabs', panelsId: 'tabpanels',
