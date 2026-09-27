@@ -17,15 +17,21 @@
 <div id="hud">
   <span>Score <b id="score">0</b></span>
   <span>World <b id="depth">Forest</b></span>
+  <span>HP <b id="hp">100/100</b></span>
   <span>Gold <b id="gold">0</b></span>
   <span>Coal <b id="coal">0</b></span>
+  <span>Wood <b id="wood">0</b></span>
+  <span>🍎 <b id="apples">0</b></span>
+  <span>🔥 <b id="torches">4</b></span>
   <span>Level <b id="level">1</b></span>
   <span>Pick <b id="pick">Wooden Pick</b></span>
   <span>Pack <b id="candy">0/50</b></span>
+  <span id="clock">☀️</span>
 </div>
 <div id="wrap">
   <canvas id="gamev" width="900" height="560"></canvas>
   <div id="tabpanels"></div>
+  <div id="objpanel"></div>
   <div id="cross">+</div>
   <button id="minebtn">MINE</button>
   <div id="overlay" class="hidden">
@@ -37,7 +43,8 @@
 </div>
 <button id="worldf">🌲 Forest</button> <button id="worldm">⛏️ Deep Mine</button>
 <button id="newmaze">🎲 New world</button> <button id="shopbtn">🛒 Sell + picks</button>
-<button id="viewbtn">👤 View</button>
+<button id="viewbtn">👤 View</button> <button id="craftbtn">🔥 Craft torch</button>
+<button id="objbtn">📋 Goals</button>
 <div id="worlds" style="margin:8px 0; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
   <a href="index.html" style="color:#ffd166">⛏️ Maze 2D</a>
   <a href="mine3d.html" style="color:#ffd166">🧱 3D mine</a>
@@ -45,7 +52,7 @@
   <a href="voxel.html#mine" style="color:#ffd166">⛏️ Voxel deep-mine</a>
 </div>
 <div id="tabs"></div>
-<p id="help">WASD move · Space jump · mouse-drag look · click/F swing pick · V avatar view · M toggles help</p>
+<p id="help">WASD move · Space jump · drag look · click/F swing · right-click/T place torch · E eat apple · V view · J goals · M help</p>
 <script src="spooky.js?v=4"></script>
 <script src="tabs.js?v=4"></script>
 <script src="games.js?v=4"></script>

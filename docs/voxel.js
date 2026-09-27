@@ -27,13 +27,15 @@
   }
   var prog = gl.createProgram();
   gl.attachShader(prog, shader(gl.VERTEX_SHADER,
-    'attribute vec3 aPos; attribute vec3 aCol; uniform mat4 uMVP; uniform mat4 uMV;' +
-    'varying vec3 vC; varying float vD;' +
-    'void main(){ vec4 mv = uMV * vec4(aPos,1.0); gl_Position = uMVP * vec4(aPos,1.0); vC = aCol; vD = -mv.z; }'));
+    'attribute vec3 aPos; attribute vec3 aCol; attribute vec3 aSun; uniform mat4 uMVP; uniform mat4 uMV;' +
+    'varying vec3 vC; varying vec3 vS; varying float vD;' +
+    'void main(){ vec4 mv = uMV * vec4(aPos,1.0); gl_Position = uMVP * vec4(aPos,1.0); vC = aCol; vS = aSun; vD = -mv.z; }'));
   gl.attachShader(prog, shader(gl.FRAGMENT_SHADER,
-    'precision mediump float; varying vec3 vC; varying float vD;' +
-    'uniform vec3 uFog; uniform vec2 uFogR; uniform float uAlpha;' +
-    'void main(){ float f = smoothstep(uFogR.x, uFogR.y, vD); gl_FragColor = vec4(mix(vC, uFog, f), uAlpha); }'));
+    'precision mediump float; varying vec3 vC; varying vec3 vS; varying float vD;' +
+    'uniform vec3 uFog; uniform vec2 uFogR; uniform float uAlpha; uniform vec3 uSun;' +
+    'void main(){ float f = smoothstep(uFogR.x, uFogR.y, vD);' +
+    ' vec3 lit = vC + vS * uSun;' +
+    ' gl_FragColor = vec4(mix(lit, uFog, f), uAlpha); }'));
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
@@ -70,10 +72,17 @@
       px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, onGround: false,
       blocks: {}, torches: [], W: 0, H: 0, D: 0,
       dmg: {}, chunks: null, glow: null, state: 'title',
-      third: false, swingT: 1, parts: []
+      third: false, swingT: 1, parts: [], dayT: 0.12,
+      mobs: [], mobT: 5, kills: 0, apples: 0, wood: 0,
+      torchesInv: 4, fallPeak: null, stats: null
     };
     genWorld();
     buildAll();
+    if (meta().hp === undefined) { meta().hp = 100; meta().maxHp = 100; }
+    if (meta().wood === undefined) meta().wood = 0;
+    if (meta().apples === undefined) meta().apples = 0;
+    if (meta().torchesInv === undefined) meta().torchesInv = 4;
+    if (!meta().stats) meta().stats = { coalRun: 0, kills: 0, torchesMade: 0, goldRun: 0, deep: 99, claimed: {} };
     renderHUD();
   }
   function meta() { return G.meta; }
@@ -263,12 +272,18 @@
     }
     return li;
   }
-  function cellLight(x, y, z) {
-    if (G.world === 1) return 0.16 + Math.min(1.3, torchGlow(x + 0.5, y + 0.5, z + 0.5));
+  function cellSun(x, y, z) {
+    if (G.world === 1) return 0;
     return Math.min(1.2, skyLight(x, y, z));
   }
+  function cellLamp(x, y, z) {
+    var amb = G.world === 1 ? 0.16 : 0.14;
+    return amb + Math.min(1.3, torchGlow(x + 0.5, y + 0.5, z + 0.5));
+  }
+  function cellLight(x, y, z) { return cellSun(x, y, z) + cellLamp(x, y, z); }
   // AO + smooth light for one face corner. n = face normal axis (0/1/2),
   // corner = [ox,oy,oz] offset, base = adjacent air cell coords.
+  // Returns [sun, lamp] pair (AO curve applied to both).
   function cornerLight(bx, by, bz, n, corner, base) {
     var axes = [0, 1, 2].filter(function (a) { return a !== n; });
     var u = axes[0], v = axes[1];
@@ -280,19 +295,26 @@
       p[u] += du * su; p[v] += dv * sv;
       return solidAt(p[0], p[1], p[2]) ? 1 : 0;
     }
-    function L_(du, dv) {
+    function sun_(du, dv) {
       var p = [b[0], b[1], b[2]];
       p[u] += du * su; p[v] += dv * sv;
-      return cellLight(p[0], p[1], p[2]);
+      return cellSun(p[0], p[1], p[2]);
+    }
+    function lamp_(du, dv) {
+      var p = [b[0], b[1], b[2]];
+      p[u] += du * su; p[v] += dv * sv;
+      return cellLamp(p[0], p[1], p[2]);
     }
     var s1 = S_(1, 0), s2 = S_(0, 1), cc = S_(1, 1);
     var ao = (s1 && s2) ? 0 : 3 - (s1 + s2 + cc);
-    var li = (L_(0, 0) + L_(1, 0) + L_(0, 1) + L_(1, 1)) / 4;
-    return li * AO_CURVE[ao];
+    var curve = AO_CURVE[ao];
+    var sun = (sun_(0, 0) + sun_(1, 0) + sun_(0, 1) + sun_(1, 1)) / 4 * curve;
+    var lamp = (lamp_(0, 0) + lamp_(1, 0) + lamp_(0, 1) + lamp_(1, 1)) / 4 * curve;
+    return [sun, lamp];
   }
   function chunkKey(cx, cy, cz) { return cx + ',' + cy + ',' + cz; }
   function buildChunk(cx, cy, cz) {
-    var P = [], C = [], TP = [], TC = [];
+    var P = [], C = [], SN = [], TP = [], TC = [], TSN = [];
     var x0 = cx * CH, y0 = cy * CH, z0 = cz * CH;
     for (var k in G.blocks) {
       var p = k.split(','), x = +p[0], y = +p[1], z = +p[2];
@@ -314,19 +336,22 @@
         var ls = quad.map(function (cn) { return cornerLight(x, y, z, nAxis, cn, bcell); });
         var order = [0, 1, 2, 0, 2, 3];
         for (var v = 0; v < 6; v++) {
-          var cn2 = quad[order[v]], li = ore.emis ? 1.5 : ls[order[v]] * F.s;
+          var cn2 = quad[order[v]], pair = ls[order[v]];
+          var sun = pair[0] * F.s, lamp = pair[1] * F.s;
+          if (ore.emis) { sun = 0; lamp = 1.5; }
           // embedded-gem glint: deterministic sparkle verts on valuable ores
-          if (!ore.emis && ore.gold > 0 && ((x * 7 + y * 13 + z * 17 + f * 3 + v) % 6) < 2) li *= 1.9;
+          if (!ore.emis && ore.gold > 0 && ((x * 7 + y * 13 + z * 17 + f * 3 + v) % 6) < 2) lamp *= 1.9;
           (leaf ? TP : P).push(x + cn2[0], y + cn2[1], z + cn2[2]);
-          var carr = leaf ? TC : C;
-          carr.push(Math.min(1.5, base[0] * li), Math.min(1.5, base[1] * li), Math.min(1.5, base[2] * li));
+          var carr = leaf ? TC : C, sarr = leaf ? TSN : SN;
+          carr.push(Math.min(1.5, base[0] * lamp), Math.min(1.5, base[1] * lamp), Math.min(1.5, base[2] * lamp));
+          sarr.push(Math.min(1.5, base[0] * sun), Math.min(1.5, base[1] * sun), Math.min(1.5, base[2] * sun));
         }
       }
     }
     return {
       x0: x0, y0: y0, z0: z0,
-      op: P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') } : { n: 0 },
-      tr: TP.length ? { n: TP.length / 3, pos: buf(TP, 3, 'aPos'), col: buf(TC, 3, 'aCol') } : { n: 0 }
+      op: P.length ? { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol'), sun: buf(SN, 3, 'aSun') } : { n: 0 },
+      tr: TP.length ? { n: TP.length / 3, pos: buf(TP, 3, 'aPos'), col: buf(TC, 3, 'aCol'), sun: buf(TSN, 3, 'aSun') } : { n: 0 }
     };
   }
   function buildAll() {
@@ -467,12 +492,12 @@
     var Rt = [cy, 0, sy];
     var U = [Rt[1] * F[2] - Rt[2] * F[1], Rt[2] * F[0] - Rt[0] * F[2], Rt[0] * F[1] - Rt[1] * F[0]];
     var lift = Math.sin(Math.PI * Math.min(1, G.swingT));
-    var o = [e[0] + F[0] * 0.55 + Rt[0] * 0.3 + U[0] * (-0.28 + 0.22 * lift),
-             e[1] + F[1] * 0.55 + Rt[1] * 0.3 + U[1] * (-0.28 + 0.22 * lift),
-             e[2] + F[2] * 0.55 + Rt[2] * 0.3 + U[2] * (-0.28 + 0.22 * lift)];
+    var o = [e[0] + F[0] * 0.75 + Rt[0] * 0.34 + U[0] * (-0.3 + 0.18 * lift),
+             e[1] + F[1] * 0.75 + Rt[1] * 0.34 + U[1] * (-0.3 + 0.18 * lift),
+             e[2] + F[2] * 0.75 + Rt[2] * 0.34 + U[2] * (-0.3 + 0.18 * lift)];
     var B = [-F[0], -F[1], -F[2]];
-    emitBox(P, C, o, Rt, U, B, 0, -0.1, -0.25, 0.07, 0.55, 0.07, WOODC, 1.25);
-    emitBox(P, C, o, Rt, U, B, 0, -0.32, -0.32, 0.4, 0.08, 0.08, STEEL, 1.25);
+    emitBox(P, C, o, Rt, U, B, 0, -0.08, -0.2, 0.05, 0.42, 0.05, WOODC, 1.25);
+    emitBox(P, C, o, Rt, U, B, 0, -0.26, -0.26, 0.26, 0.06, 0.06, STEEL, 1.25);
   }
   function spawnBurst(x, y, z, hex) {
     var base = hexRGB(hex);
@@ -544,7 +569,147 @@
     G.pz = Math.max(PR, Math.min(G.D - PR, G.pz));
   }
 
-  // ---------- mining ----------
+  // ---------- objectives: live goals with gold payouts ----------
+  var OBJECTIVES = [
+    { id: 'dig-20', name: 'Delve 20 blocks', target: 20, val: function () { return G.broken; }, reward: 40 },
+    { id: 'coal-15', name: 'Bank 15 coal (total)', target: 15, val: function () { return meta().stats.coalRun; }, reward: 30 },
+    { id: 'hunt-3', name: 'Defeat 3 beasts', target: 3, val: function () { return meta().stats.kills; }, reward: 60 },
+    { id: 'deep-2', name: 'Descend below y=2 in the mine', target: 1, val: function () { return (G.world === 1 && meta().stats.deep <= 2) ? 1 : 0; }, reward: 50 },
+    { id: 'torch-4', name: 'Craft 4 torches', target: 4, val: function () { return meta().stats.torchesMade; }, reward: 25 },
+    { id: 'gold-200', name: 'Earn 200 gold (total)', target: 200, val: function () { return meta().stats.goldRun; }, reward: 50 }
+  ];
+  function checkObjectives() {
+    if (!G.stats) return;
+    OBJECTIVES.forEach(function (o) {
+      if (!meta().stats.claimed[o.id] && o.val() >= o.target) {
+        meta().stats.claimed[o.id] = true;
+        meta().gold += o.reward;
+        meta().stats.goldRun += o.reward;
+        flash('📋 ' + o.name + ' +' + o.reward + 'g');
+      }
+    });
+    var panel = document.getElementById('objpanel');
+    if (panel && panel.style.display !== 'none') paintObjectives();
+  }
+  function paintObjectives() {
+    var panel = document.getElementById('objpanel');
+    var h = '<h2>📋 Objectives</h2>';
+    OBJECTIVES.forEach(function (o) {
+      var done = !!meta().stats.claimed[o.id];
+      h += '<div class="pitem">' + (done ? '✅ ' : '🔒 ') + o.name + ' — ' + Math.min(o.val(), o.target) + '/' + o.target + ' (+' + o.reward + 'g)</div>';
+    });
+    panel.innerHTML = h;
+  }
+  // ---------- mobs: wolves stalk, wisps drift (night forest / dark mine) ----------
+  function mobCap() { return 4; }
+  function wantMobs() {
+    if (G.world === 1) return true;
+    return dayFactor() < 0.15; // night forest
+  }
+  function spawnMob(force) {
+    var rng = new S.SeededRNG((Math.random() * 1e9) | 0);
+    for (var t = 0; t < 12; t++) {
+      var a = rng.nextDouble() * Math.PI * 2, r = 12 + rng.nextDouble() * 8;
+      var x = Math.floor(G.px + Math.cos(a) * r), z = Math.floor(G.pz + Math.sin(a) * r);
+      if (x < 1 || z < 1 || x >= G.W - 1 || z >= G.D - 1) continue;
+      var gy = -1;
+      for (var y = Math.min(G.H - 1, Math.floor(G.py) + 2); y >= 0; y--) {
+        if (solidAt(x, y, z)) { gy = y + 1; break; }
+      }
+      if (gy < 1) continue;
+      var wolf = rng.nextDouble() < 0.5;
+      G.mobs.push({ kind: wolf ? 'wolf' : 'wisp', x: x + 0.5, z: z + 0.5, y: gy + 0.3,
+        hp: wolf ? 6 : 3, wx: x + 0.5, wz: z + 0.5, wait: 0, cool: 0, phase: rng.nextDouble() * 6 });
+      return true;
+    }
+    return !!force;
+  }
+  function updateMobs(dt) {
+    if (G.state !== 'play') return;
+    G.mobT -= dt;
+    if (G.mobT <= 0) {
+      G.mobT = 6;
+      if (wantMobs() && G.mobs.length < mobCap()) spawnMob();
+    }
+    for (var i = G.mobs.length - 1; i >= 0; i--) {
+      var m = G.mobs[i];
+      m.cool -= dt;
+      var dx = G.px - m.x, dz = G.pz - m.z;
+      var dist = Math.hypot(dx, dz);
+      var sp = m.kind === 'wolf' ? 2.4 : 1.7;
+      if (dist < 11) {
+        if (dist > 0.9) {
+          var nx = m.x + dx / dist * sp * dt, nz = m.z + dz / dist * sp * dt;
+          if (!circleHits(nx, m.z, m.y)) m.x = nx;
+          if (!circleHits(m.x, nz, m.y)) m.z = nz;
+          if (m.kind === 'wisp') m.y += Math.sin(G.time * 3 + m.phase) * dt * 0.8;
+        } else if (m.cool <= 0) {
+          m.cool = 1.2;
+          hurt(m.kind === 'wolf' ? 6 : 4, m.kind === 'wolf' ? 'mauled by a wolf' : 'stung by a wisp');
+        }
+      } else {
+        // wander
+        if (m.wait > 0) m.wait -= dt;
+        else {
+          var tx = m.wx - m.x, tz = m.wz - m.z;
+          if (Math.hypot(tx, tz) < 0.6) {
+            m.wait = 2 + Math.random() * 4;
+            m.wx = m.x + (Math.random() - 0.5) * 12;
+            m.wz = m.z + (Math.random() - 0.5) * 12;
+          } else {
+            var wnx = m.x + tx * dt * 0.8, wnz = m.z + tz * dt * 0.8;
+            if (!circleHits(wnx, m.z, m.y)) m.x = wnx;
+            if (!circleHits(m.x, wnz, m.y)) m.z = wnz;
+          }
+        }
+      }
+      // gravity for wolves (wisps hover)
+      if (m.kind === 'wolf') {
+        if (!solidAt(Math.floor(m.x), Math.floor(m.y - 0.1), Math.floor(m.z))) m.y -= 6 * dt;
+      }
+    }
+  }
+  function circleHits(wx, wz, wy) {
+    var r = 0.3, feet = wy === undefined ? G.py : wy;
+    for (var ox = -1; ox <= 1; ox++) for (var oz = -1; oz <= 1; oz++) {
+      var cx = Math.floor(wx) + ox, cz = Math.floor(wz) + oz;
+      if (cx < 0 || cz < 0 || cx >= G.W || cz >= G.D) continue;
+      // check all heights overlapped by a 1.2-tall body later; here: any solid column cell near feet
+      var cy = Math.floor(feet);
+      if (solidAt(cx, cy, cz) || solidAt(cx, cy + 1, cz)) {
+        var nx = Math.max(cx, Math.min(wx, cx + 1)), nz = Math.max(cz, Math.min(wz, cz + 1));
+        var ddx = wx - nx, ddz = wz - nz;
+        if (ddx * ddx + ddz * ddz < r * r) return true;
+      }
+    }
+    return false;
+  }
+  function hurt(n, cause) {
+    if (G.state !== 'play') return;
+    meta().hp -= n;
+    flash('-' + n + ' HP' + (cause ? ' (' + cause + ')' : ''), 1.5);
+    if (meta().hp <= 0) die(cause || 'the wilds');
+    else renderHUD();
+  }
+  function die(cause) {
+    G.state = 'dead';
+    var lost = Math.floor(meta().gold * 0.1);
+    meta().gold -= lost;
+    saveMeta();
+    overlay.classList.remove('hidden');
+    hud('overlay-title').textContent = '☠️ You died (' + cause + ')';
+    hud('overlay-text').textContent = 'Lost ' + lost + ' gold. Score ' + S.compact(G.score) + '. The wilds are unforgiving after dark.';
+    hud('overlay-btn').textContent = 'Respawn';
+    hud('overlay-btn').onclick = function () {
+      hideOverlay();
+      meta().hp = meta().maxHp;
+      G.mobs = [];
+      genWorld(); buildAll();
+      G.state = 'play';
+      renderHUD();
+    };
+    hud('overlay-btn2').style.display = 'none';
+  }
   function lookDir() {
     var cp = Math.cos(G.pitch);
     return [Math.sin(G.yaw) * cp, Math.sin(G.pitch), -Math.cos(G.yaw) * cp];
@@ -553,10 +718,51 @@
     var e = eyePos(), d = lookDir();
     return S.voxelRay(e, d, 6, solidAt);
   }
+  function hitMob(mb) {
+    var dmg = S.PICKS[meta().pickIdx].speed;
+    mb.hp -= dmg;
+    spawnBurst(mb.x, mb.y + 0.5, mb.z, mb.kind === 'wolf' ? '#6b4e2e' : '#59e6ff');
+    if (mb.hp > 0) {
+      flash(mb.kind === 'wolf' ? 'Wolf hit!' : 'Wisp hit!', 0.8);
+      return;
+    }
+    G.mobs.splice(G.mobs.indexOf(mb), 1);
+    meta().stats.kills++;
+    if (mb.kind === 'wolf') {
+      meta().gold += 10;
+      meta().stats.goldRun += 10;
+      flash('Wolf driven off! +10 gold');
+    } else {
+      meta().gold += 5;
+      meta().stats.goldRun += 5;
+      gainXP(15);
+      flash('Wisp dissipated! +5 gold, +15 XP');
+    }
+    checkObjectives();
+    saveMeta(); renderHUD();
+  }
   function swing() {
+    var mE = meta();
+    // melee: nearest mob within reach in the facing hemisphere
+    var e = eyePos();
+    var fhx = Math.sin(G.yaw), fhz = -Math.cos(G.yaw);
+    var best = null, bscore = 1e9;
+    for (var mi = 0; mi < G.mobs.length; mi++) {
+      var mb = G.mobs[mi];
+      var mdx = mb.x - e[0], mdz = mb.z - e[2];
+      var hdist = Math.hypot(mdx, mdz);
+      if (hdist > 3.0) continue;
+      var fwd = (mdx * fhx + mdz * fhz) / (hdist || 1);
+      if (fwd < 0.3) continue;
+      var mdy = Math.abs((mb.y + 0.5) - e[1]);
+      if (mdy > 2.2) continue;
+      var sc = hdist - fwd;
+      if (sc < bscore) { best = mb; bscore = sc; }
+    }
+    G.swingT = 0;
+    if (best) { hitMob(best); return; }
     var hit = targetBlock();
     if (!hit) return;
-    G.swingT = 0;
     var key = hit.x + ',' + hit.y + ',' + hit.z;
     var ore = VOX[G.blocks[key]];
     if (!ore || ore.tier >= 99) { flash(ore ? ore.name + ' is unbreakable.' : '', 1.2); return; }
@@ -570,7 +776,9 @@
       var m0 = meta();
       m0.coal = (m0.coal || 0) + 1;
       G.broken++;
+      meta().stats.coalRun++;
       if (m0.coal >= 20) ach('coal-20', 'Coal Baron');
+      checkObjectives();
       saveMeta(); renderHUD(); rebuildAround(hit.x, hit.y, hit.z);
       return;
     }
@@ -582,7 +790,16 @@
     spawnBurst(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, ore.color);
     var m = meta();
     G.broken++;
-    if (ore.gold > 0 || ore.xp > 0) {
+    if (ore.key === 'wood') {
+      m.wood = (m.wood || 0) + 1;
+      gainXP(2);
+    } else if (ore.key === 'leaves') {
+      if (Math.random() < 0.12) {
+        m.apples = (m.apples || 0) + 1;
+        flash('🍎 Apple!');
+      }
+      gainXP(1);
+    } else if (ore.gold > 0 || ore.xp > 0) {
       G.pack++;
       G.sellValue += ore.gold;
       gainXP(ore.xp);
@@ -592,10 +809,52 @@
     saveMeta(); renderHUD(); rebuildAround(hit.x, hit.y, hit.z);
   }
   function sellPack() {
-    if (G.sellValue <= 0) { flash('Backpack empty — break some ore!'); return; }
-    meta().gold += G.sellValue;
+    var woodCount = meta().wood || 0;
+    if (G.sellValue <= 0 && woodCount <= 0) { flash('Backpack empty — break some ore!'); return; }
+    var g = G.sellValue + woodCount; // timber sells 1g each; coal stays banked
+    meta().gold += g;
+    meta().stats.goldRun += g;
+    meta().wood = 0;
     G.pack = 0; G.sellValue = 0;
-    flash('Sold! Coal stays banked: ' + (meta().coal || 0));
+    flash('Sold for ' + g + ' gold. Coal stays banked: ' + (meta().coal || 0));
+    checkObjectives();
+    saveMeta(); renderHUD();
+  }
+  function eatApple() {
+    var m = meta();
+    if ((m.apples || 0) <= 0) { flash('No apples — shake some leaves!'); return; }
+    if (m.hp >= m.maxHp) { flash('HP already full!'); return; }
+    m.apples--;
+    m.hp = Math.min(m.maxHp, m.hp + 25);
+    flash('🍎 +25 HP');
+    saveMeta(); renderHUD();
+  }
+  function craftTorch() {
+    var m = meta();
+    if ((m.coal || 0) < 1 || (m.wood || 0) < 1) { flash('Torch needs 1 coal + 1 wood'); return; }
+    m.coal--;
+    m.wood--;
+    m.torchesInv = (m.torchesInv || 0) + 4;
+    meta().stats.torchesMade += 4;
+    flash('🔥 +4 torches (T / right-click to place)');
+    checkObjectives();
+    saveMeta(); renderHUD();
+  }
+  function placeTorch() {
+    var m = meta();
+    if ((m.torchesInv || 0) <= 0) { flash('No torches — craft some! (1 coal + 1 wood)'); return; }
+    if (G.torches.length >= 24) { flash('Too many torches burning already!'); return; }
+    var e = eyePos(), d = lookDir();
+    var hit = S.voxelRay(e, d, 6, solidAt);
+    if (!hit) return;
+    var px = hit.x + hit.nx, py = hit.y + hit.ny, pz = hit.z + hit.nz;
+    if (px < 0 || pz < 0 || py < 0 || px >= G.W || pz >= G.D || py >= G.H) return;
+    if (solidAt(px, py, pz)) return;
+    m.torchesInv--;
+    G.torches.push({ x: px + 0.5, y: py + 0.5, z: pz + 0.5 });
+    buildGlow();
+    buildAll();
+    flash('🔥 Torch placed');
     saveMeta(); renderHUD();
   }
   function buyPick() {
@@ -623,6 +882,17 @@
     hud('level').textContent = m.level;
     hud('pick').textContent = S.PICKS[m.pickIdx].name;
     hud('candy').textContent = G.pack + '/' + G.packCap;
+    var hp = hud('hp'), wd = hud('wood'), ap = hud('apples'), tc = hud('torches'), ck = hud('clock');
+    if (hp) hp.textContent = Math.max(0, m.hp) + '/' + m.maxHp;
+    if (wd) wd.textContent = m.wood || 0;
+    if (ap) ap.textContent = m.apples || 0;
+    if (tc) tc.textContent = m.torchesInv || 0;
+    if (ck) {
+      var day = G.world === 0;
+      var t = G.dayT;
+      var icon = !day ? '⛏️' : (dayFactor() > 0.6 ? '☀️' : (dayFactor() > 0.05 ? '🌤️' : '🌙'));
+      ck.textContent = icon + ' ' + Math.floor(t * 24) + ':00';
+    }
   }
   var overlay = document.getElementById('overlay');
   function showShop() {
@@ -671,10 +941,26 @@
     }
     gl.viewport(0, 0, canvas.width, canvas.height);
   }
+  function dayFactor() {
+    // 0 = sunrise, 0.25 = noon, 0.5 = sunset, 0.75 = midnight
+    return Math.sin(2 * Math.PI * G.dayT);
+  }
+  function sunColor() {
+    var e = Math.max(0, dayFactor());
+    var warm = 1 - Math.min(1, e * 2.2); // orange near horizon
+    return [0.25 + 0.9 * e, (0.25 + 0.73 * e) * (1 - warm * 0.25), (0.3 + 0.6 * e) * (1 - warm * 0.55)];
+  }
+  function skyColor() {
+    var e = Math.max(0, dayFactor());
+    var day = [0.53, 0.71, 0.88], night = [0.015, 0.02, 0.06], dusk = [0.45, 0.22, 0.35];
+    var warm = 1 - Math.min(1, e * 2.5);
+    var base = [day[0] * e + night[0] * (1 - e), day[1] * e + night[1] * (1 - e), day[2] * e + night[2] * (1 - e)];
+    return [base[0] + (dusk[0] - base[0]) * warm * 0.7, base[1] + (dusk[1] - base[1]) * warm * 0.7, base[2] + (dusk[2] - base[2]) * warm * 0.7];
+  }
   function render() {
     resize();
     var forest = G.world === 0;
-    var fogC = forest ? [0.53, 0.71, 0.88] : [0.02, 0.01, 0.04];
+    var fogC = forest ? skyColor() : [0.02, 0.01, 0.04];
     gl.clearColor(fogC[0], fogC[1], fogC[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
@@ -696,9 +982,12 @@
       if (!g || !g.n) return;
       bind(g.pos, 3, 'aPos');
       bind(g.col, 3, 'aCol');
+      if (g.sun) bind(g.sun, 3, 'aSun');
       gl.drawArrays(gl.TRIANGLES, 0, g.n);
     }
     var planes = frustumPlanes(mvp);
+    var sc = sunColor();
+    gl.uniform3fv(gl.getUniformLocation(prog, 'uSun'), new Float32Array(sc));
     // pass 1: opaque (Z-buffer fills)
     gl.uniform1f(gl.getUniformLocation(prog, 'uAlpha'), 1);
     for (var key in G.chunks) {
@@ -715,12 +1004,27 @@
       if (chunkVisible(ch2, planes)) drawBuf(ch2.tr);
     }
     gl.disable(gl.BLEND);
-    // avatar / viewmodel / particles (dynamic)
+    // avatar / viewmodel / particles / mobs (dynamic)
     dynBufs();
     gl.uniform1f(gl.getUniformLocation(prog, 'uAlpha'), 1);
     var AP = [], AC = [];
     if (G.third) buildAvatar(AP, AC);
     else buildViewmodel(AP, AC);
+    // mobs: wolves (brown beast) + wisps (glowing cyan)
+    for (var qi = 0; qi < G.mobs.length; qi++) {
+      var qm = G.mobs[qi];
+      if (qm.kind === 'wolf') {
+        var bob = Math.abs(Math.sin(G.time * 8 + qm.phase)) * 0.06;
+        emitBox(AP, AC, [qm.x, qm.y + bob, qm.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+          0, 0.35, 0, 0.7, 0.45, 0.45, [0.42, 0.31, 0.18], 1.2);
+        emitBox(AP, AC, [qm.x, qm.y + bob, qm.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+          0, 0.62, -0.3, 0.32, 0.3, 0.32, [0.35, 0.25, 0.14], 1.2);
+      } else {
+        var fl = 0.5 + 0.2 * Math.sin(G.time * 5 + qm.phase);
+        emitBox(AP, AC, [qm.x, qm.y + 0.6 + 0.1 * Math.sin(G.time * 3 + qm.phase), qm.z],
+          [1, 0, 0], [0, 1, 0], [0, 0, 1], 0, 0, 0, fl, fl, fl, [0.35, 0.9, 1.0], 1.4);
+      }
+    }
     drawDyn(dynP1, dynC1, AP, AC);
     var PP = [], PC = [];
     for (var pi = 0; pi < G.parts.length; pi++) {
@@ -739,6 +1043,14 @@
     if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].indexOf(k) >= 0) e.preventDefault();
     if (k === 'f') swing();
     if (k === 'v') { G.third = !G.third; flash(G.third ? '👤 Third person' : '⛏️ First person', 1.5); }
+    if (k === 'e') eatApple();
+    if (k === 't') placeTorch();
+    if (k === 'j') {
+      var op = document.getElementById('objpanel');
+      if (G.tab !== 0) return;
+      if (op.style.display === 'none' || !op.style.display) { paintObjectives(); op.style.display = 'flex'; }
+      else op.style.display = 'none';
+    }
     if (k === 'm') {
       var h = document.getElementById('help');
       h.style.display = h.style.display === 'none' ? '' : 'none';
@@ -747,7 +1059,12 @@
   });
   document.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
   var drag = null;
-  canvas.addEventListener('mousedown', function (e) { drag = [e.clientX, e.clientY]; swing(); });
+  canvas.addEventListener('mousedown', function (e) {
+    drag = [e.clientX, e.clientY];
+    if (e.button === 2) placeTorch();
+    else swing();
+  });
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   document.addEventListener('mousemove', function (e) {
     if (!drag) return;
     G.yaw -= (e.clientX - drag[0]) * 0.004;
@@ -803,6 +1120,12 @@
     G.third = !G.third;
     flash(G.third ? '👤 Third person' : '⛏️ First person', 1.5);
   });
+  document.getElementById('craftbtn').addEventListener('click', function () { craftTorch(); });
+  document.getElementById('objbtn').addEventListener('click', function () {
+    var op = document.getElementById('objpanel');
+    if (op.style.display === 'none' || !op.style.display) { paintObjectives(); op.style.display = 'flex'; }
+    else op.style.display = 'none';
+  });
   function switchWorld(w) {
     var m = meta();
     newGame(w, (Math.random() * 1e9) | 0);
@@ -816,8 +1139,10 @@
   var last = 0;
   function update(dt) {
     G.time += dt;
+    if (G.world === 0) G.dayT = (G.dayT + dt / 360) % 1; // 6-minute days
     if (G.swingT < 1) G.swingT = Math.min(1, G.swingT + dt / 0.28);
     updateParts(dt);
+    updateMobs(dt);
     var sp = 4.6 * dt;
     var fw = ((keys.w || keys.arrowup) ? 1 : 0) - ((keys.s || keys.arrowdown) ? 1 : 0) + joy.y;
     var st = ((keys.d ? 1 : 0) - (keys.a ? 1 : 0)) + joy.x;
@@ -825,7 +1150,23 @@
     moveAxis((sy * fw + cy * st) * sp, 0, (-cy * fw + sy * st) * sp);
     G.vy -= 22 * dt;
     if ((keys[' '] ) && G.onGround) { G.vy = 7.6; G.onGround = false; }
+    var wasAir = !G.onGround;
+    if (!G.onGround) G.fallPeak = Math.max(G.fallPeak === undefined ? -99 : G.fallPeak, G.py);
     moveAxis(0, G.vy * dt, 0);
+    if (G.onGround && wasAir && G.fallPeak !== undefined && G.fallPeak > -99) {
+      var drop = G.fallPeak - G.py;
+      if (drop > 3.5) hurt(Math.round((drop - 3.5) * 8), 'a big fall');
+      G.fallPeak = undefined;
+    }
+    // lava burns + track depth record
+    if (get(Math.floor(G.px), Math.floor(G.py + 0.3), Math.floor(G.pz)) === 'lava') {
+      G.lavaT = (G.lavaT || 0) + dt;
+      if (G.lavaT > 0.5) { G.lavaT = 0; hurt(8, 'lava'); }
+    } else G.lavaT = 0;
+    if (G.world === 1) {
+      meta().stats.deep = Math.min(meta().stats.deep, G.py);
+      checkObjectives();
+    }
     if (G.py < -5) { // fell out: respawn
       genWorld(); buildAll();
     }
@@ -873,6 +1214,35 @@
   window.__voxel = { swing: swing, target: targetBlock, state: function () { return G; }, meta: meta,
     cornerLight: cornerLight, cellLight: cellLight, opaqueAt: opaqueAt,
     frustumPlanes: frustumPlanes, chunkVisible: chunkVisible, rebuildAround: rebuildAround,
-    carveWorm: carveWorm, buildAvatar: buildAvatar, buildViewmodel: buildViewmodel };
+    carveWorm: carveWorm, buildAvatar: buildAvatar, buildViewmodel: buildViewmodel,
+    debug: function () {
+      return {
+        dayFactor: dayFactor,
+        gold: function () { return meta().gold; },
+        hp: function () { return meta().hp; },
+        setHP: function (n) { meta().hp = n; },
+        apples: function () { return meta().apples || 0; },
+        eat: eatApple,
+        torches: function () { return G.torches.length; },
+        torchesInv: function () { return meta().torchesInv || 0; },
+        craft: craftTorch,
+        place: placeTorch,
+        placed: function () { return G.torches.length; },
+        spawn: function (kind) {
+          G.mobs.push({ kind: kind, x: G.px + 2, z: G.pz, y: G.py, hp: kind === 'wolf' ? 6 : 3,
+            wx: G.px, wz: G.pz, wait: 0, cool: 0, phase: 0 });
+        },
+        give: function (o) {
+          if (o.coal) meta().coal = (meta().coal || 0) + o.coal;
+          if (o.wood) meta().wood = (meta().wood || 0) + o.wood;
+          if (o.apples) meta().apples = (meta().apples || 0) + o.apples;
+        },
+        objectives: function () {
+          return OBJECTIVES.map(function (o) {
+            return { id: o.id, have: o.val(), claimed: !!meta().stats.claimed[o.id] };
+          });
+        }
+      };
+    } };
   requestAnimationFrame(loop);
 })();
