@@ -338,122 +338,231 @@
 
   function projectCandy3D(key, points, name) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(11,6,32,.92);display:flex;align-items:center;justify-content:center;z-index:100;overflow:hidden';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(5,2,15,.96);display:flex;align-items:center;justify-content:center;z-index:100;overflow:hidden';
     var canvas = document.createElement('canvas');
-    canvas.width = 400; canvas.height = 400;
-    canvas.style.cssText = 'max-width:90vw;max-height:90vh';
+    canvas.width = 500; canvas.height = 500;
+    canvas.style.cssText = 'max-width:92vw;max-height:92vh';
     overlay.appendChild(canvas);
     document.body.appendChild(overlay);
     var ctx = canvas.getContext('2d');
-    var W = 400, H = 400, cx = W / 2, cy = H / 2;
-    var particles = [];
-    var sparkles = [];
-    var stage = 'shake';
-    var stageT = 0;
-    var shakeMag = 0;
-    var revealScale = 0;
-    var flashAlpha = 0;
+    var W = 500, H = 500, cx = W / 2, cy = H / 2;
+    var particles = [], sparkles = [], confetti = [], rings = [], lightRays = [];
+    var stage = 'intro';
+    var stageStart = performance.now();
+    var shakeMag = 0, revealScale = 0, flashAlpha = 0, textAlpha = 0, textScale = 0;
     var candyColor = points >= 25 ? '#ff69b4' : points >= 15 ? '#ffd700' : points >= 5 ? '#59e6ff' : '#ffbe5a';
     var rarity = points >= 50 ? 'legendary' : points >= 25 ? 'epic' : points >= 15 ? 'rare' : points >= 5 ? 'uncommon' : 'common';
     var rarityLabel = { legendary: 'LEGENDARY', epic: 'EPIC', rare: 'RARE', uncommon: 'UNCOMMON', common: 'COMMON' };
-    var rarityColor = { legendary: '#ff69b4', epic: '#c44dff', rare: '#ffd700', uncommon: '#59e6ff', common: '#cccccc' };
-    function spawnParticles(n, color, speed) {
+    var rarityColor = { legendary: '#ff69b4', epic: '#c44dff', rare: '#ffd700', uncommon: '#59e6ff', common: '#aaaaaa' };
+    var rarityGlow = { legendary: 30, epic: 22, rare: 16, uncommon: 10, common: 0 };
+    function stageT() { return (performance.now() - stageStart) / 1000; }
+    function spawnParticles(n, color, speed, spread) {
       for (var i = 0; i < n; i++) {
         var a = Math.random() * Math.PI * 2;
-        var v = (0.5 + Math.random()) * (speed || 3);
-        particles.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 2, life: 1, decay: 0.015 + Math.random() * 0.02, color: color, size: 2 + Math.random() * 4 });
+        var v = (0.3 + Math.random()) * (speed || 3);
+        particles.push({ x: cx, y: cy, vx: Math.cos(a) * v * (spread || 1), vy: Math.sin(a) * v - 1.5, life: 1, decay: 0.012 + Math.random() * 0.018, color: color, size: 2 + Math.random() * 5, trail: [] });
       }
     }
-    function spawnSparkles(n) {
+    function spawnSparkles(n, rMin, rMax) {
       for (var i = 0; i < n; i++) {
         var a = Math.random() * Math.PI * 2;
-        var r = 30 + Math.random() * 80;
-        sparkles.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, life: 1, decay: 0.02 + Math.random() * 0.03, size: 1 + Math.random() * 3, rot: Math.random() * Math.PI });
+        var r = (rMin || 30) + Math.random() * ((rMax || 90) - (rMin || 30));
+        sparkles.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, life: 1, decay: 0.015 + Math.random() * 0.025, size: 1.5 + Math.random() * 3.5, rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.02 });
       }
+    }
+    function spawnConfetti(n) {
+      var cols = ['#ff69b4', '#ffd700', '#59e6ff', '#c44dff', '#7dff6a', '#ff9f1c', '#fff'];
+      for (var i = 0; i < n; i++) {
+        confetti.push({ x: Math.random() * W, y: -10 - Math.random() * 100, vx: (Math.random() - 0.5) * 2, vy: 1 + Math.random() * 3, rot: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.1, w: 4 + Math.random() * 6, h: 3 + Math.random() * 4, color: cols[(Math.random() * cols.length) | 0], life: 1 });
+      }
+    }
+    function spawnRing() {
+      rings.push({ r: 20, life: 1, decay: 0.03, color: candyColor, width: 3 });
+    }
+    function spawnLightRays() {
+      for (var i = 0; i < 12; i++) {
+        lightRays.push({ angle: (i / 12) * Math.PI * 2, speed: 0.3 + Math.random() * 0.5, width: 0.05 + Math.random() * 0.08, alpha: 0.1 + Math.random() * 0.15 });
+      }
+    }
+    function drawBackground(t) {
+      var g = ctx.createRadialGradient(cx, cy, 10, cx, cy, 300);
+      g.addColorStop(0, '#1e1145');
+      g.addColorStop(0.5, '#0f0828');
+      g.addColorStop(1, '#05020f');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.save();
+      ctx.globalAlpha = 0.15 + Math.sin(t * 2) * 0.05;
+      for (var i = 0; i < 30; i++) {
+        var sx = (i * 137.5) % W, sy = (i * 97.3) % H;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.5 + Math.sin(t * 3 + i) * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    function drawLightRays(t) {
+      if (stage !== 'reveal' && stage !== 'celebrate') return;
+      ctx.save();
+      ctx.translate(cx, cy);
+      lightRays.forEach(function (r) {
+        ctx.save();
+        ctx.rotate(r.angle + t * r.speed);
+        var grad = ctx.createLinearGradient(0, 0, 250, 0);
+        grad.addColorStop(0, 'rgba(255,255,255,' + r.alpha + ')');
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 250, -r.width, r.width);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      });
+      ctx.restore();
     }
     function drawWrappedCandy(t) {
       ctx.save();
       ctx.translate(cx, cy);
-      var shake = stage === 'shake' ? Math.sin(t * 30) * shakeMag : 0;
-      ctx.translate(shake, 0);
-      ctx.rotate(stage === 'shake' ? Math.sin(t * 20) * 0.1 : 0);
-      var s = 60 + Math.sin(t * 4) * 3;
-      ctx.fillStyle = '#8b5cf6';
+      var st = stageT();
+      if (stage === 'anticipate') {
+        var pulse = 1 + Math.sin(t * 8) * 0.04;
+        ctx.scale(pulse, pulse);
+        ctx.rotate(Math.sin(t * 3) * 0.05);
+      } else if (stage === 'shake') {
+        shakeMag = Math.min(10, st * 5);
+        ctx.translate(Math.sin(t * 35) * shakeMag, Math.cos(t * 28) * shakeMag * 0.5);
+        ctx.rotate(Math.sin(t * 22) * 0.12);
+      }
+      var s = 70 + Math.sin(t * 4) * 3;
+      var wrapperGrad = ctx.createRadialGradient(-s * 0.3, -s * 0.3, 5, 0, 0, s * 1.2);
+      wrapperGrad.addColorStop(0, '#a78bfa');
+      wrapperGrad.addColorStop(0.5, '#7c3aed');
+      wrapperGrad.addColorStop(1, '#4c1d95');
+      ctx.fillStyle = wrapperGrad;
       ctx.beginPath();
-      ctx.ellipse(0, 0, s, s * 0.7, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, s, s * 0.72, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#a78bfa';
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
       ctx.beginPath();
-      ctx.ellipse(0, -s * 0.15, s * 0.8, s * 0.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -s * 0.2, s * 0.75, s * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#c4b5fd';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(-s * 0.3, -s * 0.5);
-      ctx.quadraticCurveTo(0, -s * 0.8, s * 0.3, -s * 0.5);
+      ctx.moveTo(-s * 0.35, -s * 0.55);
+      ctx.quadraticCurveTo(0, -s * 0.85, s * 0.35, -s * 0.55);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(-s * 0.3, s * 0.5);
-      ctx.quadraticCurveTo(0, s * 0.8, s * 0.3, s * 0.5);
+      ctx.moveTo(-s * 0.35, s * 0.55);
+      ctx.quadraticCurveTo(0, s * 0.85, s * 0.35, s * 0.55);
       ctx.stroke();
-      ctx.fillStyle = '#7c3aed';
+      var twistGrad = ctx.createLinearGradient(-s - 20, 0, -s + 15, 0);
+      twistGrad.addColorStop(0, '#5b21b6');
+      twistGrad.addColorStop(1, '#8b5cf6');
+      ctx.fillStyle = twistGrad;
       ctx.beginPath();
-      ctx.moveTo(-s - 15, 0);
-      ctx.lineTo(-s + 10, -18);
-      ctx.lineTo(-s + 10, 18);
+      ctx.moveTo(-s - 20, 0);
+      ctx.lineTo(-s + 12, -20);
+      ctx.lineTo(-s + 12, 20);
       ctx.closePath();
       ctx.fill();
+      var twistGrad2 = ctx.createLinearGradient(s + 20, 0, s - 15, 0);
+      twistGrad2.addColorStop(0, '#5b21b6');
+      twistGrad2.addColorStop(1, '#8b5cf6');
+      ctx.fillStyle = twistGrad2;
       ctx.beginPath();
-      ctx.moveTo(s + 15, 0);
-      ctx.lineTo(s - 10, -18);
-      ctx.lineTo(s - 10, 18);
+      ctx.moveTo(s + 20, 0);
+      ctx.lineTo(s - 12, -20);
+      ctx.lineTo(s - 12, 20);
       ctx.closePath();
       ctx.fill();
-      if (stage === 'shake') {
-        ctx.strokeStyle = 'rgba(255,255,255,' + (0.3 + Math.sin(t * 15) * 0.3) + ')';
+      if (stage === 'anticipate' || stage === 'shake') {
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.2 + Math.sin(t * 12) * 0.2) + ')';
         ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
+        ctx.setLineDash([5, 5]);
         ctx.beginPath();
-        ctx.arc(0, 0, s + 12 + Math.sin(t * 8) * 4, 0, Math.PI * 2);
+        ctx.arc(0, 0, s + 15 + Math.sin(t * 6) * 5, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
       }
+      if (stage === 'unwrap') {
+        var peel = Math.min(1, st * 2);
+        ctx.save();
+        ctx.globalAlpha = 1 - peel;
+        ctx.translate(-peel * 40, -peel * 30);
+        ctx.rotate(-peel * 0.5);
+        ctx.fillStyle = '#7c3aed';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, s, s * 0.72, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
       ctx.restore();
     }
-    function drawReveal(t) {
+    function drawRevealCandy(t) {
       ctx.save();
       ctx.translate(cx, cy);
-      var pulse = 1 + Math.sin(t * 6) * 0.05;
+      var pulse = 1 + Math.sin(t * 5) * 0.04;
       ctx.scale(revealScale * pulse, revealScale * pulse);
-      var glow = ctx.createRadialGradient(0, 0, 10, 0, 0, 80);
+      var glowR = 90 + rarityGlow[rarity];
+      var glow = ctx.createRadialGradient(0, 0, 5, 0, 0, glowR);
       glow.addColorStop(0, candyColor);
+      glow.addColorStop(0.4, candyColor + '88');
       glow.addColorStop(1, 'transparent');
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(0, 0, 80, 0, Math.PI * 2);
+      ctx.arc(0, 0, glowR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = candyColor;
+      var bodyGrad = ctx.createRadialGradient(-12, -12, 3, 0, 0, 40);
+      bodyGrad.addColorStop(0, '#fff');
+      bodyGrad.addColorStop(0.3, candyColor);
+      bodyGrad.addColorStop(1, candyColor);
+      ctx.fillStyle = bodyGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, 35, 0, Math.PI * 2);
+      ctx.arc(0, 0, 38, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.beginPath();
-      ctx.arc(-10, -10, 12, 0, Math.PI * 2);
+      ctx.arc(-12, -14, 10, 0, Math.PI * 2);
       ctx.fill();
-      ctx.font = 'bold 18px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath();
+      ctx.arc(10, 8, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    function drawText(t) {
+      if (textAlpha <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = textAlpha;
+      ctx.translate(cx, cy);
+      ctx.scale(textScale, textScale);
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 28px sans-serif';
       ctx.shadowColor = candyColor;
-      ctx.shadowBlur = 10;
-      ctx.fillText(name || key, 0, 60);
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(name || key, 0, 75);
       ctx.shadowBlur = 0;
-      ctx.font = 'bold 14px sans-serif';
+      ctx.font = 'bold 16px sans-serif';
       ctx.fillStyle = rarityColor[rarity];
-      ctx.fillText(rarityLabel[rarity] + ' · +' + points + ' pts', 0, 82);
+      ctx.shadowColor = rarityColor[rarity];
+      ctx.shadowBlur = 10;
+      ctx.fillText(rarityLabel[rarity] + '  ·  +' + points + ' PTS', 0, 100);
       ctx.restore();
     }
     function drawParticles() {
       particles.forEach(function (p) {
+        p.trail.push({ x: p.x, y: p.y });
+        if (p.trail.length > 6) p.trail.shift();
+        ctx.globalAlpha = p.life * 0.3;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = p.size * 0.5;
+        ctx.beginPath();
+        p.trail.forEach(function (tp, i) { i === 0 ? ctx.moveTo(tp.x, tp.y) : ctx.lineTo(tp.x, tp.y); });
+        ctx.stroke();
         ctx.globalAlpha = p.life;
         ctx.fillStyle = p.color;
         ctx.beginPath();
@@ -466,73 +575,155 @@
       sparkles.forEach(function (s) {
         ctx.save();
         ctx.translate(s.x, s.y);
-        ctx.rotate(s.rot + (1 - s.life) * 3);
+        ctx.rotate(s.rot + (1 - s.life) * 4);
         ctx.globalAlpha = s.life;
         ctx.fillStyle = '#fff';
         var sz = s.size * s.life;
-        ctx.fillRect(-sz / 2, -0.5, sz, 1);
-        ctx.fillRect(-0.5, -sz / 2, 1, sz);
+        ctx.beginPath();
+        ctx.moveTo(0, -sz * 2);
+        ctx.lineTo(sz * 0.5, -sz * 0.5);
+        ctx.lineTo(sz * 2, 0);
+        ctx.lineTo(sz * 0.5, sz * 0.5);
+        ctx.lineTo(0, sz * 2);
+        ctx.lineTo(-sz * 0.5, sz * 0.5);
+        ctx.lineTo(-sz * 2, 0);
+        ctx.lineTo(-sz * 0.5, -sz * 0.5);
+        ctx.closePath();
+        ctx.fill();
         ctx.restore();
       });
       ctx.globalAlpha = 1;
     }
+    function drawConfetti() {
+      confetti.forEach(function (c) {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.rot);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+        ctx.restore();
+      });
+    }
+    function drawRings() {
+      rings.forEach(function (r) {
+        ctx.globalAlpha = r.life;
+        ctx.strokeStyle = r.color;
+        ctx.lineWidth = r.width * r.life;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r.r, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+    }
     function drawFlash() {
-      if (flashAlpha > 0) {
+      if (flashAlpha > 0.01) {
         ctx.fillStyle = 'rgba(255,255,255,' + flashAlpha + ')';
         ctx.fillRect(0, 0, W, H);
       }
     }
-    var startTime = performance.now();
-    function animate(now) {
-      var t = (now - startTime) / 1000;
-      stageT = t;
-      ctx.clearRect(0, 0, W, H);
-      var bgGrad = ctx.createRadialGradient(cx, cy, 20, cx, cy, 250);
-      bgGrad.addColorStop(0, '#1a1038');
-      bgGrad.addColorStop(1, '#0b0620');
-      ctx.fillStyle = bgGrad;
+    function drawVignette() {
+      var v = ctx.createRadialGradient(cx, cy, W * 0.3, cx, cy, W * 0.7);
+      v.addColorStop(0, 'transparent');
+      v.addColorStop(1, 'rgba(0,0,0,0.5)');
+      ctx.fillStyle = v;
       ctx.fillRect(0, 0, W, H);
-      if (stage === 'shake') {
-        shakeMag = Math.min(8, t * 4);
-        drawWrappedCandy(t);
-        if (t > 1.2) {
-          stage = 'burst';
-          stageT = 0;
-          startTime = now;
-          spawnParticles(60, candyColor, 5);
-          spawnParticles(30, '#fff', 3);
-          spawnSparkles(20);
-          flashAlpha = 0.6;
+    }
+    function setStage(s) { stage = s; stageStart = performance.now(); }
+    spawnLightRays();
+    function animate(now) {
+      var t = (now - stageStart) / 1000;
+      var st = stageT();
+      ctx.clearRect(0, 0, W, H);
+      drawBackground(now / 1000);
+      drawLightRays(now / 1000);
+      if (stage === 'intro') {
+        var scale = Math.min(1, st * 3);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = Math.min(1, st * 2);
+        ctx.fillStyle = '#8b5cf6';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 70, 50, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        if (st > 0.8) setStage('anticipate');
+      } else if (stage === 'anticipate') {
+        drawWrappedCandy(now / 1000);
+        if (st > 1.0) setStage('shake');
+      } else if (stage === 'shake') {
+        drawWrappedCandy(now / 1000);
+        if (st > 1.4) {
+          setStage('unwrap');
+          spawnParticles(40, '#c4b5fd', 4);
+        }
+      } else if (stage === 'unwrap') {
+        drawWrappedCandy(now / 1000);
+        drawParticles();
+        if (st > 0.5) {
+          setStage('burst');
+          spawnParticles(80, candyColor, 6);
+          spawnParticles(40, '#fff', 4);
+          spawnParticles(30, rarityColor[rarity], 5);
+          spawnSparkles(30);
+          spawnRing(); spawnRing();
+          flashAlpha = 0.7;
           shakeMag = 0;
         }
       } else if (stage === 'burst') {
-        var bt = stageT;
-        revealScale = Math.min(1, bt * 2.5);
-        drawReveal(t);
+        revealScale = Math.min(1, st * 3);
+        textAlpha = Math.max(0, Math.min(1, (st - 0.3) * 2));
+        textScale = 0.5 + Math.min(1, (st - 0.3) * 2) * 0.5;
+        drawRevealCandy(now / 1000);
+        drawText(now / 1000);
         drawParticles();
         drawSparkles();
+        drawRings();
         drawFlash();
-        flashAlpha *= 0.92;
-        if (bt > 0.5 && bt < 0.6) spawnSparkles(3);
-        if (bt > 2.5) {
-          stage = 'done';
-          stageT = 0;
-          startTime = now;
+        flashAlpha *= 0.9;
+        rings.forEach(function (r) { r.r += 4; r.life -= r.decay; });
+        rings = rings.filter(function (r) { return r.life > 0; });
+        if (st > 0.4 && Math.random() < 0.15) spawnSparkles(2);
+        if (st > 1.2) {
+          setStage('reveal');
+          spawnConfetti(60);
+          if (rarity === 'legendary' || rarity === 'epic') { spawnConfetti(80); spawnRing(); }
         }
-      } else if (stage === 'done') {
+      } else if (stage === 'reveal') {
         revealScale = 1;
-        drawReveal(t);
+        textAlpha = Math.min(1, textAlpha + 0.02);
+        textScale = 1;
+        drawRevealCandy(now / 1000);
+        drawText(now / 1000);
         drawSparkles();
-        if (Math.random() < 0.1) spawnSparkles(1);
-        if (stageT > 2) {
+        drawConfetti();
+        drawRings();
+        rings.forEach(function (r) { r.r += 3; r.life -= r.decay * 0.7; });
+        rings = rings.filter(function (r) { return r.life > 0; });
+        if (Math.random() < 0.08) spawnSparkles(2);
+        if (Math.random() < 0.03) spawnRing();
+        if (st > 2.0) setStage('celebrate');
+      } else if (stage === 'celebrate') {
+        revealScale = 1 + Math.sin(now / 1000 * 4) * 0.03;
+        textAlpha = 1;
+        drawRevealCandy(now / 1000);
+        drawText(now / 1000);
+        drawSparkles();
+        drawConfetti();
+        if (Math.random() < 0.1) spawnSparkles(3);
+        if (Math.random() < 0.05) spawnConfetti(5);
+        if (st > 3.0) {
           document.body.removeChild(overlay);
           return;
         }
       }
-      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= p.decay; });
+      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.vx *= 0.99; p.life -= p.decay; });
       particles = particles.filter(function (p) { return p.life > 0; });
-      sparkles.forEach(function (s) { s.life -= s.decay; });
+      sparkles.forEach(function (s) { s.life -= s.decay; s.rot += s.vr; });
       sparkles = sparkles.filter(function (s) { return s.life > 0; });
+      confetti.forEach(function (c) { c.x += c.vx; c.y += c.vy; c.rot += c.vr; if (c.y > H + 20) { c.y = -10; c.x = Math.random() * W; } });
+      drawVignette();
       requestAnimationFrame(animate);
     }
     requestAnimationFrame(animate);
