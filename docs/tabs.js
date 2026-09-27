@@ -242,7 +242,7 @@
         S.CANDIES.forEach(function (c, ci) {
           var card = el('div', 'candy-card', c.name + '<br>' + c.points + ' pts');
           card.dataset.key = c.key;
-          card.onclick = function () { projectCandy3D(c.key, c.points, c.name); };
+          card.onclick = function () { projectCandy3D(c.key, c.points, c.name, c.theme); };
           candyGrid.appendChild(card);
         });
         var mysteryBtn = el('button', 'mystery-btn', '🎁 Mystery Candy');
@@ -292,8 +292,9 @@
         function showList() {
           if (window.SpookyGames) window.SpookyGames.stopAll();
           glist.innerHTML = '';
-          var all = [{ key: 'memory', name: '🧠 Memory Match' }]
-            .concat((window.SpookyGames ? window.SpookyGames.list : []).map(function (g) { return { key: g.key, name: g.name }; }));
+          // unified arcade registry (theirs includes Memory Match; fall back to local build if absent)
+          var all = (window.SpookyGames ? window.SpookyGames.list : []).map(function (g) { return { key: g.key, name: g.name }; });
+          if (!all.some(function (g) { return g.key === 'memory'; })) all.unshift({ key: 'memory', name: '🧠 Memory Match' });
           all.forEach(function (g) {
             var row = el('div', 'pitem', '');
             row.textContent = g.name + ' ';
@@ -308,14 +309,17 @@
           stage.innerHTML = '';
           var back = btn('← All games', showList);
           stage.appendChild(back);
+          var def = window.SpookyGames ? window.SpookyGames.list.filter(function (g) { return g.key === key; })[0] : null;
+          if (def) {
+            var P = opts.profile;
+            def.build(stage, P);
+            stage.appendChild(back);
+            return;
+          }
           if (key === 'memory') {
             stage.appendChild(buildMemory(opts.host));
             return;
           }
-          var def = window.SpookyGames.list.filter(function (g) { return g.key === key; })[0];
-          var P = opts.profile;
-          def.build(stage, P);
-          stage.appendChild(back);
         }
         box.appendChild(stage);
         showList();
@@ -338,7 +342,7 @@
 
   window.SpookyTabs = { init: init, hasMatch: hasMatch, setMatch: setMatch };
 
-  function projectCandy3D(key, points, name) {
+  function projectCandy3D(key, points, name, theme) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(5,2,15,.96);display:flex;align-items:center;justify-content:center;z-index:100;overflow:hidden';
     var canvas = document.createElement('canvas');
@@ -348,15 +352,123 @@
     document.body.appendChild(overlay);
     var ctx = canvas.getContext('2d');
     var W = 500, H = 500, cx = W / 2, cy = H / 2;
-    var particles = [], sparkles = [], confetti = [], rings = [], lightRays = [];
+    var particles = [], sparkles = [], confetti = [], rings = [], lightRays = [], bats = [], ghosts = [], pumpkins = [];
     var stage = 'intro';
     var stageStart = performance.now();
     var shakeMag = 0, revealScale = 0, flashAlpha = 0, textAlpha = 0, textScale = 0;
-    var candyColor = points >= 25 ? '#ff69b4' : points >= 15 ? '#ffd700' : points >= 5 ? '#59e6ff' : '#ffbe5a';
+    var themeColors = {
+      choco: '#8B4513', swirl: '#ff69b4', gummi: '#ff4500', corn: '#ff9f1c',
+      dark: '#2d1b4e', crack: '#ff0000', stretch: '#ff69b4', mint: '#00ff88',
+      truffle: '#5c3317', caramel: '#c68e17', fudge: '#3d1c02', toffee: '#d4a017',
+      gold: '#ffd700', magic: '#c44dff', rainbow: '#ff69b4', king: '#ffd700',
+      dragon: '#ff4500', tower: '#ff69b4'
+    };
+    var candyColor = (theme && themeColors[theme]) || (points >= 25 ? '#ff69b4' : points >= 15 ? '#ffd700' : points >= 5 ? '#59e6ff' : '#ffbe5a');
     var rarity = points >= 50 ? 'legendary' : points >= 25 ? 'epic' : points >= 15 ? 'rare' : points >= 5 ? 'uncommon' : 'common';
     var rarityLabel = { legendary: 'LEGENDARY', epic: 'EPIC', rare: 'RARE', uncommon: 'UNCOMMON', common: 'COMMON' };
     var rarityColor = { legendary: '#ff69b4', epic: '#c44dff', rare: '#ffd700', uncommon: '#59e6ff', common: '#aaaaaa' };
     var rarityGlow = { legendary: 30, epic: 22, rare: 16, uncommon: 10, common: 0 };
+    var themeBats = { dark: 20, dragon: 15, king: 10, magic: 8, tower: 12, crack: 6 };
+    var themeGhosts = { dark: 8, magic: 6, king: 5, tower: 7, dragon: 4 };
+    var themePumpkins = { corn: 15, king: 12, gold: 8, crack: 6 };
+    function spawnBats(n) {
+      for (var i = 0; i < n; i++) {
+        var side = Math.random() < 0.5 ? -20 : W + 20;
+        bats.push({ x: side, y: Math.random() * H, vx: (side < 0 ? 1 : -1) * (2 + Math.random() * 4), vy: (Math.random() - 0.5) * 3, size: 8 + Math.random() * 12, flap: Math.random() * Math.PI * 2, flapSpeed: 0.15 + Math.random() * 0.15 });
+      }
+    }
+    function spawnGhosts(n) {
+      for (var i = 0; i < n; i++) {
+        var side = Math.random() < 0.5 ? -30 : W + 30;
+        ghosts.push({ x: side, y: Math.random() * H * 0.7, vx: (side < 0 ? 1 : -1) * (1 + Math.random() * 2), vy: (Math.random() - 0.5) * 1.5, size: 15 + Math.random() * 15, alpha: 0.6 + Math.random() * 0.4, wobble: Math.random() * Math.PI * 2 });
+      }
+    }
+    function spawnPumpkins(n) {
+      for (var i = 0; i < n; i++) {
+        pumpkins.push({ x: Math.random() * W, y: -30 - Math.random() * 100, vy: 2 + Math.random() * 3, vx: (Math.random() - 0.5) * 2, rot: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.05, size: 12 + Math.random() * 14 });
+      }
+    }
+    function drawBats() {
+      bats.forEach(function (b) {
+        b.flap += b.flapSpeed;
+        var wingY = Math.sin(b.flap) * b.size * 0.6;
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, b.size * 0.4, b.size * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-b.size * 0.3, 0);
+        ctx.quadraticCurveTo(-b.size * 0.8, -wingY, -b.size * 1.1, -wingY * 0.3);
+        ctx.quadraticCurveTo(-b.size * 0.6, 0, -b.size * 1.1, wingY * 0.3);
+        ctx.quadraticCurveTo(-b.size * 0.8, wingY, -b.size * 0.3, 0);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(b.size * 0.3, 0);
+        ctx.quadraticCurveTo(b.size * 0.8, -wingY, b.size * 1.1, -wingY * 0.3);
+        ctx.quadraticCurveTo(b.size * 0.6, 0, b.size * 1.1, wingY * 0.3);
+        ctx.quadraticCurveTo(b.size * 0.8, wingY, b.size * 0.3, 0);
+        ctx.fill();
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.arc(-b.size * 0.12, -b.size * 0.05, 1.5, 0, Math.PI * 2);
+        ctx.arc(b.size * 0.12, -b.size * 0.05, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+    function drawGhosts() {
+      ghosts.forEach(function (g) {
+        g.wobble += 0.03;
+        var wy = Math.sin(g.wobble) * 8;
+        ctx.save();
+        ctx.translate(g.x, g.y + wy);
+        ctx.globalAlpha = g.alpha;
+        ctx.fillStyle = '#f2f2fa';
+        ctx.beginPath();
+        ctx.arc(0, -g.size * 0.2, g.size * 0.5, Math.PI, 0);
+        ctx.lineTo(g.size * 0.5, g.size * 0.3);
+        for (var i = 0; i < 3; i++) {
+          ctx.arc(g.size * 0.5 - g.size * 0.33 - i * g.size * 0.33, g.size * 0.3, g.size * 0.15, 0, Math.PI);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.ellipse(-g.size * 0.15, -g.size * 0.25, g.size * 0.08, g.size * 0.12, 0, 0, Math.PI * 2);
+        ctx.ellipse(g.size * 0.15, -g.size * 0.25, g.size * 0.08, g.size * 0.12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+    function drawPumpkins() {
+      pumpkins.forEach(function (p) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = '#ff7518';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size * 0.5, p.size * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#5a3a1a';
+        ctx.fillRect(-2, -p.size * 0.5 - 4, 4, 8);
+        ctx.fillStyle = '#ffd166';
+        ctx.beginPath();
+        ctx.moveTo(-p.size * 0.2, -p.size * 0.1);
+        ctx.lineTo(-p.size * 0.1, p.size * 0.05);
+        ctx.lineTo(-p.size * 0.3, p.size * 0.05);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(p.size * 0.2, -p.size * 0.1);
+        ctx.lineTo(p.size * 0.1, p.size * 0.05);
+        ctx.lineTo(p.size * 0.3, p.size * 0.05);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      });
+    }
     function stageT() { return (performance.now() - stageStart) / 1000; }
     function spawnParticles(n, color, speed, spread) {
       for (var i = 0; i < n; i++) {
@@ -670,6 +782,9 @@
           spawnParticles(30, rarityColor[rarity], 5);
           spawnSparkles(30);
           spawnRing(); spawnRing();
+          if (theme && themeBats[theme]) spawnBats(themeBats[theme]);
+          if (theme && themeGhosts[theme]) spawnGhosts(themeGhosts[theme]);
+          if (theme && themePumpkins[theme]) spawnPumpkins(themePumpkins[theme]);
           flashAlpha = 0.7;
           shakeMag = 0;
         }
@@ -682,6 +797,9 @@
         drawParticles();
         drawSparkles();
         drawRings();
+        drawBats();
+        drawGhosts();
+        drawPumpkins();
         drawFlash();
         flashAlpha *= 0.9;
         rings.forEach(function (r) { r.r += 4; r.life -= r.decay; });
@@ -701,6 +819,9 @@
         drawSparkles();
         drawConfetti();
         drawRings();
+        drawBats();
+        drawGhosts();
+        drawPumpkins();
         rings.forEach(function (r) { r.r += 3; r.life -= r.decay * 0.7; });
         rings = rings.filter(function (r) { return r.life > 0; });
         if (Math.random() < 0.08) spawnSparkles(2);
@@ -713,6 +834,9 @@
         drawText(now / 1000);
         drawSparkles();
         drawConfetti();
+        drawBats();
+        drawGhosts();
+        drawPumpkins();
         if (Math.random() < 0.1) spawnSparkles(3);
         if (Math.random() < 0.05) spawnConfetti(5);
         if (st > 3.0) {
@@ -725,6 +849,12 @@
       sparkles.forEach(function (s) { s.life -= s.decay; s.rot += s.vr; });
       sparkles = sparkles.filter(function (s) { return s.life > 0; });
       confetti.forEach(function (c) { c.x += c.vx; c.y += c.vy; c.rot += c.vr; if (c.y > H + 20) { c.y = -10; c.x = Math.random() * W; } });
+      bats.forEach(function (b) { b.x += b.vx; b.y += b.vy; });
+      bats = bats.filter(function (b) { return b.x > -60 && b.x < W + 60; });
+      ghosts.forEach(function (g) { g.x += g.vx; });
+      ghosts = ghosts.filter(function (g) { return g.x > -80 && g.x < W + 80; });
+      pumpkins.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.rot += p.vr; });
+      pumpkins = pumpkins.filter(function (p) { return p.y < H + 40; });
       drawVignette();
       requestAnimationFrame(animate);
     }
@@ -733,28 +863,28 @@
 
   function unpackMysteryCandy() {
     var surprises = [
-      { name: 'Chocolate Bar', emoji: '🍫', points: 3 },
-      { name: 'Lollipop Pop', emoji: '🍭', points: 3 },
-      { name: 'Gummi Bear', emoji: '🐻', points: 3 },
-      { name: 'Candy Corn', emoji: '🌽', points: 2 },
-      { name: 'Licorice Twist', emoji: '🖤', points: 2 },
-      { name: 'Jawbreaker', emoji: '🔴', points: 2 },
-      { name: 'Taffy Pull', emoji: '🍬', points: 2 },
-      { name: 'Peppermint Twist', emoji: '🍬', points: 2 },
-      { name: 'Truffle Delight', emoji: '🍫', points: 5 },
-      { name: 'Caramel Swirl', emoji: '🍬', points: 5 },
-      { name: 'Fudge Square', emoji: '🍫', points: 5 },
-      { name: 'Toffee Crunch', emoji: '🍬', points: 5 },
-      { name: 'Golden Candy', emoji: '⭐', points: 15 },
-      { name: 'Magical Candy', emoji: '✨', points: 20 },
-      { name: 'Rainbow Candy', emoji: '🌈', points: 25 },
-      { name: 'Candy Corn King', emoji: '👑', points: 50 },
-      { name: 'Chocolate Dragon', emoji: '🐉', points: 60 },
-      { name: 'Lollipop Tower', emoji: '🗼', points: 70 }
+      { name: 'Chocolate Bar', emoji: '🍫', points: 3, theme: 'choco' },
+      { name: 'Lollipop Pop', emoji: '🍭', points: 3, theme: 'swirl' },
+      { name: 'Gummi Bear', emoji: '🐻', points: 3, theme: 'gummi' },
+      { name: 'Candy Corn', emoji: '🌽', points: 2, theme: 'corn' },
+      { name: 'Licorice Twist', emoji: '🖤', points: 2, theme: 'dark' },
+      { name: 'Jawbreaker', emoji: '🔴', points: 2, theme: 'crack' },
+      { name: 'Taffy Pull', emoji: '🍬', points: 2, theme: 'stretch' },
+      { name: 'Peppermint Twist', emoji: '🍬', points: 2, theme: 'mint' },
+      { name: 'Truffle Delight', emoji: '🍫', points: 5, theme: 'truffle' },
+      { name: 'Caramel Swirl', emoji: '🍬', points: 5, theme: 'caramel' },
+      { name: 'Fudge Square', emoji: '🍫', points: 5, theme: 'fudge' },
+      { name: 'Toffee Crunch', emoji: '🍬', points: 5, theme: 'toffee' },
+      { name: 'Golden Candy', emoji: '⭐', points: 15, theme: 'gold' },
+      { name: 'Magical Candy', emoji: '✨', points: 20, theme: 'magic' },
+      { name: 'Rainbow Candy', emoji: '🌈', points: 25, theme: 'rainbow' },
+      { name: 'Candy Corn King', emoji: '👑', points: 50, theme: 'king' },
+      { name: 'Chocolate Dragon', emoji: '🐉', points: 60, theme: 'dragon' },
+      { name: 'Lollipop Tower', emoji: '🗼', points: 70, theme: 'tower' }
     ];
     var idx = Math.floor(Math.random() * surprises.length);
     var s = surprises[idx];
-    projectCandy3D('mystery_' + idx, s.points, s.emoji + ' ' + s.name);
+    projectCandy3D('mystery_' + idx, s.points, s.emoji + ' ' + s.name, s.theme);
   }
 
 })();
