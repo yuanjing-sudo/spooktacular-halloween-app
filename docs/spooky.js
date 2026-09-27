@@ -30,6 +30,13 @@
   SeededRNG.prototype.pick = function (arr) {
     return arr[this.nextInt(arr.length)];
   };
+  SeededRNG.prototype.shuffle = function (arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = this.nextInt(i + 1), t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  };
 
   /* Depth-first maze carver (mirrors MazeCarver DFS): odd grid, cells 2 apart,
    * returns Set of "x,z" keys for open cells. */
@@ -302,9 +309,48 @@
             (m[2] * x + m[6] * y + m[10] * z + m[14]) / w];
   }
 
+  /* ---- Voxel raycast (Amanatides & Woo DDA) + value noise ---- */
+  function voxelRay(origin, dir, maxDist, solid) {
+    var L = Math.hypot(dir[0], dir[1], dir[2]);
+    if (L === 0) return null;
+    var d = [dir[0] / L, dir[1] / L, dir[2] / L];
+    var x = Math.floor(origin[0]), y = Math.floor(origin[1]), z = Math.floor(origin[2]);
+    function delta(c) { return c !== 0 ? Math.abs(1 / c) : Infinity; }
+    var tdx = delta(d[0]), tdy = delta(d[1]), tdz = delta(d[2]);
+    function tmax(o, d, td, s) {
+      if (d === 0) return Infinity;
+      return s > 0 ? ((Math.floor(o) + 1 - o) * td) : ((o - Math.floor(o)) * td);
+    }
+    var sx = d[0] > 0 ? 1 : -1, sy = d[1] > 0 ? 1 : -1, sz = d[2] > 0 ? 1 : -1;
+    var tmx = tmax(origin[0], d[0], tdx, sx), tmy = tmax(origin[1], d[1], tdy, sy), tmz = tmax(origin[2], d[2], tdz, sz);
+    var t = 0, n = [0, 0, 0];
+    for (var i = 0; i < 256; i++) {
+      if (tmx < tmy && tmx < tmz) { x += sx; t = tmx; tmx += tdx; n = [-sx, 0, 0]; }
+      else if (tmy < tmz) { y += sy; t = tmy; tmy += tdy; n = [0, -sy, 0]; }
+      else { z += sz; t = tmz; tmz += tdz; n = [0, 0, -sz]; }
+      if (t > maxDist) return null;
+      if (solid(x, y, z)) return { x: x, y: y, z: z, nx: n[0], ny: n[1], nz: n[2], dist: t };
+    }
+    return null;
+  }
+  /* Seeded 2D value noise in [0,1], smooth + tileable-ish. */
+  function makeNoise2D(seed) {
+    var rng = new SeededRNG(seed);
+    var perm = rng.shuffle(Array.apply(null, { length: 256 }).map(function (_, i) { return i; }));
+    function lat(ix, iz) { return perm[((ix & 255) + (iz & 255) * 57) & 255] / 255; }
+    function sm(t) { return t * t * (3 - 2 * t); }
+    return function (x, z) {
+      var ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz;
+      var a = lat(ix, iz), b = lat(ix + 1, iz), c = lat(ix, iz + 1), d = lat(ix + 1, iz + 1);
+      var u = sm(fx), v = sm(fz);
+      return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+    };
+  }
+
   var api = { SeededRNG: SeededRNG, carveDFS: carveDFS, connected: connected, astar: astar, ease: ease, comboMult: comboMult, streakBonus: streakBonus, compact: compact, key: key,
     PICKS: PICKS, LAYERS: LAYERS, RELICS: RELICS, FISH: FISH, FISH_WEIGHT: FISH_WEIGHT, xpNext: xpNext,
-    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS, ORES: ORES };
+    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS, ORES: ORES,
+    voxelRay: voxelRay, makeNoise2D: makeNoise2D };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Spooky = api;
 })(typeof self !== 'undefined' ? self : this);

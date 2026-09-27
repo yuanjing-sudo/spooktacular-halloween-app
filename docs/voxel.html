@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>⛏️ Spooktacular Voxel Worlds</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #gamev { width: 94vw; max-width: 900px; height: 62vh; display: block; cursor: crosshair; }
+  #cross { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: #fff; font-size: 20px; pointer-events: none; text-shadow: 0 0 4px #000; }
+  #minebtn { position: absolute; bottom: 14px; right: 14px; width: 84px; height: 84px; border-radius: 50%; background: #ff7518; color: #1a0b00; font-weight: 800; border: none; display: none; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>⛏️ Spooktacular Voxel Worlds</h1>
+<p class="sub">Minecraft-style digging — forest by day, rich mine below. Click / F to swing.</p>
+<div id="hud">
+  <span>Score <b id="score">0</b></span>
+  <span>World <b id="depth">Forest</b></span>
+  <span>Gold <b id="gold">0</b></span>
+  <span>Coal <b id="coal">0</b></span>
+  <span>Level <b id="level">1</b></span>
+  <span>Pick <b id="pick">Wooden Pick</b></span>
+  <span>Pack <b id="candy">0/50</b></span>
+</div>
+<div id="wrap">
+  <canvas id="gamev" width="900" height="560"></canvas>
+  <div id="tabpanels"></div>
+  <div id="cross">+</div>
+  <button id="minebtn">MINE</button>
+  <div id="overlay" class="hidden">
+    <h2 id="overlay-title"></h2>
+    <p id="overlay-text"></p>
+    <button id="overlay-btn"></button>
+    <button id="overlay-btn2" style="display:none"></button>
+  </div>
+</div>
+<button id="worldf">🌲 Forest</button> <button id="worldm">⛏️ Deep Mine</button>
+<button id="newmaze">🎲 New world</button> <button id="shopbtn">🛒 Sell + picks</button>
+<div id="tabs"></div>
+<p id="help">WASD move · Space jump · mouse-drag look · click/F swing pick · M toggles help</p>
+<script src="spooky.js"></script>
+<script src="tabs.js"></script>
+<script src="games.js"></script>
+<script src="voxel.js"></script>
+</body>
+</html>
