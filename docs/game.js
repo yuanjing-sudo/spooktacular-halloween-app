@@ -66,7 +66,12 @@
     }
     G.maze = maze; G.rng = rng; G.depth = d;
     var n = 0;
-    G.candies = rooms.slice(n, n + cfg.candies).map(function (r) { return { x: r[0], y: r[1] }; }); n += cfg.candies;
+    G.candies = rooms.slice(n, n + cfg.candies).map(function (r) {
+      var c = { x: r[0], y: r[1] };
+      c.sweet = S.pickSweet(rng);
+      return c;
+    });
+    n += cfg.candies;
     G.crystals = rooms.slice(n, n + cfg.crystals + packBonus()).map(function (r) { return { x: r[0], y: r[1] }; }); n += cfg.crystals + packBonus();
     G.relicSpot = rooms[n] ? { x: rooms[n][0], y: rooms[n][1] } : null; n++;
     G.pond = rooms[n] ? { x: rooms[n][0], y: rooms[n][1] } : null;
@@ -137,9 +142,11 @@
       if (c.x === p.x && c.y === p.y) {
         G.candies.splice(i, 1);
         G.combo++; G.streak++; G.picked++;
-        G.score += Math.round((10 * S.comboMult(G.combo) + S.streakBonus(G.streak)) * dmgMult());
+        var sw = c.sweet || S.SWEETS[0];
+        G.score += Math.round((sw.points * S.comboMult(G.combo) + S.streakBonus(G.streak)) * dmgMult());
         m.gold += Math.round(2 * goldMult());
         gainXP(8);
+        if (sw.name !== 'Candy') flash('🍬 ' + sw.name + ' +' + sw.points, 1.4);
         if (G.score >= 1000) ach('score-1k', 'Score Legend — 1,000 points');
       }
     }
@@ -292,7 +299,7 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     var bob = Math.sin(G.time * 4) * 2;
     ctx.font = '15px serif';
-    G.candies.forEach(function (c) { ctx.fillText('🍬', c.x * TILE + TILE / 2, c.y * TILE + TILE / 2 + bob); });
+    G.candies.forEach(function (c) { ctx.fillText((c.sweet || S.SWEETS[0]).emoji, c.x * TILE + TILE / 2, c.y * TILE + TILE / 2 + bob); });
     ctx.font = '17px serif';
     G.crystals.forEach(function (c) { ctx.fillText('💎', c.x * TILE + TILE / 2, c.y * TILE + TILE / 2 - bob); });
     if (G.relicSpot) { ctx.font = '18px serif'; ctx.fillText('🗿', G.relicSpot.x * TILE + TILE / 2, G.relicSpot.y * TILE + TILE / 2); }

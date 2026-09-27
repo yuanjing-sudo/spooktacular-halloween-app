@@ -280,7 +280,21 @@
     { key: 'diamond', name: 'Diamond Ore', emoji: '💎', color: '#78dcf0', hp: 6, gold: 25, xp: 30, tier: 4, w: 4 },
     { key: 'crystal', name: 'Spike Crystal', emoji: '🔺', color: '#4bd8ff', hp: 4, gold: 18, xp: 22, tier: 1, w: 6 }
   ];
-  /* ---- Minimal mat4 core (column-major, WebGL-ready, pure) ---- */
+  /* ---- Sweet table (shared candy variety for 2D + 3D mazes) ---- */
+  var SWEETS = [
+    { tex: 'candy', emoji: '🍬', name: 'Candy', points: 10, w: 30 },
+    { tex: 'lollipop', emoji: '🍭', name: 'Lollipop', points: 15, w: 20 },
+    { tex: 'choco', emoji: '🍫', name: 'Chocolate', points: 12, w: 20 },
+    { tex: 'gummy', emoji: '🐻', name: 'Gummy', points: 8, w: 15 },
+    { tex: 'corn', emoji: '🌽', name: 'Candy Corn', points: 10, w: 15 }
+  ];
+  function pickSweet(rng) {
+    var tot = 0, i;
+    for (i = 0; i < SWEETS.length; i++) tot += SWEETS[i].w;
+    var r = rng.nextDouble() * tot;
+    for (i = 0; i < SWEETS.length; i++) { r -= SWEETS[i].w; if (r <= 0) return SWEETS[i]; }
+    return SWEETS[0];
+  }
   function mIdentity() { return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; }
   function mMul(a, b) {
     var o = new Array(16);
@@ -350,7 +364,7 @@
   var api = { SeededRNG: SeededRNG, carveDFS: carveDFS, connected: connected, astar: astar, ease: ease, comboMult: comboMult, streakBonus: streakBonus, compact: compact, key: key,
     PICKS: PICKS, LAYERS: LAYERS, RELICS: RELICS, FISH: FISH, FISH_WEIGHT: FISH_WEIGHT, xpNext: xpNext,
     mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS, ORES: ORES,
-    voxelRay: voxelRay, makeNoise2D: makeNoise2D };
+    voxelRay: voxelRay, makeNoise2D: makeNoise2D, SWEETS: SWEETS, pickSweet: pickSweet };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Spooky = api;
 })(typeof self !== 'undefined' ? self : this);

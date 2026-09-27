@@ -140,7 +140,7 @@
       g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2;
       g.beginPath(); g.ellipse(32, 34, 15, 9, 0, 0, 7); g.stroke();
       g.beginPath(); g.ellipse(32, 34, 7, 4, 0, 0, 7); g.stroke();
-    } else if (kind === 'torch') {
+  } else if (kind === 'torch') {
       g.fillStyle = '#7a4a21';
       g.fillRect(29, 38, 6, 22);
       g.fillStyle = '#ff7518';
@@ -153,61 +153,104 @@
       g.bezierCurveTo(40, 28, 38, 38, 32, 41);
       g.bezierCurveTo(26, 38, 24, 28, 32, 18);
       g.fill();
+    } else if (kind === 'lollipop') {
+      g.strokeStyle = '#8a5a2b'; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(32, 60); g.lineTo(32, 40); g.stroke();
+      g.fillStyle = '#ff5b8d';
+      g.beginPath(); g.arc(32, 24, 17, 0, 7); g.fill();
+      g.strokeStyle = '#ffffff'; g.lineWidth = 4;
+      g.beginPath(); g.arc(32, 24, 11, 0.5, 2.5); g.stroke();
+      g.beginPath(); g.arc(32, 24, 5, 3.5, 5.8); g.stroke();
+    } else if (kind === 'choco') {
+      g.fillStyle = '#5a2f14';
+      g.fillRect(20, 14, 24, 36);
+      g.fillStyle = '#7a4520';
+      g.fillRect(23, 17, 8, 8); g.fillRect(33, 17, 8, 8);
+      g.fillRect(23, 29, 8, 8); g.fillRect(33, 29, 8, 8);
+      g.fillStyle = '#a06a35';
+      g.fillRect(23, 17, 8, 3); g.fillRect(33, 17, 8, 3);
+    } else if (kind === 'gummy') {
+      g.fillStyle = '#e63946';
+      g.beginPath(); g.ellipse(32, 34, 13, 15, 0, 0, 7); g.fill();
+      g.beginPath(); g.arc(22, 18, 7, 0, 7); g.fill();
+      g.beginPath(); g.arc(42, 18, 7, 0, 7); g.fill();
+      g.fillStyle = '#ff8fa3';
+      g.beginPath(); g.arc(27, 30, 4, 0, 7); g.fill();
+      g.fillStyle = '#1a1a2e';
+      g.beginPath(); g.arc(27, 26, 2, 0, 7); g.fill();
+      g.beginPath(); g.arc(37, 26, 2, 0, 7); g.fill();
+    } else if (kind === 'corn') {
+      g.fillStyle = '#ff9f1c';
+      g.beginPath(); g.moveTo(32, 8); g.lineTo(48, 52); g.lineTo(16, 52); g.closePath(); g.fill();
+      g.fillStyle = '#ffffff';
+      g.beginPath(); g.moveTo(32, 8); g.lineTo(39, 30); g.lineTo(25, 30); g.closePath(); g.fill();
+      g.fillStyle = '#ffd166';
+      g.beginPath(); g.moveTo(28, 38); g.lineTo(36, 38); g.lineTo(44, 52); g.lineTo(20, 52); g.closePath(); g.fill();
     }
     return glTex(c, false);
   }
   var TEX = { ghost: makeArt('ghost'), candy: makeArt('candy'), gem: makeArt('gem'),
-    relic: makeArt('relic'), pond: makeArt('pond'), torch: makeArt('torch') };
+    relic: makeArt('relic'), pond: makeArt('pond'), torch: makeArt('torch'),
+    lollipop: makeArt('lollipop'), choco: makeArt('choco'), gummy: makeArt('gummy'), corn: makeArt('corn') };
 
-  var brickHeight = null;
-  /* Procedural grayscale masonry: tint comes from vertex color, so one
-   * texture serves every depth palette. Brick heights are kept for the
-   * normal map built just below. */
-  function makePattern(kind) {
-    var c = document.createElement('canvas'); c.width = c.height = 64;
+  var brickHeights = {};
+  /* Procedural masonry at 128px: crisp mortar joints; tint comes from vertex
+   * color so one pattern family serves every depth. Styles per depth:
+   * 0 mossy dirt-brick, 1 slate + crystal flecks, 2 basalt + lava cracks. */
+  function makePattern(kind, depth) {
+    var SZ = 128;
+    var c = document.createElement('canvas'); c.width = c.height = SZ;
     var g = c.getContext('2d');
-    var img = g.createImageData(64, 64);
-    var rng = new S.SeededRNG(kind === 'floor' ? 77 : kind === 'ceil' ? 913 : 1234);
-    for (var y = 0; y < 64; y++) for (var x = 0; x < 64; x++) {
+    var img = g.createImageData(SZ, SZ);
+    var rng = new S.SeededRNG((depth || 0) * 1013 + (kind === 'floor' ? 77 : kind === 'ceil' ? 913 : 1234));
+    var heights = new Array(SZ * SZ);
+    for (var y = 0; y < SZ; y++) for (var x = 0; x < SZ; x++) {
       var v;
       if (kind === 'white') {
         v = 1.0;
       } else if (kind === 'brick') {
-        var mortar = (y % 16 === 0) || (((x + ((y / 16) | 0) * 32) | 0) % 64 === 0);
-        v = mortar ? 0.45 : 0.78 + rng.nextDouble() * 0.28;
-        if (y < 3) v *= 1.15; // top highlight
+        var row = (y / 32) | 0;
+        var mortar = (y % 32 === 0) || (((x + row * 64) | 0) % 128 === 0);
+        v = mortar ? 0.4 : 0.8 + rng.nextDouble() * 0.26;
+        if (depth === 0 && rng.nextDouble() < 0.02) v *= 0.55; // moss pits
+        if (depth === 1 && rng.nextDouble() < 0.015) v = 1.3; // crystal flecks
+        if (depth === 2 && ((x * 7 + y * 13) % 61) < 3) v = 1.35; // lava cracks
+        else if (depth === 2 && !mortar) v *= 0.82; // dark basalt
       } else if (kind === 'floor') {
-        v = ((x >> 4) + (y >> 4)) % 2 ? 0.42 : 0.55;
+        v = (((x >> 5) + (y >> 5)) % 2) ? 0.5 : 0.62;
         v *= 0.9 + rng.nextDouble() * 0.2;
+        if (depth === 1 && rng.nextDouble() < 0.01) v = 1.25;
+        if (depth === 2 && ((x * 5 + y * 11) % 71) < 2) v = 1.3;
       } else {
         v = 0.30 + rng.nextDouble() * 0.12;
       }
-      if (kind === 'brick') brickHeight = brickHeight || [];
-      if (kind === 'brick') brickHeight[y * 64 + x] = v;
-      var o = (y * 64 + x) * 4, b = Math.max(0, Math.min(255, Math.round(v * 255)));
+      heights[y * SZ + x] = v;
+      var o = (y * SZ + x) * 4, b = Math.max(0, Math.min(255, Math.round(v * 255)));
       img.data[o] = b; img.data[o + 1] = b; img.data[o + 2] = b; img.data[o + 3] = 255;
     }
     g.putImageData(img, 0, 0);
+    if (kind === 'brick') brickHeights[depth || 0] = heights;
     return glTex(c, true);
   }
-  var TEXWALL = makePattern('brick'), TEXFLOOR = makePattern('floor'),
-      TEXCEIL = makePattern('ceil'), TEXWHITE = makePattern('white');
+  var TEXWALLS = [makePattern('brick', 0), makePattern('brick', 1), makePattern('brick', 2)];
+  var TEXFLOORS = [makePattern('floor', 0), makePattern('floor', 1), makePattern('floor', 2)];
+  var TEXCEIL = makePattern('ceil'), TEXWHITE = makePattern('white');
 
-  /* Tangent-space normal map from the brick heights (Sobel). Flat normal
-   * for floor/ceiling/glow. */
-  function makeNormalTex(height, strength) {
-    var c = document.createElement('canvas'); c.width = c.height = 64;
+  /* Tangent-space normal map from heights (Sobel). Flat normal for misc. */
+  function makeNormalTex(height, strength, SZ) {
+    SZ = SZ || 128;
+    var c = document.createElement('canvas'); c.width = c.height = SZ;
     var g = c.getContext('2d');
-    var img = g.createImageData(64, 64);
+    var img = g.createImageData(SZ, SZ);
     function h(x, y) {
-      x = (x + 64) % 64; y = (y + 64) % 64;
-      return height ? height[y * 64 + x] : 0.5;
+      x = (x + SZ) % SZ; y = (y + SZ) % SZ;
+      return height ? height[y * SZ + x] : 0.5;
     }
-    for (var y = 0; y < 64; y++) for (var x = 0; x < 64; x++) {
+    for (var y = 0; y < SZ; y++) for (var x = 0; x < SZ; x++) {
       var dx = (h(x + 1, y) - h(x - 1, y)) * (strength || 2);
       var dy = (h(x, y + 1) - h(x, y - 1)) * (strength || 2);
       var inv = 1 / Math.sqrt(dx * dx + dy * dy + 1);
-      var o = (y * 64 + x) * 4;
+      var o = (y * SZ + x) * 4;
       img.data[o] = Math.round((-dx * inv * 0.5 + 0.5) * 255);
       img.data[o + 1] = Math.round((-dy * inv * 0.5 + 0.5) * 255);
       img.data[o + 2] = Math.round(inv * 255);
@@ -216,7 +259,8 @@
     g.putImageData(img, 0, 0);
     return glTex(c, true);
   }
-  var NRMWALL = makeNormalTex(brickHeight, 2.2), NRMFLAT = makeNormalTex(null, 0);
+  var NRMWALLS = [makeNormalTex(brickHeights[0], 2.2), makeNormalTex(brickHeights[1], 2.2), makeNormalTex(brickHeights[2], 2.2)];
+  var NRMFLAT = makeNormalTex(null, 0);
 
   function buf(data, size, prog, name) {
     var b = gl.createBuffer();
@@ -264,7 +308,12 @@
     for (var i = rooms.length - 1; i > 0; i--) { var j = rng.nextInt(i + 1), t = rooms[i]; rooms[i] = rooms[j]; rooms[j] = t; }
     G.maze = maze; G.rng = rng; G.depth = d;
     var n = 0, map = function (r) { return { x: r[0] + 0.5, z: r[1] + 0.5 }; };
-    G.candies = rooms.slice(n, n + cfg.candies).map(map); n += cfg.candies;
+    G.candies = rooms.slice(n, n + cfg.candies).map(function (r) {
+      var c = map(r);
+      c.sweet = S.pickSweet(rng);
+      return c;
+    });
+    n += cfg.candies;
     G.crystals = rooms.slice(n, n + cfg.crystals + packBonus()).map(map); n += cfg.crystals + packBonus();
     G.relicSpot = rooms[n] ? map(rooms[n]) : null; n++;
     G.pond = rooms[n] ? map(rooms[n]) : null; G.pondUsed = false;
@@ -329,13 +378,36 @@
       quad(glow, ox - s, WALL_H, oz - s, ox + s, WALL_H, oz - s, ox + s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz, cc, 0.9, 1, 1, 0, 0, 1);
       quad(glow, ox - s, WALL_H, oz + s, ox - s, WALL_H, oz - s, ox - s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz + s, cc, 0.9, 1, 1, 0, 0, -1);
     }
+    // magma depth: lava veins drooling down random walls + floor pools
+    if (G.depth === 2) {
+      for (var li = 0; li < 16; li++) {
+        var lx = 1 + rng.nextInt(G.maze.w - 2), lz = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(lx, lz)) continue;
+        var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        var dd = dirs[rng.nextInt(4)];
+        var wx = lx + dd[0], wz = lz + dd[1];
+        if (walkable(wx, wz)) continue;
+        var wcol = [1.2, 0.35, 0.08];
+        var off = 0.02, vh = 0.4 + rng.nextDouble() * 1.4;
+        if (dd[0] === 1) quad(glow, wx + off, 0.2, wz + 0.15, wx + off, 0.2, wz + 0.85, wx + off, 0.2 + vh, wz + 0.85, wx + off, 0.2 + vh, wz + 0.15, wcol, 0.95, 1, 1, 1, 0, 0);
+        else if (dd[0] === -1) quad(glow, wx + 1 - off, 0.2, wz + 0.85, wx + 1 - off, 0.2, wz + 0.15, wx + 1 - off, 0.2 + vh, wz + 0.15, wx + 1 - off, 0.2 + vh, wz + 0.85, wcol, 0.95, 1, 1, -1, 0, 0);
+        else if (dd[1] === 1) quad(glow, wx + 0.15, 0.2, wz + off, wx + 0.85, 0.2, wz + off, wx + 0.85, 0.2 + vh, wz + off, wx + 0.15, 0.2 + vh, wz + off, wcol, 0.95, 1, 1, 0, 0, 1);
+        else quad(glow, wx + 0.85, 0.2, wz + 1 - off, wx + 0.15, 0.2, wz + 1 - off, wx + 0.15, 0.2 + vh, wz + 1 - off, wx + 0.85, 0.2 + vh, wz + 1 - off, wcol, 0.95, 1, 1, 0, 0, -1);
+      }
+      for (var pi = 0; pi < 8; pi++) {
+        var qx = 1 + rng.nextInt(G.maze.w - 2), qz = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(qx, qz)) continue;
+        var ps = 0.3 + rng.nextDouble() * 0.25, px0 = qx + 0.2 + rng.nextDouble() * 0.4, pz0 = qz + 0.2 + rng.nextDouble() * 0.4;
+        quad(glow, px0 - ps, 0.03, pz0 - ps, px0 + ps, 0.03, pz0 - ps, px0 + ps, 0.03, pz0 + ps, px0 - ps, 0.03, pz0 + ps, [1.1, 0.4, 0.1], 0.9, 1, 1, 0, 1, 0);
+      }
+    }
     function freeze(G8, tex, nrm) {
       return { n: G8.P.length / 3, tex: tex, nrm: nrm,
         pos: buf(G8.P, 3, worldProg, 'aPos'), col: buf(G8.C, 3, worldProg, 'aCol'),
         uv: buf(G8.U, 2, worldProg, 'aUV'), nrmA: buf(G8.N, 3, worldProg, 'aNrm'),
         em: buf(G8.E, 1, worldProg, 'aEmis') };
     }
-    G.world = [freeze(wall, TEXWALL, NRMWALL), freeze(floor, TEXFLOOR, NRMFLAT),
+    G.world = [freeze(wall, TEXWALLS[G.depth], NRMWALLS[G.depth]), freeze(floor, TEXFLOORS[G.depth], NRMFLAT),
       freeze(ceil, TEXCEIL, NRMFLAT), freeze(glow, TEXWHITE, NRMFLAT)];
   }
 
@@ -455,8 +527,10 @@
       var c = G.candies[i];
       if (near(G.px, G.pz, c.x, c.z, 0.7)) {
         G.candies.splice(i, 1); G.combo++; G.streak++; G.picked++;
-        G.score += Math.round((10 * S.comboMult(G.combo) + S.streakBonus(G.streak)) * dmgMult());
+        var sw = c.sweet || S.SWEETS[0];
+        G.score += Math.round((sw.points * S.comboMult(G.combo) + S.streakBonus(G.streak)) * dmgMult());
         m.gold += Math.round(2 * goldMult()); gainXP(8);
+        if (sw.name !== 'Candy') flash('🍬 ' + sw.name + ' +' + sw.points + ' (combo x' + S.comboMult(G.combo).toFixed(2) + ')', 1.4);
         if (G.score >= 1000) ach('score-1k', 'Score Legend — 1,000 points');
       }
     }
@@ -644,7 +718,7 @@
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     var list = [];
-    G.candies.forEach(function (c) { list.push({ tex: 'candy', x: c.x, y: 0.8, z: c.z, size: 0.55, bob: true }); });
+    G.candies.forEach(function (c) { list.push({ tex: (c.sweet || S.SWEETS[0]).tex, x: c.x, y: 0.8, z: c.z, size: 0.55, bob: true }); });
     G.crystals.forEach(function (c) { list.push({ tex: 'gem', x: c.x, y: 0.9, z: c.z, size: 0.7, bob: true }); });
     if (G.relicSpot) list.push({ tex: 'relic', x: G.relicSpot.x, y: 0.8, z: G.relicSpot.z, size: 0.9, bob: false });
     if (G.pond) list.push({ tex: 'pond', x: G.pond.x, y: 0.7, z: G.pond.z, size: 0.9, bob: false });
