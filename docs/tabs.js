@@ -337,82 +337,231 @@
   window.SpookyTabs = { init: init, hasMatch: hasMatch, setMatch: setMatch };
 
   function projectCandy3D(key, points, name) {
-    var canvas = document.createElement('canvas');
-    canvas.width = 300; canvas.height = 300;
-    var ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#1a1038';
-    ctx.fillRect(0, 0, 300, 300);
-    var size = 30;
-    var x = 150, y = 150;
-    var isDark = name && (name.includes('🍫') || name.includes('🍫'));
-    ctx.fillStyle = isDark ? '#59e6ff' : '#ffbe5a';
-    ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = 'bold 24px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#1a1038';
-    ctx.fillText(name || key, x, y + 12);
-    var panel = document.querySelector('#tabpanels .panel');
     var overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.cssText = 'inset:0;background:rgba(11,6,32,.9);display:flex;align-items:center;justify-content:center;z-index:100';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(11,6,32,.92);display:flex;align-items:center;justify-content:center;z-index:100;overflow:hidden';
+    var canvas = document.createElement('canvas');
+    canvas.width = 400; canvas.height = 400;
+    canvas.style.cssText = 'max-width:90vw;max-height:90vh';
     overlay.appendChild(canvas);
     document.body.appendChild(overlay);
-    var start = performance.now();
-    function animate() {
-      var now = performance.now();
-      var t = (now - start) / 500;
-      if (t > 1) { document.body.removeChild(overlay); return; }
-      var progress = Math.sin(t * Math.PI) * 0.3 + t;
-      var angle = t * 180;
-      var scale = 1 + progress * 0.5;
-      ctx.clearRect(0, 0, 300, 300);
-      ctx.fillStyle = '#1a1038';
-      ctx.fillRect(0, 0, 300, 300);
+    var ctx = canvas.getContext('2d');
+    var W = 400, H = 400, cx = W / 2, cy = H / 2;
+    var particles = [];
+    var sparkles = [];
+    var stage = 'shake';
+    var stageT = 0;
+    var shakeMag = 0;
+    var revealScale = 0;
+    var flashAlpha = 0;
+    var candyColor = points >= 25 ? '#ff69b4' : points >= 15 ? '#ffd700' : points >= 5 ? '#59e6ff' : '#ffbe5a';
+    var rarity = points >= 50 ? 'legendary' : points >= 25 ? 'epic' : points >= 15 ? 'rare' : points >= 5 ? 'uncommon' : 'common';
+    var rarityLabel = { legendary: 'LEGENDARY', epic: 'EPIC', rare: 'RARE', uncommon: 'UNCOMMON', common: 'COMMON' };
+    var rarityColor = { legendary: '#ff69b4', epic: '#c44dff', rare: '#ffd700', uncommon: '#59e6ff', common: '#cccccc' };
+    function spawnParticles(n, color, speed) {
+      for (var i = 0; i < n; i++) {
+        var a = Math.random() * Math.PI * 2;
+        var v = (0.5 + Math.random()) * (speed || 3);
+        particles.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 2, life: 1, decay: 0.015 + Math.random() * 0.02, color: color, size: 2 + Math.random() * 4 });
+      }
+    }
+    function spawnSparkles(n) {
+      for (var i = 0; i < n; i++) {
+        var a = Math.random() * Math.PI * 2;
+        var r = 30 + Math.random() * 80;
+        sparkles.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, life: 1, decay: 0.02 + Math.random() * 0.03, size: 1 + Math.random() * 3, rot: Math.random() * Math.PI });
+      }
+    }
+    function drawWrappedCandy(t) {
       ctx.save();
-      ctx.translate(150, 150);
-      ctx.rotate(angle * Math.PI / 180);
-      ctx.scale(scale, scale);
-      ctx.fillStyle = points >= 5 ? '#59e6ff' : '#ffbe5a';
+      ctx.translate(cx, cy);
+      var shake = stage === 'shake' ? Math.sin(t * 30) * shakeMag : 0;
+      ctx.translate(shake, 0);
+      ctx.rotate(stage === 'shake' ? Math.sin(t * 20) * 0.1 : 0);
+      var s = 60 + Math.sin(t * 4) * 3;
+      ctx.fillStyle = '#8b5cf6';
       ctx.beginPath();
-      ctx.arc(0, 0, size * scale, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, s, s * 0.7, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.font = Math.round(24 * scale) + 'px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#1a1038';
-      ctx.fillText(name || key, 0, 12 * scale);
+      ctx.fillStyle = '#a78bfa';
+      ctx.beginPath();
+      ctx.ellipse(0, -s * 0.15, s * 0.8, s * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#c4b5fd';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.3, -s * 0.5);
+      ctx.quadraticCurveTo(0, -s * 0.8, s * 0.3, -s * 0.5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.3, s * 0.5);
+      ctx.quadraticCurveTo(0, s * 0.8, s * 0.3, s * 0.5);
+      ctx.stroke();
+      ctx.fillStyle = '#7c3aed';
+      ctx.beginPath();
+      ctx.moveTo(-s - 15, 0);
+      ctx.lineTo(-s + 10, -18);
+      ctx.lineTo(-s + 10, 18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(s + 15, 0);
+      ctx.lineTo(s - 10, -18);
+      ctx.lineTo(s - 10, 18);
+      ctx.closePath();
+      ctx.fill();
+      if (stage === 'shake') {
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.3 + Math.sin(t * 15) * 0.3) + ')';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(0, 0, s + 12 + Math.sin(t * 8) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       ctx.restore();
+    }
+    function drawReveal(t) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      var pulse = 1 + Math.sin(t * 6) * 0.05;
+      ctx.scale(revealScale * pulse, revealScale * pulse);
+      var glow = ctx.createRadialGradient(0, 0, 10, 0, 0, 80);
+      glow.addColorStop(0, candyColor);
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, 80, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = candyColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, 35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      ctx.arc(-10, -10, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = 'bold 18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = candyColor;
+      ctx.shadowBlur = 10;
+      ctx.fillText(name || key, 0, 60);
+      ctx.shadowBlur = 0;
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillStyle = rarityColor[rarity];
+      ctx.fillText(rarityLabel[rarity] + ' · +' + points + ' pts', 0, 82);
+      ctx.restore();
+    }
+    function drawParticles() {
+      particles.forEach(function (p) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+    function drawSparkles() {
+      sparkles.forEach(function (s) {
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.rot + (1 - s.life) * 3);
+        ctx.globalAlpha = s.life;
+        ctx.fillStyle = '#fff';
+        var sz = s.size * s.life;
+        ctx.fillRect(-sz / 2, -0.5, sz, 1);
+        ctx.fillRect(-0.5, -sz / 2, 1, sz);
+        ctx.restore();
+      });
+      ctx.globalAlpha = 1;
+    }
+    function drawFlash() {
+      if (flashAlpha > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,' + flashAlpha + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+    var startTime = performance.now();
+    function animate(now) {
+      var t = (now - startTime) / 1000;
+      stageT = t;
+      ctx.clearRect(0, 0, W, H);
+      var bgGrad = ctx.createRadialGradient(cx, cy, 20, cx, cy, 250);
+      bgGrad.addColorStop(0, '#1a1038');
+      bgGrad.addColorStop(1, '#0b0620');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, W, H);
+      if (stage === 'shake') {
+        shakeMag = Math.min(8, t * 4);
+        drawWrappedCandy(t);
+        if (t > 1.2) {
+          stage = 'burst';
+          stageT = 0;
+          startTime = now;
+          spawnParticles(60, candyColor, 5);
+          spawnParticles(30, '#fff', 3);
+          spawnSparkles(20);
+          flashAlpha = 0.6;
+          shakeMag = 0;
+        }
+      } else if (stage === 'burst') {
+        var bt = stageT;
+        revealScale = Math.min(1, bt * 2.5);
+        drawReveal(t);
+        drawParticles();
+        drawSparkles();
+        drawFlash();
+        flashAlpha *= 0.92;
+        if (bt > 0.5 && bt < 0.6) spawnSparkles(3);
+        if (bt > 2.5) {
+          stage = 'done';
+          stageT = 0;
+          startTime = now;
+        }
+      } else if (stage === 'done') {
+        revealScale = 1;
+        drawReveal(t);
+        drawSparkles();
+        if (Math.random() < 0.1) spawnSparkles(1);
+        if (stageT > 2) {
+          document.body.removeChild(overlay);
+          return;
+        }
+      }
+      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= p.decay; });
+      particles = particles.filter(function (p) { return p.life > 0; });
+      sparkles.forEach(function (s) { s.life -= s.decay; });
+      sparkles = sparkles.filter(function (s) { return s.life > 0; });
       requestAnimationFrame(animate);
     }
-    animate();
-    setTimeout(function () { alert('Got ' + (name || key) + '! +' + points + ' points'); }, 500);
+    requestAnimationFrame(animate);
   }
 
   function unpackMysteryCandy() {
     var surprises = [
-      'Chocolate Bar 🍫',
-      'Lollipop Pop 🍭',
-      'Gummi Bear 🐻',
-      'Candy Corn 🌽',
-      'Licorice Twist 🖤',
-      'Jawbreaker 🔴',
-      'Taffy Pull 🍬',
-      'Peppermint Twist 🍬',
-      'Truffle Delight 🍫',
-      'Caramel Swirl 🍬',
-      'Fudge Square 🍫',
-      'Toffee Crunch 🍬',
-      'Golden Candy ⭐',
-      'Magical Candy ✨',
-      'Rainbow Candy 🌈',
-      'Candy Corn King 👑',
-      'Chocolate Dragon 🐉',
-      'Lollipop Tower 🗼'
+      { name: 'Chocolate Bar', emoji: '🍫', points: 3 },
+      { name: 'Lollipop Pop', emoji: '🍭', points: 3 },
+      { name: 'Gummi Bear', emoji: '🐻', points: 3 },
+      { name: 'Candy Corn', emoji: '🌽', points: 2 },
+      { name: 'Licorice Twist', emoji: '🖤', points: 2 },
+      { name: 'Jawbreaker', emoji: '🔴', points: 2 },
+      { name: 'Taffy Pull', emoji: '🍬', points: 2 },
+      { name: 'Peppermint Twist', emoji: '🍬', points: 2 },
+      { name: 'Truffle Delight', emoji: '🍫', points: 5 },
+      { name: 'Caramel Swirl', emoji: '🍬', points: 5 },
+      { name: 'Fudge Square', emoji: '🍫', points: 5 },
+      { name: 'Toffee Crunch', emoji: '🍬', points: 5 },
+      { name: 'Golden Candy', emoji: '⭐', points: 15 },
+      { name: 'Magical Candy', emoji: '✨', points: 20 },
+      { name: 'Rainbow Candy', emoji: '🌈', points: 25 },
+      { name: 'Candy Corn King', emoji: '👑', points: 50 },
+      { name: 'Chocolate Dragon', emoji: '🐉', points: 60 },
+      { name: 'Lollipop Tower', emoji: '🗼', points: 70 }
     ];
-    var surprise = surprises[(Math.random() * surprises.length) | 0];
-    var points = [3, 3, 3, 2, 2, 2, 2, 2, 5, 5, 5, 5, 15, 20, 25, 50, 60, 70][Math.floor(Math.random() * 18)];
-    alert('🎁 Mystery Candy: ' + surprise + '!\n+ ' + points + ' points');
+    var idx = Math.floor(Math.random() * surprises.length);
+    var s = surprises[idx];
+    projectCandy3D('mystery_' + idx, s.points, s.emoji + ' ' + s.name);
   }
 
 })();
