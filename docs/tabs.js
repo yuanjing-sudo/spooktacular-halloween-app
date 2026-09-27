@@ -342,6 +342,82 @@
 
   window.SpookyTabs = { init: init, hasMatch: hasMatch, setMatch: setMatch };
 
+  var audioCtx = null, musicNodes = [], musicPlaying = false, musicMuted = false;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function startMusic() {
+    var ac = ensureAudio();
+    if (!ac || musicPlaying) return;
+    musicPlaying = true;
+    var masterGain = ac.createGain();
+    masterGain.gain.value = 0.15;
+    masterGain.connect(ac.destination);
+    var melodyNotes = [523, 659, 784, 659, 587, 698, 880, 698, 523, 659, 784, 1047, 880, 784, 659, 587];
+    var bassNotes = [131, 131, 165, 165, 175, 175, 196, 196, 131, 131, 165, 165, 175, 175, 196, 196];
+    var noteLen = 0.28;
+    var totalNotes = melodyNotes.length;
+    var loopDur = totalNotes * noteLen;
+    function scheduleLoop() {
+      if (!musicPlaying) return;
+      var now = ac.currentTime;
+      for (var i = 0; i < totalNotes; i++) {
+        var t = now + i * noteLen;
+        var osc = ac.createOscillator();
+        var gain = ac.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = melodyNotes[i];
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.6, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + noteLen * 0.9);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + noteLen);
+        var bass = ac.createOscillator();
+        var bGain = ac.createGain();
+        bass.type = 'sine';
+        bass.frequency.value = bassNotes[i];
+        bGain.gain.setValueAtTime(0, t);
+        bGain.gain.linearRampToValueAtTime(0.4, t + 0.02);
+        bGain.gain.exponentialRampToValueAtTime(0.01, t + noteLen * 0.9);
+        bass.connect(bGain); bGain.connect(masterGain);
+        bass.start(t); bass.stop(t + noteLen);
+        if (i % 4 === 0) {
+          var sparkle = ac.createOscillator();
+          var sGain = ac.createGain();
+          sparkle.type = 'sine';
+          sparkle.frequency.value = melodyNotes[i] * 2;
+          sGain.gain.setValueAtTime(0, t);
+          sGain.gain.linearRampToValueAtTime(0.15, t + 0.01);
+          sGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+          sparkle.connect(sGain); sGain.connect(masterGain);
+          sparkle.start(t); sparkle.stop(t + 0.15);
+        }
+      }
+      musicNodes.push(setTimeout(scheduleLoop, loopDur * 1000));
+    }
+    scheduleLoop();
+    musicNodes.push(masterGain);
+  }
+  function stopMusic() {
+    musicPlaying = false;
+    musicNodes.forEach(function (n) {
+      if (n instanceof GainNode) { try { n.disconnect(); } catch (e) {} }
+      else { try { clearTimeout(n); } catch (e) {} }
+    });
+    musicNodes = [];
+  }
+  function toggleMute() {
+    musicMuted = !musicMuted;
+    if (audioCtx) {
+      audioCtx.suspend();
+      if (!musicMuted) audioCtx.resume();
+    }
+    return musicMuted;
+  }
   function projectCandy3D(key, points, name, theme) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(5,2,15,.96);display:flex;align-items:center;justify-content:center;z-index:100;overflow:hidden';
@@ -349,7 +425,17 @@
     canvas.width = 500; canvas.height = 500;
     canvas.style.cssText = 'max-width:92vw;max-height:92vh';
     overlay.appendChild(canvas);
+    var muteBtn = document.createElement('button');
+    muteBtn.textContent = '🔊';
+    muteBtn.style.cssText = 'position:absolute;top:12px;right:12px;z-index:101;background:rgba(11,6,32,.8);border:1px solid #6d28a8;border-radius:6px;color:#fff;font-size:1.2rem;padding:6px 10px;cursor:pointer';
+    muteBtn.onclick = function (e) {
+      e.stopPropagation();
+      var muted = toggleMute();
+      muteBtn.textContent = muted ? '🔇' : '🔊';
+    };
+    overlay.appendChild(muteBtn);
     document.body.appendChild(overlay);
+    startMusic();
     var ctx = canvas.getContext('2d');
     var W = 500, H = 500, cx = W / 2, cy = H / 2;
     var particles = [], sparkles = [], confetti = [], rings = [], lightRays = [], bats = [], ghosts = [], pumpkins = [];
@@ -883,6 +969,7 @@
         if (Math.random() < 0.1) spawnSparkles(3);
         if (Math.random() < 0.05) spawnConfetti(5);
         if (st > 3.0) {
+          stopMusic();
           document.body.removeChild(overlay);
           return;
         }
