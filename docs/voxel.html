@@ -16,6 +16,7 @@
     opacity: 0;
     transition: opacity 0.8s ease, transform 0.8s ease;
     transform: perspective(800px) rotateX(60deg) rotateZ(-15deg) scale(0.8);
+    z-index: 20;
   }
   .world-plane.visible {
     opacity: 1;
@@ -224,11 +225,13 @@
 
     var worldNames = { 'forest': 'Forest', 'deep mine': 'Deep Mine', 'frost': 'Frost', 'crystal': 'Crystal' };
     var planeWorlds = ['deep mine', 'frost', 'crystal'];
+    var worldAliases = { 'mine': 'deep mine', 'deep mine': 'deep mine' };
 
     function checkWorld() {
       var depthEl = document.getElementById('depth');
       if (!depthEl) return;
       var txt = depthEl.textContent.toLowerCase().trim();
+      txt = worldAliases[txt] || txt;
       if (txt !== currentWorld) {
         currentWorld = txt;
         showWorldAnimation(worldNames[txt] || txt);
