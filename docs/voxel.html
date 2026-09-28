@@ -201,6 +201,18 @@
       if (o) o.classList.remove('hidden');
     } catch (_) {}
   });
+  setTimeout(function () {
+    try {
+      if (window.__voxelErrors.length) return;
+      if (window.__voxel) return;
+      var t2 = document.getElementById('overlay-title');
+      var x2 = document.getElementById('overlay-text');
+      var o2 = document.getElementById('overlay');
+      if (t2) t2.textContent = 'Voxel world never booted';
+      if (x2) x2.textContent = 'Scripts loaded with no errors, but the world did not finish starting within 4s. Screenshot this and send it back.';
+      if (o2) o2.classList.remove('hidden');
+    } catch (_) {}
+  }, 4000);
   </script>
   <script src="spooky.js?v=9"></script>
   <script src="tabs.js?v=9"></script>
