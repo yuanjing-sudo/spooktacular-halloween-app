@@ -110,7 +110,7 @@
     ' float fl = 1.0 + 0.16*sin(uTime*11.0 + vWp.x*5.0 + vWp.z*7.0)*sin(uTime*7.3 + vWp.y*3.1);' +
     ' float lamp = vL * fl;' +
     ' vec3 lampCol = albedo * lamp * vec3(1.0,0.72,0.42) * 1.15;' +
-    ' vec3 col = albedo * (1.0-metal) * (vS + lampCol + vec3(0.03,0.035,0.05));' +
+    ' vec3 col = albedo * (1.0-metal) * (vS + lampCol + vec3(0.22,0.23,0.27));' +
     ' if (NoL > 0.001) {' +
     '  vec3 H = normalize(V+L);' +
     '  float NoH = max(dot(N,H),0.0); float VoH = max(dot(V,H),0.0);' +
@@ -637,7 +637,7 @@
     return Math.min(1.2, skyLight(x, y, z));
   }
   function cellLamp(x, y, z) {
-    var amb = G.world === 1 ? 0.16 : G.world === 3 ? 0.30 : 0.14;
+    var amb = G.world === 1 ? 0.26 : G.world === 3 ? 0.38 : 0.24;
     return amb + Math.min(1.3, torchGlow(x + 0.5, y + 0.5, z + 0.5));
   }
   function cellLight(x, y, z) { return cellSun(x, y, z) + cellLamp(x, y, z); }
@@ -1049,9 +1049,17 @@
              e[2] + F[2] * 0.75 + Rt[2] * 0.34 + U[2] * (-0.3 + 0.18 * lift)];
     var B = [-F[0], -F[1], -F[2]];
     var skinCol = SKINS[meta().skinIdx || 0] ? SKINS[meta().skinIdx || 0].col : WOODC;
-    emitCylinder(P, C, o[0], o[1] - 0.08, o[2] - 0.2, 0.05, 0.42, skinCol, 1.25, 8);
-    emitCylinder(P, C, o[0], o[1] - 0.26, o[2] - 0.26, 0.26, 0.06, STEEL, 1.25, 8);
-    emitSphere(P, C, o[0], o[1] - 0.26, o[2] - 0.26, 0.28, [0.7, 0.75, 0.85], 1.3, 8, 6);
+    var pi = (meta().pickIdx || 0);
+    var headCol = [0.45, 0.32, 0.2], headBright = 0.85;
+    if (pi === 1) { headCol = [0.5, 0.5, 0.52]; headBright = 0.9; }
+    else if (pi === 2) { headCol = STEEL; headBright = 1.0; }
+    else if (pi === 3) { headCol = [0.95, 0.75, 0.3]; headBright = 1.05; }
+    else if (pi === 4) { headCol = [0.7, 0.95, 1.0]; headBright = 1.3; }
+    else if (pi === 5) { headCol = [0.75, 0.5, 1.0]; headBright = 1.2; }
+    else if (pi >= 6) { headCol = [0.3, 0.2, 0.5]; headBright = 1.1; }
+    emitCylinder(P, C, o[0], o[1] - 0.08, o[2] - 0.2, 0.05, 0.42, skinCol, 1.0, 8);
+    emitCylinder(P, C, o[0], o[1] - 0.26, o[2] - 0.26, 0.26, 0.06, headCol, headBright, 8);
+    emitSphere(P, C, o[0], o[1] - 0.26, o[2] - 0.26, 0.28, headCol, headBright, 8, 6);
   }
   function spawnBurst(x, y, z, hex) {
     var base = hexRGB(hex);
@@ -3236,11 +3244,11 @@
   function sunColor() {
     var e = Math.max(0, dayFactor());
     var warm = 1 - Math.min(1, e * 2.2); // orange near horizon
-    return [0.25 + 0.9 * e, (0.25 + 0.73 * e) * (1 - warm * 0.25), (0.3 + 0.6 * e) * (1 - warm * 0.55)];
+    return [0.45 + 0.75 * e, (0.45 + 0.6 * e) * (1 - warm * 0.25), (0.48 + 0.5 * e) * (1 - warm * 0.55)];
   }
   function skyColor() {
     var e = Math.max(0, dayFactor());
-    var day = [0.53, 0.71, 0.88], night = [0.015, 0.02, 0.06], dusk = [0.45, 0.22, 0.35];
+    var day = [0.53, 0.71, 0.88], night = [0.07, 0.08, 0.14], dusk = [0.45, 0.22, 0.35];
     var warm = 1 - Math.min(1, e * 2.5);
     var base = [day[0] * e + night[0] * (1 - e), day[1] * e + night[1] * (1 - e), day[2] * e + night[2] * (1 - e)];
     var sky = [base[0] + (dusk[0] - base[0]) * warm * 0.7, base[1] + (dusk[1] - base[1]) * warm * 0.7, base[2] + (dusk[2] - base[2]) * warm * 0.7];
