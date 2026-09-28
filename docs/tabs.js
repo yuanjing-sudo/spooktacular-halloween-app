@@ -11,7 +11,7 @@
     { icon: '⛏️', name: 'Maze' },
     { icon: '🍬', name: 'Candy' },
     { icon: '🛒', name: 'Mine' },
-    { icon: '🌍', name: 'World' },
+    { icon: '👻', name: 'Ghosts' },
     { icon: '🗺️', name: 'Explore' },
     { icon: '🎮', name: 'Games' },
     { icon: '🏆', name: 'Achieve' }
@@ -265,11 +265,12 @@
         row.appendChild(btn('New Maze', function () { select(0); opts.actions.newMaze(); }));
         box.appendChild(row);
       } else if (i === 3) {
-        box.appendChild(head('🌍 Avatar World', snap));
-        box.appendChild(el('div', 'psub', 'Companions (first 8 of the 25-ghost cast):'));
-        box.appendChild(list(S.GHOSTS.slice(0, 8).map(function (g) { return g.name + ' [' + g.rarity + ']'; })));
-        box.appendChild(el('div', 'psub', 'Full cast:'));
-        box.appendChild(list(S.GHOSTS.slice(8).map(function (g) { return g.name + ' [' + g.rarity + ']'; })));
+        if (window.SpookyGhostShooter) {
+          window.SpookyGhostShooter.build(box);
+        } else {
+          box.appendChild(head('👻 Spooky Ghost Shooter', snap));
+          box.appendChild(el('div', 'psub', 'Loading ghost shooter...'));
+        }
       } else if (i === 4) {
         box.appendChild(head('🗺️ Explore', snap));
         box.appendChild(el('div', 'psub', 'Regions:'));
