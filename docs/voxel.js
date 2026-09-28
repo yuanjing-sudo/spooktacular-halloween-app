@@ -236,7 +236,7 @@
   function carveWorm(rng, x0, y0, z0, steps, r) {
     var x = x0, y = y0, z = z0, dx = 1, dz = 0, dy = 0;
     for (var s = 0; s < steps; s++) {
-      for (var ix = -r; ix <= r; ix++) for (var iy = 0; iy <= 1; iy++) for (var iz = -r; iz <= r; iz++) {
+      for (var ix = -r; ix <= r; ix++) for (var iy = 0; iy <= 2; iy++) for (var iz = -r; iz <= r; iz++) {
         var cx = Math.round(x) + ix, cy = Math.round(y) + iy, cz = Math.round(z) + iz;
         if (cx > 0 && cz > 0 && cy > 0 && cx < G.W - 1 && cz < G.D - 1 && cy < G.H - 1)
           delete G.blocks[K(cx, cy, cz)];
@@ -539,8 +539,8 @@
       G.torches.push({ x: cx - 1.5, y: 2.5, z: cz - 1.5 });
       G.torches.push({ x: cx + 2.5, y: 2.5, z: cz + 2.5 });
       // worm tunnel network out of the starter hall (intersecting passages)
-      for (var w2 = 0; w2 < 4; w2++) {
-        carveWorm(rng, cx + (rng.nextDouble() - 0.5) * 4, 2, cz + (rng.nextDouble() - 0.5) * 4, 45 + rng.nextInt(40), 1);
+      for (var w2 = 0; w2 < 6; w2++) {
+        carveWorm(rng, cx + (rng.nextDouble() - 0.5) * 6, 2, cz + (rng.nextDouble() - 0.5) * 6, 80 + rng.nextInt(60), 2);
       }
       G.px = cx + 1; G.pz = cz + 1; G.py = 2.05;
     // Generate portal blocks in mine world
@@ -593,8 +593,8 @@
         if (chx >= 0 && chx < 2 && chz >= 0 && chz < 2 && chy <= 9) continue;
         delete G.blocks[K(ccx + chx, chy, ccz + chz)];
       }
-      for (var cw = 0; cw < 5; cw++) {
-        carveWorm(rng, ccx + (rng.nextDouble() - 0.5) * 4, 3, ccz + (rng.nextDouble() - 0.5) * 4, 40 + rng.nextInt(40), 1);
+      for (var cw = 0; cw < 8; cw++) {
+        carveWorm(rng, ccx + (rng.nextDouble() - 0.5) * 6, 3, ccz + (rng.nextDouble() - 0.5) * 6, 70 + rng.nextInt(50), 2);
       }
       G.px = ccx + 1; G.pz = ccz + 1; G.py = 2.05;
     }
@@ -889,20 +889,81 @@
         }
         if (mossy) boxD(decorP, decorC, x + 0.5, fy + hgt - 0.4, z + 0.5, 0.3, 0.12, 0.3, 0.2, 0.42, 0.18);
       }
-      // organic crystal clusters (crystal world)
+      if (G.world === 1) {
+        for (i = 0; i < 15; i++) {
+          x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
+          var gy7 = -1;
+          for (y = 8; y >= 1; y--) { if (solidAt(x, y, z)) { gy7 = y; break; } }
+          if (gy7 < 2) continue;
+          if (G.blocks[K(x, gy7, z)] === 'lava') continue;
+          var sh2 = 0.3 + rng.nextDouble() * 0.6;
+          var sr2 = 0.1 + rng.nextDouble() * 0.12;
+          var sc2 = [0.35, 0.25, 0.5];
+          boxD(decorP, decorC, x + 0.5, gy7 + sh2 / 2, z + 0.5, sr2, sh2 / 2, sr2, sc2[0], sc2[1], sc2[2]);
+        }
+      }
       if (G.world === 3) {
-        for (i = 0; i < 30; i++) {
+        for (i = 0; i < 40; i++) {
           x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
           var gy3 = -1;
           for (y = 1; y <= 8; y++) { if (solidAt(x, y, z)) { gy3 = y; break; } }
           if (gy3 < 1) continue;
           if (solidAt(x, gy3 + 1, z)) continue;
-          var n = 1 + rng.nextInt(3);
+          var n = 1 + rng.nextInt(4);
           for (var c3 = 0; c3 < n; c3++) {
-            var ox = (rng.nextDouble() - 0.5) * 0.5, oz = (rng.nextDouble() - 0.5) * 0.5;
-            var h = 0.3 + rng.nextDouble() * 0.5;
-            boxD(decorP, decorC, x + 0.5 + ox, gy3 + h / 2, z + 0.5 + oz, 0.09, h / 2, 0.09, 0.62, 0.45, 0.95);
+            var ox = (rng.nextDouble() - 0.5) * 0.6, oz = (rng.nextDouble() - 0.5) * 0.6;
+            var h = 0.4 + rng.nextDouble() * 0.8;
+            var cr = 0.06 + rng.nextDouble() * 0.06;
+            var cc = rng.nextDouble() < 0.5 ? [0.62, 0.45, 0.95] : [0.4, 0.8, 1.0];
+            boxD(decorP, decorC, x + 0.5 + ox, gy3 + h / 2, z + 0.5 + oz, cr, h / 2, cr, cc[0], cc[1], cc[2]);
           }
+        }
+        for (i = 0; i < 25; i++) {
+          x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
+          var gy5 = -1;
+          for (y = 8; y >= 1; y--) { if (solidAt(x, y, z)) { gy5 = y; break; } }
+          if (gy5 < 2) continue;
+          if (G.blocks[K(x, gy5, z)] === 'lava') continue;
+          var sh = 0.5 + rng.nextDouble() * 1.2;
+          var sr = 0.15 + rng.nextDouble() * 0.2;
+          var sc = [0.5, 0.3, 0.9];
+          boxD(decorP, decorC, x + 0.5, gy5 + sh / 2, z + 0.5, sr, sh / 2, sr, sc[0], sc[1], sc[2]);
+          boxD(decorP, decorC, x + 0.5, gy5 + sh * 0.8, z + 0.5, sr * 0.5, sh * 0.2, sr * 0.5, sc[0] * 0.7, sc[1] * 0.7, sc[2] * 0.7);
+        }
+        for (i = 0; i < 20; i++) {
+          x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
+          var gy6 = -1;
+          for (y = 1; y <= 8; y++) { if (solidAt(x, y, z)) { gy6 = y; break; } }
+          if (gy6 < 1) continue;
+          if (solidAt(x, gy6 + 1, z)) continue;
+          var ah = 0.4 + rng.nextDouble() * 0.8;
+          var ar = 0.12 + rng.nextDouble() * 0.15;
+          var ac = [0.4, 0.7, 1.0];
+          boxD(decorP, decorC, x + 0.5, gy6 + ah / 2, z + 0.5, ar, ah / 2, ar, ac[0], ac[1], ac[2]);
+          boxD(decorP, decorC, x + 0.5, gy6 + ah * 0.75, z + 0.5, ar * 0.4, ah * 0.25, ar * 0.4, ac[0] * 0.6, ac[1] * 0.6, ac[2] * 0.6);
+        }
+        for (i = 0; i < 10; i++) {
+          x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
+          var gy9 = -1;
+          for (y = 1; y <= 8; y++) { if (solidAt(x, y, z)) { gy9 = y; break; } }
+          if (gy9 < 1) continue;
+          if (solidAt(x, gy9 + 1, z)) continue;
+          var oh = 0.3 + rng.nextDouble() * 0.4;
+          var or2 = 0.15 + rng.nextDouble() * 0.1;
+          var oc = [0.5, 0.35, 0.9];
+          boxD(decorP, decorC, x + 0.5, gy9 + oh / 2, z + 0.5, or2, oh / 2, or2, oc[0], oc[1], oc[2]);
+        }
+        for (i = 0; i < 15; i++) {
+          x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
+          var gy8 = -1;
+          for (y = 8; y >= 1; y--) { if (solidAt(x, y, z)) { gy8 = y; break; } }
+          if (gy8 < 3) continue;
+          if (solidAt(x, gy8 - 1, z)) continue;
+          var dh = 0.3 + rng.nextDouble() * 0.6;
+          var dr = 0.1 + rng.nextDouble() * 0.12;
+          var dc = [0.45, 0.3, 0.8];
+          boxD(decorP, decorC, x + 0.5, gy8 - dh / 2, z + 0.5, dr, dh / 2, dr, dc[0], dc[1], dc[2]);
+          boxD(decorP, decorC, x + 0.5, gy8 - dh * 0.75, z + 0.5, dr * 0.4, dh * 0.25, dr * 0.4, dc[0] * 0.6, dc[1] * 0.6, dc[2] * 0.6);
         }
       }
     } else {
@@ -3760,6 +3821,154 @@
     }
   }
 
+  function emitOctahedron(P, C, cx, cy, cz, r, col, alpha) {
+    var top = [cx, cy + r, cz], bot = [cx, cy - r, cz];
+    var pts = [[cx + r, cy, cz], [cx, cy, cz + r], [cx - r, cy, cz], [cx, cy, cz - r]];
+    for (var i = 0; i < 4; i++) {
+      var p1 = pts[i], p2 = pts[(i + 1) % 4];
+      P.push(top[0], top[1], top[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
+      P.push(bot[0], bot[1], bot[2], p2[0], p2[1], p2[2], p1[0], p1[1], p1[2]);
+      for (var j = 0; j < 6; j++) C.push(col[0], col[1], col[2], alpha);
+    }
+  }
+
+  function emitHexPrism(P, C, cx, cy, cz, r, h, col, alpha) {
+    for (var i = 0; i < 6; i++) {
+      var a1 = Math.PI / 3 * i, a2 = Math.PI / 3 * (i + 1);
+      var x1 = cx + r * Math.cos(a1), z1 = cz + r * Math.sin(a1);
+      var x2 = cx + r * Math.cos(a2), z2 = cz + r * Math.sin(a2);
+      P.push(x1, cy, z1, x2, cy, z2, x2, cy + h, z2);
+      P.push(x1, cy, z1, x2, cy + h, z2, x1, cy + h, z1);
+      for (var j = 0; j < 6; j++) C.push(col[0], col[1], col[2], alpha);
+    }
+    for (var i = 0; i < 6; i++) {
+      var a = Math.PI / 3 * i + Math.PI / 6;
+      P.push(cx + r * Math.cos(a), cy + h, cz + r * Math.sin(a));
+    }
+    for (var i = 0; i < 6; i++) {
+      var a = Math.PI / 3 * i + Math.PI / 6;
+      P.push(cx + r * Math.cos(a), cy, cz + r * Math.sin(a));
+    }
+  }
+
+  function emitCrystalCylinder(P, C, cx, cy, cz, r, h, col, alpha, sides) {
+    sides = sides || 6;
+    for (var i = 0; i < sides; i++) {
+      var a1 = Math.PI * 2 * i / sides, a2 = Math.PI * 2 * (i + 1) / sides;
+      var x1 = cx + r * Math.cos(a1), z1 = cz + r * Math.sin(a1);
+      var x2 = cx + r * Math.cos(a2), z2 = cz + r * Math.sin(a2);
+      P.push(x1, cy, z1, x2, cy, z2, x2, cy + h * 0.7, z2);
+      P.push(x1, cy, z1, x2, cy + h * 0.7, z2, x1, cy + h * 0.7, z1);
+      for (var j = 0; j < 6; j++) C.push(col[0], col[1], col[2], alpha);
+    }
+    for (var i = 0; i < sides; i++) {
+      var a = Math.PI * 2 * i / sides;
+      P.push(cx + r * Math.cos(a), cy + h * 0.7, cz + r * Math.sin(a));
+    }
+    for (var i = 0; i < sides; i++) {
+      var a = Math.PI * 2 * i / sides;
+      P.push(cx + r * Math.cos(a) * 0.3, cy + h, cz + r * Math.sin(a) * 0.3);
+    }
+  }
+
+  function emitTorus(P, C, cx, cy, cz, R, r, col, alpha, segs, sides) {
+    segs = segs || 12; sides = sides || 6;
+    for (var i = 0; i < segs; i++) {
+      var a1 = Math.PI * 2 * i / segs, a2 = Math.PI * 2 * (i + 1) / segs;
+      for (var j = 0; j < sides; j++) {
+        var b1 = Math.PI * 2 * j / sides, b2 = Math.PI * 2 * (j + 1) / sides;
+        var p1 = [cx + (R + r * Math.cos(b1)) * Math.cos(a1), cy + r * Math.sin(b1), cz + (R + r * Math.cos(b1)) * Math.sin(a1)];
+        var p2 = [cx + (R + r * Math.cos(b2)) * Math.cos(a1), cy + r * Math.sin(b2), cz + (R + r * Math.cos(b2)) * Math.sin(a1)];
+        var p3 = [cx + (R + r * Math.cos(b2)) * Math.cos(a2), cy + r * Math.sin(b2), cz + (R + r * Math.cos(b2)) * Math.sin(a2)];
+        var p4 = [cx + (R + r * Math.cos(b1)) * Math.cos(a2), cy + r * Math.sin(b1), cz + (R + r * Math.cos(b1)) * Math.sin(a2)];
+        P.push(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2]);
+        P.push(p1[0], p1[1], p1[2], p3[0], p3[1], p3[2], p4[0], p4[1], p4[2]);
+        for (var k = 0; k < 6; k++) C.push(col[0], col[1], col[2], alpha);
+      }
+    }
+  }
+
+  function emitIcosahedron(P, C, cx, cy, cz, r, col, alpha) {
+    var t = (1 + Math.sqrt(5)) / 2;
+    var verts = [
+      [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+      [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+      [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
+    ];
+    var faces = [
+      [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+      [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+      [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+      [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
+    ];
+    for (var i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      for (var j = 0; j < 3; j++) {
+        var v = verts[f[j]];
+        P.push(cx + v[0] * r * 0.6, cy + v[1] * r * 0.6, cz + v[2] * r * 0.6);
+      }
+      for (var j = 0; j < 3; j++) C.push(col[0], col[1], col[2], alpha);
+    }
+  }
+
+  function emitDodecahedron(P, C, cx, cy, cz, r, col, alpha) {
+    var t = (1 + Math.sqrt(5)) / 2, r2 = 1 / t;
+    var verts = [
+      [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
+      [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
+      [0, r2, t], [0, r2, -t], [0, -r2, t], [0, -r2, -t],
+      [r2, t, 0], [r2, -t, 0], [-r2, t, 0], [-r2, -t, 0],
+      [t, 0, r2], [t, 0, -r2], [-t, 0, r2], [-t, 0, -r2]
+    ];
+    var faces = [
+      [0, 8, 4, 14, 12], [0, 12, 1, 18, 16], [0, 16, 2, 10, 8],
+      [1, 9, 5, 14, 12], [1, 18, 3, 11, 9], [2, 10, 6, 15, 13],
+      [2, 13, 3, 18, 16], [3, 11, 7, 15, 13], [4, 8, 10, 6, 15],
+      [4, 15, 7, 19, 14], [5, 9, 11, 7, 19], [5, 19, 14, 12],
+      [6, 15, 7, 11, 9], [6, 9, 5, 14, 8]
+    ];
+    for (var i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      for (var j = 0; j < f.length - 2; j++) {
+        var v1 = verts[f[0]], v2 = verts[f[j + 1]], v3 = verts[f[j + 2]];
+        P.push(cx + v1[0] * r * 0.5, cy + v1[1] * r * 0.5, cz + v1[2] * r * 0.5);
+        P.push(cx + v2[0] * r * 0.5, cy + v2[1] * r * 0.5, cz + v2[2] * r * 0.5);
+        P.push(cx + v3[0] * r * 0.5, cy + v3[1] * r * 0.5, cz + v3[2] * r * 0.5);
+        for (var k = 0; k < 3; k++) C.push(col[0], col[1], col[2], alpha);
+      }
+    }
+  }
+
+  function emitAnimatedCrystal(P, C, cx, cy, cz, r, h, col, phase) {
+    var t = G.time * 2 + phase;
+    var pulse = 0.8 + 0.2 * Math.sin(t * 3);
+    var glowR = r * (1.2 + 0.3 * Math.sin(t * 2));
+    emitSphere(P, C, cx, cy + h * 0.4, cz, glowR, [col[0] * 0.5, col[1] * 0.5, col[2] * 0.5], 0.15 * pulse, 8, 6);
+    emitCrystalCylinder(P, C, cx, cy, cz, r * 0.4, h * 0.7, col, 0.9 * pulse, 6);
+    emitCone(P, C, cx, cy + h * 0.7, cz, r * 0.4, h * 0.3, [Math.min(1, col[0] * 1.3), Math.min(1, col[1] * 1.3), Math.min(1, col[2] * 1.3)], pulse, 6);
+    for (var i = 0; i < 4; i++) {
+      var a = t * 0.5 + i * Math.PI / 2;
+      var ox = Math.cos(a) * r * 0.6, oz = Math.sin(a) * r * 0.6;
+      emitOctahedron(P, C, cx + ox, cy + h * 0.3, cz + oz, r * 0.15, [col[0] * 0.7, col[1] * 0.7, col[2] * 0.7], 0.6 * pulse);
+    }
+  }
+
+  function emitCrystalStalagmite(P, C, cx, cy, cz, h, r, col, phase) {
+    var t = G.time + phase;
+    var sway = Math.sin(t * 1.5) * 0.02;
+    emitCone(P, C, cx + sway, cy, cz, r, h, col, 0.95, 8);
+    emitCone(P, C, cx + sway, cy + h * 0.6, cz, r * 0.6, h * 0.4, [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8], 0.9, 6);
+    emitSphere(P, C, cx + sway, cy + h, cz, r * 0.15, [Math.min(1, col[0] * 1.2), Math.min(1, col[1] * 1.2), Math.min(1, col[2] * 1.2)], 0.7, 4, 3);
+  }
+
+  function emitCrystalStalactite(P, C, cx, cy, cz, h, r, col, phase) {
+    var t = G.time + phase;
+    var sway = Math.sin(t * 1.5) * 0.02;
+    emitCone(P, C, cx + sway, cy - h, cz, r, h, col, 0.95, 8);
+    emitCone(P, C, cx + sway, cy - h * 0.6, cz, r * 0.6, h * 0.4, [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8], 0.9, 6);
+    emitSphere(P, C, cx + sway, cy - h, cz, r * 0.15, [Math.min(1, col[0] * 1.2), Math.min(1, col[1] * 1.2), Math.min(1, col[2] * 1.2)], 0.7, 4, 3);
+  }
+
   function buildGhost3D(P, C, x, y, z, phase, scale) {
     scale = scale || 1;
     var t = G.time + phase;
@@ -4641,6 +4850,26 @@
     drawEctoplasm(P, C);
     drawProps(P, C);
     drawBlobShadows(P, C);
+    drawAnimatedCrystals(PG, CG);
+  }
+
+  function drawAnimatedCrystals(P, C) {
+    if (!G.lightSources) return;
+    for (var i = 0; i < G.lightSources.length; i++) {
+      var ls = G.lightSources[i];
+      if (ls.lava) continue;
+      var dx = ls.x - G.px, dz = ls.z - G.pz;
+      if (dx * dx + dz * dz > 400) continue;
+      var pulse = 0.7 + 0.3 * Math.sin(G.time * 3 + i * 1.7);
+      var r = 0.15 + 0.05 * Math.sin(G.time * 2 + i);
+      emitSphere(P, C, ls.x, ls.y + 0.1, ls.z, r * 2, [0.4, 0.2, 0.6], 0.12 * pulse, 6, 4);
+      emitCrystalCylinder(P, C, ls.x, ls.y - 0.3, ls.z, r * 0.5, 0.6, [0.5, 0.3, 0.9], 0.8 * pulse, 6);
+      emitCone(P, C, ls.x, ls.y + 0.3, ls.z, r * 0.5, 0.3, [0.6, 0.4, 1.0], pulse, 6);
+      for (var j = 0; j < 3; j++) {
+        var a = G.time * 0.8 + j * Math.PI * 2 / 3;
+        emitOctahedron(P, C, ls.x + Math.cos(a) * r * 0.8, ls.y, ls.z + Math.sin(a) * r * 0.8, r * 0.2, [0.4, 0.25, 0.8], 0.5 * pulse);
+      }
+    }
   }
 
   /* ---- System 49: Hook into main loop ---- */

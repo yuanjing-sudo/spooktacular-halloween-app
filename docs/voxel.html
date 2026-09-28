@@ -222,26 +222,27 @@
       }
     }
 
-    var origSwitch = window.switchWorld;
-    window.switchWorld = function(world) {
-      if (origSwitch) origSwitch(world);
-      currentWorld = world;
-      var names = { forest: 'Forest', mine: 'Deep Mine', frost: 'Frost', crystal: 'Crystal' };
-      showWorldAnimation(names[world] || world);
-      setPlanesVisible(world);
-    };
+    var worldNames = { 'forest': 'Forest', 'deep mine': 'Deep Mine', 'frost': 'Frost', 'crystal': 'Crystal' };
+    var planeWorlds = ['deep mine', 'frost', 'crystal'];
 
-    var obs = new MutationObserver(function() {
+    function checkWorld() {
       var depthEl = document.getElementById('depth');
-      if (depthEl) {
-        var txt = depthEl.textContent.toLowerCase();
-        if (txt !== currentWorld) {
-          currentWorld = txt;
+      if (!depthEl) return;
+      var txt = depthEl.textContent.toLowerCase().trim();
+      if (txt !== currentWorld) {
+        currentWorld = txt;
+        showWorldAnimation(worldNames[txt] || txt);
+        if (planeWorlds.indexOf(txt) >= 0) {
           setPlanesVisible(txt);
+        } else {
+          planes.forEach(function(p) { p.classList.remove('visible'); });
         }
       }
-    });
+    }
+
+    var obs = new MutationObserver(checkWorld);
     obs.observe(document.getElementById('hud'), { childList: true, subtree: true, characterData: true });
+    setInterval(checkWorld, 500);
   })();
   </script>
 </body>

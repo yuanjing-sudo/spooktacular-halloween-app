@@ -13,6 +13,2263 @@
   ];
 
   var canvas = document.getElementById('game3d');
+
+  // ==================== VISUAL EFFECTS SYSTEM ====================
+  var FX = {
+    particles: [],
+    shockwaves: [],
+    floatingTexts: [],
+    screenShake: { mag: 0, decay: 0.92, x: 0, y: 0 },
+    glowPulses: [],
+    trailPoints: [],
+    ambientParticles: [],
+    sparkleBursts: [],
+    colorOverlays: [],
+    vignetteIntensity: 0.3,
+    bloomIntensity: 0.5,
+    chromaticAberration: 0,
+    time: 0,
+    lastTime: 0,
+    deltaTime: 0.016,
+    cameraShakeEnabled: true,
+    particleBudget: 500,
+    activeEffects: 0,
+    fps: 60,
+    fpsHistory: [],
+    performanceMode: false,
+    qualityLevel: 2,
+    maxParticles: 500,
+    maxShockwaves: 10,
+    maxFloatingTexts: 20,
+    maxTrailPoints: 100,
+    maxAmbientParticles: 50,
+    maxSparkleBursts: 30,
+    maxColorOverlays: 5,
+    effectPool: [],
+    poolSize: 100,
+    initialized: false
+  };
+
+  function fxInit() {
+    if (FX.initialized) return;
+    FX.initialized = true;
+    FX.lastTime = performance.now();
+    fxInitParticlePool();
+    fxInitAmbientParticles();
+    fxDetectPerformanceMode();
+  }
+
+  function fxInitParticlePool() {
+    FX.effectPool = [];
+    for (var i = 0; i < FX.poolSize; i++) {
+      FX.effectPool.push({
+        active: false,
+        x: 0, y: 0, z: 0,
+        vx: 0, vy: 0, vz: 0,
+        life: 0, maxLife: 1,
+        size: 3, color: '#fff',
+        alpha: 1, decay: 0.02,
+        gravity: 0, friction: 0.98,
+        type: 'circle', rotation: 0,
+        rotationSpeed: 0, scale: 1,
+        scaleSpeed: 0, glow: 0,
+        trail: false, trailLength: 0,
+        bounce: false, bounceFactor: 0.5,
+        fadeIn: 0, fadeOut: 0.5,
+        customData: null
+      });
+    }
+  }
+
+  function fxGetFromPool() {
+    for (var i = 0; i < FX.effectPool.length; i++) {
+      if (!FX.effectPool[i].active) return FX.effectPool[i];
+    }
+    return null;
+  }
+
+  function fxReturnToPool(p) {
+    p.active = false;
+    p.customData = null;
+  }
+
+  function fxInitAmbientParticles() {
+    FX.ambientParticles = [];
+    var count = FX.performanceMode ? 20 : 50;
+    for (var i = 0; i < count; i++) {
+      FX.ambientParticles.push({
+        x: Math.random() * G.maze.w,
+        y: Math.random() * 2,
+        z: Math.random() * G.maze.d,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.2,
+        vz: (Math.random() - 0.5) * 0.3,
+        size: 1 + Math.random() * 2,
+        alpha: 0.1 + Math.random() * 0.3,
+        color: ['#ffd166', '#59e6ff', '#ff69b4', '#c44dff'][Math.floor(Math.random() * 4)],
+        pulse: Math.random() * Math.PI * 2,
+        pulseSpeed: 0.5 + Math.random() * 1.5
+      });
+    }
+  }
+
+  function fxDetectPerformanceMode() {
+    var testFrames = 0;
+    var testTime = 0;
+    var testStart = performance.now();
+    function testLoop() {
+      testFrames++;
+      testTime = performance.now() - testStart;
+      if (testTime < 1000) {
+        requestAnimationFrame(testLoop);
+      } else {
+        FX.fps = testFrames;
+        FX.performanceMode = testFrames < 30;
+        FX.maxParticles = FX.performanceMode ? 200 : 500;
+        FX.maxAmbientParticles = FX.performanceMode ? 20 : 50;
+        if (FX.performanceMode) {
+          fxInitAmbientParticles();
+        }
+      }
+    }
+    requestAnimationFrame(testLoop);
+  }
+
+  function fxUpdate(dt) {
+    FX.time += dt;
+    FX.deltaTime = dt;
+    fxUpdateParticles(dt);
+    fxUpdateShockwaves(dt);
+    fxUpdateFloatingTexts(dt);
+    fxUpdateScreenShake(dt);
+    fxUpdateGlowPulses(dt);
+    fxUpdateTrailPoints(dt);
+    fxUpdateAmbientParticles(dt);
+    fxUpdateSparkleBursts(dt);
+    fxUpdateColorOverlays(dt);
+    fxUpdateFPS(dt);
+    FX.activeEffects = FX.particles.length + FX.shockwaves.length + FX.floatingTexts.length;
+  }
+
+  function fxUpdateParticles(dt) {
+    for (var i = FX.particles.length - 1; i >= 0; i--) {
+      var p = FX.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        fxReturnToPool(p);
+        FX.particles.splice(i, 1);
+        continue;
+      }
+      p.vx *= p.friction;
+      p.vy *= p.friction;
+      p.vz *= p.friction;
+      p.vy += p.gravity * dt;
+      p.x += p.vx * dt * 60;
+      p.y += p.vy * dt * 60;
+      p.z += p.vz * dt * 60;
+      p.rotation += p.rotationSpeed * dt;
+      p.scale += p.scaleSpeed * dt;
+      if (p.bounce && p.y < 0) {
+        p.y = 0;
+        p.vy *= -p.bounceFactor;
+      }
+      var lifeRatio = p.life / p.maxLife;
+      if (lifeRatio < p.fadeOut) {
+        p.alpha = lifeRatio / p.fadeOut;
+      } else if (lifeRatio > (1 - p.fadeIn)) {
+        p.alpha = (1 - lifeRatio) / p.fadeIn;
+      } else {
+        p.alpha = 1;
+      }
+    }
+  }
+
+  function fxUpdateShockwaves(dt) {
+    for (var i = FX.shockwaves.length - 1; i >= 0; i--) {
+      var s = FX.shockwaves[i];
+      s.life -= dt;
+      s.r += s.speed * dt;
+      if (s.life <= 0) FX.shockwaves.splice(i, 1);
+    }
+  }
+
+  function fxUpdateFloatingTexts(dt) {
+    for (var i = FX.floatingTexts.length - 1; i >= 0; i--) {
+      var t = FX.floatingTexts[i];
+      t.life -= dt;
+      t.y += t.vy * dt * 60;
+      t.vy *= 0.98;
+      if (t.life <= 0) FX.floatingTexts.splice(i, 1);
+    }
+  }
+
+  function fxUpdateScreenShake(dt) {
+    if (FX.screenShake.mag > 0.1) {
+      FX.screenShake.x = (Math.random() - 0.5) * FX.screenShake.mag;
+      FX.screenShake.y = (Math.random() - 0.5) * FX.screenShake.mag;
+      FX.screenShake.mag *= FX.screenShake.decay;
+    } else {
+      FX.screenShake.mag = 0;
+      FX.screenShake.x = 0;
+      FX.screenShake.y = 0;
+    }
+  }
+
+  function fxUpdateGlowPulses(dt) {
+    for (var i = FX.glowPulses.length - 1; i >= 0; i--) {
+      var g = FX.glowPulses[i];
+      g.life -= dt;
+      g.intensity = Math.sin(g.life * Math.PI) * g.maxIntensity;
+      if (g.life <= 0) FX.glowPulses.splice(i, 1);
+    }
+  }
+
+  function fxUpdateTrailPoints(dt) {
+    for (var i = FX.trailPoints.length - 1; i >= 0; i--) {
+      var t = FX.trailPoints[i];
+      t.life -= dt;
+      if (t.life <= 0) FX.trailPoints.splice(i, 1);
+    }
+  }
+
+  function fxUpdateAmbientParticles(dt) {
+    for (var i = 0; i < FX.ambientParticles.length; i++) {
+      var p = FX.ambientParticles[i];
+      p.x += p.vx * dt * 60;
+      p.y += p.vy * dt * 60;
+      p.z += p.vz * dt * 60;
+      p.pulse += p.pulseSpeed * dt;
+      p.alpha = 0.1 + Math.sin(p.pulse) * 0.15;
+      if (p.x < 0) p.x = G.maze.w;
+      if (p.x > G.maze.w) p.x = 0;
+      if (p.z < 0) p.z = G.maze.d;
+      if (p.z > G.maze.d) p.z = 0;
+      if (p.y < 0) p.y = 2;
+      if (p.y > 2.5) p.y = 0;
+    }
+  }
+
+  function fxUpdateSparkleBursts(dt) {
+    for (var i = FX.sparkleBursts.length - 1; i >= 0; i--) {
+      var s = FX.sparkleBursts[i];
+      s.life -= dt;
+      if (s.life <= 0) FX.sparkleBursts.splice(i, 1);
+    }
+  }
+
+  function fxUpdateColorOverlays(dt) {
+    for (var i = FX.colorOverlays.length - 1; i >= 0; i--) {
+      var c = FX.colorOverlays[i];
+      c.life -= dt;
+      if (c.life <= 0) FX.colorOverlays.splice(i, 1);
+    }
+  }
+
+  function fxUpdateFPS(dt) {
+    var now = performance.now();
+    var delta = now - FX.lastTime;
+    FX.lastTime = now;
+    FX.fpsHistory.push(1000 / delta);
+    if (FX.fpsHistory.length > 60) FX.fpsHistory.shift();
+    var sum = 0;
+    for (var i = 0; i < FX.fpsHistory.length; i++) sum += FX.fpsHistory[i];
+    FX.fps = Math.round(sum / FX.fpsHistory.length);
+  }
+
+  function fxEmitParticles(x, y, z, opts) {
+    if (FX.particles.length >= FX.maxParticles) return;
+    var p = fxGetFromPool();
+    if (!p) return;
+    p.active = true;
+    p.x = x; p.y = y; p.z = z;
+    p.vx = (Math.random() - 0.5) * (opts.speed || 3);
+    p.vy = (Math.random() - 0.5) * (opts.speed || 3) + (opts.upBias || 0);
+    p.vz = (Math.random() - 0.5) * (opts.speed || 3);
+    p.life = (opts.life || 1) * (0.7 + Math.random() * 0.6);
+    p.maxLife = p.life;
+    p.size = (opts.size || 3) * (0.7 + Math.random() * 0.6);
+    p.color = opts.colors ? opts.colors[Math.floor(Math.random() * opts.colors.length)] : (opts.color || '#fff');
+    p.alpha = 1;
+    p.decay = opts.decay || 0.02;
+    p.gravity = opts.gravity || 0;
+    p.friction = opts.friction || 0.98;
+    p.type = opts.type || 'circle';
+    p.rotation = Math.random() * Math.PI * 2;
+    p.rotationSpeed = (Math.random() - 0.5) * 0.2;
+    p.trail = opts.trail || false;
+    p.trailLength = opts.trailLength || 5;
+    p.bounce = opts.bounce || false;
+    p.bounceFactor = opts.bounceFactor || 0.5;
+    p.fadeIn = opts.fadeIn || 0;
+    p.fadeOut = opts.fadeOut || 0.5;
+    p.glow = opts.glow || 0;
+    p.customData = opts.customData || null;
+    FX.particles.push(p);
+  }
+
+  function fxEmitShockwave(x, y, z, opts) {
+    if (FX.shockwaves.length >= FX.maxShockwaves) return;
+    FX.shockwaves.push({
+      x: x, y: y, z: z,
+      r: opts.startR || 5,
+      maxR: opts.maxR || 100,
+      speed: opts.speed || 5,
+      life: opts.life || 0.5,
+      maxLife: opts.life || 0.5,
+      color: opts.color || '#fff',
+      width: opts.width || 3
+    });
+  }
+
+  function fxEmitFloatingText(x, y, z, str, opts) {
+    if (FX.floatingTexts.length >= FX.maxFloatingTexts) return;
+    FX.floatingTexts.push({
+      x: x, y: y, z: z,
+      str: str,
+      vy: (opts && opts.vy) || -1.5,
+      life: (opts && opts.life) || 1.2,
+      maxLife: (opts && opts.life) || 1.2,
+      color: (opts && opts.color) || '#ffd166',
+      size: (opts && opts.size) || 16,
+      weight: (opts && opts.weight) || 'bold'
+    });
+  }
+
+  function fxEmitGlowPulse(x, y, z, opts) {
+    FX.glowPulses.push({
+      x: x, y: y, z: z,
+      life: (opts && opts.life) || 0.5,
+      maxLife: (opts && opts.life) || 0.5,
+      color: (opts && opts.color) || '#fff',
+      maxIntensity: (opts && opts.maxIntensity) || 1
+    });
+  }
+
+  function fxEmitSparkleBurst(x, y, z, count) {
+    for (var i = 0; i < count; i++) {
+      FX.sparkleBursts.push({
+        x: x + (Math.random() - 0.5) * 20,
+        y: y + (Math.random() - 0.5) * 20,
+        z: z + (Math.random() - 0.5) * 20,
+        life: 0.5 + Math.random() * 0.5,
+        maxLife: 1,
+        size: 1 + Math.random() * 3,
+        rot: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  function fxEmitColorOverlay(color, life) {
+    if (FX.colorOverlays.length >= FX.maxColorOverlays) FX.colorOverlays.shift();
+    FX.colorOverlays.push({
+      color: color,
+      life: life || 0.5,
+      maxLife: life || 0.5
+    });
+  }
+
+  function fxScreenShake(mag, decay) {
+    if (!FX.cameraShakeEnabled) return;
+    FX.screenShake.mag = Math.max(FX.screenShake.mag, mag);
+    FX.screenShake.decay = decay || 0.92;
+  }
+
+  function fxCandyExplosion(x, y, z, color) {
+    fxEmitParticles(x, y, z, { count: 30, color: color, speed: 5, life: 1, size: 4, gravity: 0.1 });
+    fxEmitParticles(x, y, z, { count: 20, color: '#fff', speed: 3, life: 0.8, size: 3 });
+    fxEmitShockwave(x, y, z, { color: color, maxR: 80, life: 0.4 });
+    fxEmitGlowPulse(x, y, z, { color: color, life: 0.5, maxIntensity: 1.5 });
+    fxEmitSparkleBurst(x, y, z, 15);
+    fxScreenShake(5, 0.9);
+  }
+
+  function fxGhostTrail(x, y, z) {
+    fxEmitParticles(x, y, z, {
+      count: 3, color: '#f2f2fa', speed: 0.5, life: 0.6, size: 8,
+      gravity: -0.05, glow: 0.5, fadeOut: 0.8
+    });
+  }
+
+  function fxPumpkinRain() {
+    for (var i = 0; i < 5; i++) {
+      fxEmitParticles(
+        Math.random() * G.maze.w,
+        3 + Math.random() * 2,
+        Math.random() * G.maze.d,
+        { count: 1, color: '#ff7518', speed: 0.5, life: 2, size: 6, gravity: 0.3, type: 'pumpkin' }
+      );
+    }
+  }
+
+  function fxGoldShower(x, y, z) {
+    fxEmitParticles(x, y, z, { count: 15, color: '#ffd700', speed: 2, life: 1.5, size: 3, gravity: 0.2, type: 'star' });
+  }
+
+  function fxMagicSwirl(x, y, z) {
+    for (var i = 0; i < 8; i++) {
+      var angle = (i / 8) * Math.PI * 2;
+      fxEmitParticles(
+        x + Math.cos(angle) * 10,
+        y,
+        z + Math.sin(angle) * 10,
+        { count: 1, color: '#c44dff', speed: 1, life: 0.8, size: 4, gravity: 0, glow: 0.8 }
+      );
+    }
+  }
+
+  function fxDragonBreath(x, y, z) {
+    fxEmitParticles(x, y, z, { count: 20, color: '#ff4500', speed: 4, life: 0.7, size: 5, gravity: -0.1, glow: 1 });
+    fxEmitParticles(x, y, z, { count: 10, color: '#ffd700', speed: 3, life: 0.5, size: 3, glow: 0.8 });
+    fxScreenShake(3, 0.85);
+  }
+
+  function fxKingCrown(x, y, z) {
+    fxEmitParticles(x, y, z, { count: 12, color: '#ffd700', speed: 2, life: 1.2, size: 4, type: 'star', gravity: 0.1 });
+    fxEmitGlowPulse(x, y, z, { color: '#ffd700', life: 0.8, maxIntensity: 2 });
+  }
+
+  function fxTowerTopple(x, y, z) {
+    fxEmitParticles(x, y, z, { count: 25, color: '#ff69b4', speed: 3, life: 1, size: 5, gravity: 0.15 });
+    fxEmitShockwave(x, y, z, { color: '#ff69b4', maxR: 120, life: 0.6 });
+    fxScreenShake(6, 0.88);
+  }
+
+  function fxUpdateCamera(dt) {
+    if (G.orbit) {
+      var targetYaw = G.yaw;
+      var targetPitch = G.pitch;
+      G.yaw += (targetYaw - G.yaw) * 0.05;
+      G.pitch += (targetPitch - G.pitch) * 0.05;
+    }
+  }
+
+  function fxRenderOverlay() {
+    if (FX.screenShake.mag > 0.1) {
+      canvas.style.transform = 'translate(' + FX.screenShake.x + 'px, ' + FX.screenShake.y + 'px)';
+    } else {
+      canvas.style.transform = '';
+    }
+  }
+
+  function fxGetQualityLevel() {
+    if (FX.fps < 20) return 0;
+    if (FX.fps < 40) return 1;
+    return 2;
+  }
+
+  function fxAutoAdjustQuality() {
+    var q = fxGetQualityLevel();
+    if (q < FX.qualityLevel) {
+      FX.qualityLevel = q;
+      FX.maxParticles = [100, 250, 500][q];
+      FX.maxAmbientParticles = [10, 25, 50][q];
+    }
+  }
+
+  function fxRenderParticles3D() {
+    if (FX.particles.length === 0) return;
+    var view = currentView();
+    var mvp = currentMVP();
+    gl.useProgram(sprProg);
+    gl.uniformMatrix4fv(gl.getUniformLocation(sprProg, 'uMVP'), false, new Float32Array(mvp));
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    var positions = [];
+    var colors = [];
+    var sizes = [];
+    for (var i = 0; i < FX.particles.length; i++) {
+      var p = FX.particles[i];
+      var cx = view[0], cy = view[4], cz = view[8];
+      var ux = view[1], uy = view[5], uz = view[9];
+      var size = p.size * p.alpha;
+      positions.push(
+        p.x + cx * size, p.y + cy * size, p.z + cz * size,
+        p.x - cx * size, p.y - cy * size, p.z - cz * size,
+        p.x + ux * size, p.y + uy * size, p.z + uz * size,
+        p.x - cx * size, p.y - cy * size, p.z - cz * size,
+        p.x - ux * size, p.y - uy * size, p.z - uz * size,
+        p.x + ux * size, p.y + uy * size, p.z + uz * size
+      );
+      for (var j = 0; j < 6; j++) {
+        colors.push(p.color);
+      }
+      sizes.push(size);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, sprBufP);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.DYNAMIC_DRAW);
+    var locP = gl.getAttribLocation(sprProg, 'aPos');
+    gl.enableVertexAttribArray(locP);
+    gl.vertexAttribPointer(locP, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, positions.length / 3);
+    gl.disable(gl.BLEND);
+  }
+
+  function fxHexToRgb(hex) {
+    var r = parseInt(hex.slice(1, 3), 16) / 255;
+    var g = parseInt(hex.slice(3, 5), 16) / 255;
+    var b = parseInt(hex.slice(5, 7), 16) / 255;
+    return [r, g, b];
+  }
+
+  function fxRenderParticleLayer() {
+    if (FX.particles.length === 0) return;
+    var sorted = FX.particles.slice().sort(function (a, b) {
+      var dxA = a.x - G.px, dzA = a.z - G.pz;
+      var dxB = b.x - G.px, dzB = b.z - G.pz;
+      return (dxB * dxB + dzB * dzB) - (dxA * dxA + dzA * dzA);
+    });
+    for (var i = 0; i < sorted.length; i++) {
+      var p = sorted[i];
+      var dx = p.x - G.px, dz = p.z - G.pz;
+      var dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist > 30) continue;
+      var alpha = p.alpha * (1 - dist / 30);
+      if (alpha < 0.01) continue;
+      var rgb = typeof p.color === 'string' ? fxHexToRgb(p.color) : p.color;
+      gl.useProgram(sprProg);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      var size = p.size;
+      var view = currentView();
+      var rx = view[0], ry = view[4], rz = view[8];
+      var ux = view[1], uy = view[5], uz = view[9];
+      var corners = [
+        [-size, -size], [size, -size], [size, size],
+        [-size, -size], [size, size], [-size, size]
+      ];
+      var positions = [];
+      for (var j = 0; j < 6; j++) {
+        positions.push(
+          p.x + rx * corners[j][0] + ux * corners[j][1],
+          p.y + ry * corners[j][0] + uy * corners[j][1],
+          p.z + rz * corners[j][0] + uz * corners[j][1]
+        );
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, sprBufP);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.DYNAMIC_DRAW);
+      var locP = gl.getAttribLocation(sprProg, 'aPos');
+      gl.enableVertexAttribArray(locP);
+      gl.vertexAttribPointer(locP, 3, gl.FLOAT, false, 0, 0);
+      gl.uniform1f(gl.getUniformLocation(sprProg, 'uAlpha'), alpha);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disable(gl.BLEND);
+    }
+  }
+
+  function fxUpdateCameraSmooth(dt) {
+    if (!G.orbit) return;
+    var targetYaw = G.yaw;
+    var targetPitch = G.pitch;
+    G.yaw += (targetYaw - G.yaw) * 0.05;
+    G.pitch += (targetPitch - G.pitch) * 0.05;
+  }
+
+  function fxApplyScreenTransform() {
+    if (FX.screenShake.mag > 0.1) {
+      var sx = (Math.random() - 0.5) * FX.screenShake.mag;
+      var sy = (Math.random() - 0.5) * FX.screenShake.mag;
+      canvas.style.transform = 'translate(' + sx + 'px, ' + sy + 'px)';
+    } else {
+      canvas.style.transform = '';
+    }
+  }
+
+  function fxUpdateScreenShake(dt) {
+    if (FX.screenShake.mag > 0.1) {
+      FX.screenShake.mag *= FX.screenShake.decay;
+    } else {
+      FX.screenShake.mag = 0;
+    }
+  }
+
+  function fxTriggerCandyPickup(x, y, z, points) {
+    var color = points >= 25 ? '#ff69b4' : points >= 15 ? '#ffd700' : points >= 5 ? '#59e6ff' : '#ffbe5a';
+    var count = Math.min(30, 5 + Math.floor(points / 2));
+    for (var i = 0; i < count; i++) {
+      fxEmitParticles(x, y, z, {
+        count: 1,
+        color: color,
+        speed: 2 + Math.random() * 3,
+        life: 0.8 + Math.random() * 0.4,
+        size: 2 + Math.random() * 3,
+        gravity: 0.05,
+        upBias: 1.5
+      });
+    }
+    fxEmitShockwave(x, y, z, { color: color, maxR: 40 + points, life: 0.3 });
+    if (points >= 15) {
+      fxEmitSparkleBurst(x, y, z, 10);
+      fxScreenShake(3, 0.9);
+    }
+  }
+
+  function fxTriggerCrystalPickup(x, y, z) {
+    var colors = ['#59e6ff', '#b8f4ff', '#ffffff'];
+    for (var i = 0; i < 20; i++) {
+      fxEmitParticles(x, y, z, {
+        count: 1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speed: 3 + Math.random() * 4,
+        life: 1,
+        size: 3 + Math.random() * 4,
+        gravity: 0.08,
+        upBias: 2
+      });
+    }
+    fxEmitShockwave(x, y, z, { color: '#59e6ff', maxR: 60, life: 0.4 });
+    fxEmitSparkleBurst(x, y, z, 8);
+    fxScreenShake(4, 0.88);
+  }
+
+  function fxTriggerGhostCatch() {
+    fxScreenShake(8, 0.85);
+    fxEmitColorOverlay('rgba(255,0,0,0.3)', 0.3);
+  }
+
+  function fxTriggerLevelUp() {
+    var colors = ['#ffd700', '#ff9f1c', '#ffffff'];
+    for (var i = 0; i < 40; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, {
+        count: 1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speed: 4 + Math.random() * 5,
+        life: 1.5,
+        size: 3 + Math.random() * 5,
+        gravity: 0.1,
+        upBias: 3
+      });
+    }
+    fxEmitShockwave(G.px, 1.5, G.pz, { color: '#ffd700', maxR: 100, life: 0.6 });
+    fxEmitSparkleBurst(G.px, 1.5, G.pz, 20);
+    fxScreenShake(6, 0.9);
+  }
+
+  function fxTriggerRelicFind(x, y, z) {
+    var colors = ['#c44dff', '#ff69b4', '#ffd700'];
+    for (var i = 0; i < 35; i++) {
+      fxEmitParticles(x, y, z, {
+        count: 1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speed: 3 + Math.random() * 4,
+        life: 1.2,
+        size: 3 + Math.random() * 4,
+        gravity: 0.05,
+        upBias: 2
+      });
+    }
+    fxEmitShockwave(x, y, z, { color: '#c44dff', maxR: 80, life: 0.5 });
+    fxEmitSparkleBurst(x, y, z, 15);
+    fxScreenShake(5, 0.88);
+  }
+
+  function fxTriggerFishCatch(x, y, z) {
+    var colors = ['#2f7bff', '#59e6ff', '#ffffff'];
+    for (var i = 0; i < 25; i++) {
+      fxEmitParticles(x, y, z, {
+        count: 1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speed: 2 + Math.random() * 3,
+        life: 1,
+        size: 2 + Math.random() * 3,
+        gravity: 0.15,
+        upBias: 1
+      });
+    }
+    fxEmitShockwave(x, y, z, { color: '#2f7bff', maxR: 50, life: 0.4 });
+  }
+
+  function fxRenderMinimapGlow() {
+    mm.save();
+    mm.shadowColor = '#ffd166';
+    mm.shadowBlur = 4;
+    mm.fillStyle = '#ffd166';
+    G.candies.forEach(function (c) {
+      mm.beginPath();
+      mm.arc(c.x / G.maze.w * s, c.z / G.maze.d * s, 2, 0, 7);
+      mm.fill();
+    });
+    mm.restore();
+  }
+
+  function fxUpdateMinimapPulse() {
+    var pulse = 0.5 + Math.sin(FX.time * 4) * 0.5;
+    mm.save();
+    mm.globalAlpha = pulse * 0.5;
+    mm.fillStyle = '#59e6ff';
+    G.crystals.forEach(function (c) {
+      mm.beginPath();
+      mm.arc(c.x / G.maze.w * s, c.z / G.maze.d * s, 3, 0, 7);
+      mm.fill();
+    });
+    mm.restore();
+  }
+
+  function fxRenderGhostAura() {
+    var gb = 1 + 0.08 * Math.sin(G.time * 5);
+    mm.save();
+    mm.globalAlpha = 0.3;
+    mm.fillStyle = '#ff0000';
+    mm.beginPath();
+    mm.arc(G.ghost.x / G.maze.w * s, G.ghost.z / G.maze.d * s, 4 * gb, 0, 7);
+    mm.fill();
+    mm.restore();
+  }
+
+  function fxUpdateAmbientEffects(dt) {
+    if (Math.random() < 0.02) {
+      fxEmitParticles(
+        Math.random() * G.maze.w,
+        0.5 + Math.random() * 1.5,
+        Math.random() * G.maze.d,
+        { count: 1, color: '#ffd166', speed: 0.5, life: 2, size: 2, gravity: -0.02, upBias: 0.3 }
+      );
+    }
+    if (Math.random() < 0.01) {
+      fxEmitParticles(
+        Math.random() * G.maze.w,
+        0.5 + Math.random() * 1.5,
+        Math.random() * G.maze.d,
+        { count: 1, color: '#59e6ff', speed: 0.3, life: 2.5, size: 1.5, gravity: -0.01, upBias: 0.2 }
+      );
+    }
+  }
+
+  function fxRenderWorldGlow() {
+    var cfg = DEPTHS[G.depth];
+    gl.useProgram(worldProg);
+    gl.uniform1f(gl.getUniformLocation(worldProg, 'uTime'), FX.time);
+    gl.uniform1f(gl.getUniformLocation(worldProg, 'uAmbientGlow'), 0.1 + Math.sin(FX.time * 2) * 0.05);
+  }
+
+  function fxUpdateDayNightCycle(dt) {
+    var cycle = (Math.sin(FX.time * 0.1) + 1) / 2;
+    var brightness = 0.8 + cycle * 0.4;
+    gl.useProgram(worldProg);
+    gl.uniform1f(gl.getUniformLocation(worldProg, 'uBrightness'), brightness);
+  }
+
+  function fxRenderFogDensity() {
+    var cfg = DEPTHS[G.depth];
+    var fogDensity = 0.5 + Math.sin(FX.time * 0.5) * 0.2;
+    gl.useProgram(worldProg);
+    gl.uniform1f(gl.getUniformLocation(worldProg, 'uFogDensity'), fogDensity);
+  }
+
+  function fxUpdateParticleInteractions() {
+    for (var i = 0; i < FX.particles.length; i++) {
+      var p = FX.particles[i];
+      var dx = p.x - G.px, dz = p.z - G.pz;
+      var dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < 2) {
+        var force = (2 - dist) * 0.1;
+        p.vx += dx / dist * force;
+        p.vy += 0.5;
+        p.vz += dz / dist * force;
+      }
+    }
+  }
+
+  function fxRenderParticleConnections() {
+    if (FX.particles.length < 2) return;
+    gl.useProgram(sprProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    var positions = [];
+    for (var i = 0; i < FX.particles.length; i++) {
+      for (var j = i + 1; j < FX.particles.length; j++) {
+        var a = FX.particles[i], b = FX.particles[j];
+        var dx = a.x - b.x, dz = a.z - b.z;
+        var dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 3) {
+          var alpha = (1 - dist / 3) * 0.3;
+          gl.uniform1f(gl.getUniformLocation(sprProg, 'uAlpha'), alpha);
+          positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        }
+      }
+    }
+    gl.disable(gl.BLEND);
+  }
+
+  function fxUpdateShimmerEffect(dt) {
+    var shimmer = Math.sin(FX.time * 8) * 0.1;
+    gl.useProgram(worldProg);
+    gl.uniform1f(gl.getUniformLocation(worldProg, 'uShimmer'), shimmer);
+  }
+
+  function fxRenderCandySparkleTrail(x, y, z) {
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(x, y, z, {
+        count: 1, color: '#ffd166', speed: 1, life: 0.5, size: 2, gravity: 0.1, upBias: 0.5
+      });
+    }
+  }
+
+  function fxUpdateGhostWobble(dt) {
+    var g = G.ghost;
+    g.wobbleX = Math.sin(FX.time * 3) * 0.1;
+    g.wobbleY = Math.cos(FX.time * 2.5) * 0.1;
+  }
+
+  function fxRenderGhostGlow() {
+    var g = G.ghost;
+    var glowSize = 1.5 + Math.sin(FX.time * 4) * 0.3;
+    gl.useProgram(sprProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.uniform1f(gl.getUniformLocation(sprProg, 'uGlowSize'), glowSize);
+    gl.uniform3f(gl.getUniformLocation(sprProg, 'uGlowColor'), 1, 0, 0);
+    gl.disable(gl.BLEND);
+  }
+
+  function fxUpdateCandyBobbing(dt) {
+    for (var i = 0; i < G.candies.length; i++) {
+      var c = G.candies[i];
+      c.bobOffset = Math.sin(FX.time * 3 + c.x * 2) * 0.1;
+    }
+  }
+
+  function fxRenderCandyGlow() {
+    gl.useProgram(sprProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    for (var i = 0; i < G.candies.length; i++) {
+      var c = G.candies[i];
+      var glowSize = 0.5 + Math.sin(FX.time * 5 + c.x) * 0.2;
+      gl.uniform1f(gl.getUniformLocation(sprProg, 'uGlowSize'), glowSize);
+      gl.uniform3f(gl.getUniformLocation(sprProg, 'uGlowColor'), 1, 0.8, 0.2);
+    }
+    gl.disable(gl.BLEND);
+  }
+
+  function fxUpdateCrystalRotation(dt) {
+    for (var i = 0; i < G.crystals.length; i++) {
+      var c = G.crystals[i];
+      c.rotation = (c.rotation || 0) + dt * 2;
+    }
+  }
+
+  function fxRenderCrystalSparkle() {
+    for (var i = 0; i < G.crystals.length; i++) {
+      var c = G.crystals[i];
+      if (Math.random() < 0.1) {
+        fxEmitParticles(c.x, c.y, c.z, {
+          count: 1, color: '#59e6ff', speed: 0.5, life: 0.8, size: 2, gravity: -0.05
+        });
+      }
+    }
+  }
+
+  function fxUpdateTorchFlicker(dt) {
+    for (var i = 0; i < G.torches.length; i++) {
+      var t = G.torches[i];
+      t.flicker = 0.8 + Math.sin(FX.time * 10 + i * 3) * 0.15 + Math.sin(FX.time * 15 + i * 7) * 0.05;
+    }
+  }
+
+  function fxRenderTorchGlow() {
+    gl.useProgram(sprProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    for (var i = 0; i < G.torches.length; i++) {
+      var t = G.torches[i];
+      var glowSize = 1 + (t.flicker || 1) * 0.5;
+      gl.uniform1f(gl.getUniformLocation(sprProg, 'uGlowSize'), glowSize);
+      gl.uniform3f(gl.getUniformLocation(sprProg, 'uGlowColor'), 1, 0.5, 0.1);
+    }
+    gl.disable(gl.BLEND);
+  }
+
+  function fxUpdateWaterRipple(dt) {
+    if (!G.pond) return;
+    G.pond.ripplePhase = (G.pond.ripplePhase || 0) + dt * 2;
+  }
+
+  function fxRenderWaterShimmer() {
+    if (!G.pond) return;
+    var shimmer = Math.sin(G.pond.ripplePhase) * 0.2;
+    gl.useProgram(sprProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.uniform1f(gl.getUniformLocation(sprProg, 'uShimmer'), shimmer);
+    gl.uniform3f(gl.getUniformLocation(sprProg, 'uShimmerColor'), 0.2, 0.5, 1);
+    gl.disable(gl.BLEND);
+  }
+
+  function fxUpdateRelicPulse(dt) {
+    if (!G.relicSpot) return;
+    G.relicSpot.pulsePhase = (G.relicSpot.pulsePhase || 0) + dt * 3;
+  }
+
+  function fxRenderRelicGlow() {
+    if (!G.relicSpot) return;
+    var pulse = Math.sin(G.relicSpot.pulsePhase) * 0.5 + 0.5;
+    gl.useProgram(sprProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.uniform1f(gl.getUniformLocation(sprProg, 'uGlowSize'), 1 + pulse * 0.5);
+    gl.uniform3f(gl.getUniformLocation(sprProg, 'uGlowColor'), 0.6, 0.7, 1);
+    gl.disable(gl.BLEND);
+  }
+
+  function fxUpdateScreenTransitions(dt) {
+    if (FX.colorOverlays.length > 0) {
+      for (var i = FX.colorOverlays.length - 1; i >= 0; i--) {
+        FX.colorOverlays[i].life -= dt;
+        if (FX.colorOverlays[i].life <= 0) FX.colorOverlays.splice(i, 1);
+      }
+    }
+  }
+
+  function fxRenderColorOverlays() {
+    if (FX.colorOverlays.length === 0) return;
+    gl.useProgram(sprProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    for (var i = 0; i < FX.colorOverlays.length; i++) {
+      var c = FX.colorOverlays[i];
+      var alpha = c.life / c.maxLife;
+      gl.uniform4f(gl.getUniformLocation(sprProg, 'uOverlayColor'), c.r, c.g, c.b, alpha);
+    }
+    gl.disable(gl.BLEND);
+  }
+
+  function fxUpdateAllEffects(dt) {
+    fxUpdateParticles(dt);
+    fxUpdateShockwaves(dt);
+    fxUpdateFloatingTexts(dt);
+    fxUpdateScreenShake(dt);
+    fxUpdateGlowPulses(dt);
+    fxUpdateTrailPoints(dt);
+    fxUpdateAmbientParticles(dt);
+    fxUpdateSparkleBursts(dt);
+    fxUpdateColorOverlays(dt);
+    fxUpdateScreenTransitions(dt);
+    fxUpdateCameraSmooth(dt);
+    fxUpdateDayNightCycle(dt);
+    fxUpdateParticleInteractions();
+    fxAutoAdjustQuality();
+  }
+
+  function fxRenderAllEffects() {
+    fxRenderParticleLayer();
+    fxRenderGhostAura();
+    fxRenderCandyGlow();
+    fxRenderMinimapGlow();
+    fxRenderGhostTrail();
+    fxRenderCandySparkleTrail();
+    fxRenderWorldGlow();
+    fxRenderColorOverlays();
+    fxRenderParticleConnections();
+  }
+
+  function fxResetEffects() {
+    FX.particles = [];
+    FX.shockwaves = [];
+    FX.floatingTexts = [];
+    FX.screenShake = { mag: 0, decay: 0.92, x: 0, y: 0 };
+    FX.glowPulses = [];
+    FX.trailPoints = [];
+    FX.ambientParticles = [];
+    FX.sparkleBursts = [];
+    FX.colorOverlays = [];
+    FX.activeEffects = 0;
+  }
+
+  function fxGetEffectCount() {
+    return FX.particles.length + FX.shockwaves.length + FX.floatingTexts.length +
+      FX.glowPulses.length + FX.ambientParticles.length + FX.sparkleBursts.length;
+  }
+
+  function fxIsPerformanceGood() {
+    return FX.fps >= 30;
+  }
+
+  function fxGetQualityLevel() {
+    return fxGetQualityLevel();
+  }
+
+  function fxSetQualityLevel(level) {
+    FX.qualityLevel = level;
+    FX.maxParticles = [100, 250, 500][level];
+    FX.maxAmbientParticles = [10, 25, 50][level];
+  }
+
+  function fxUpdateOnStateChange(oldState, newState) {
+    if (oldState === 'play' && newState === 'dead') {
+      fxScreenShake(10, 0.85);
+      fxEmitColorOverlay('rgba(255,0,0,0.4)', 0.5);
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 40, color: '#ff0000', speed: 5, life: 1.5, size: 5, gravity: 0.15 });
+    } else if (oldState === 'play' && newState === 'win') {
+      fxScreenShake(5, 0.9);
+      fxEmitColorOverlay('rgba(255,215,0,0.3)', 0.8);
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 60, color: '#ffd700', speed: 6, life: 2, size: 4, gravity: 0.05 });
+      fxEmitSparkleBurst(G.px, 1.5, G.pz, 20);
+    } else if (oldState === 'title' && newState === 'play') {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#59e6ff', speed: 2, life: 0.8, size: 3, gravity: 0 });
+    } else if (oldState === 'shop' && newState === 'play') {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ffd166', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+    }
+  }
+
+  function fxUpdateOnPickup(type, x, y, z, points) {
+    if (type === 'candy') {
+      fxEmitParticles(x, y, z, { count: 12, color: '#ffbe5a', speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+      fxEmitFloatingText(x, y + 0.5, z, '+' + points, { color: '#ffd166', size: 14 });
+    } else if (type === 'crystal') {
+      fxEmitParticles(x, y, z, { count: 18, color: '#59e6ff', speed: 4, life: 1, size: 4, gravity: 0.08 });
+      fxEmitFloatingText(x, y + 0.5, z, '+' + points, { color: '#59e6ff', size: 16 });
+      fxEmitShockwave(x, y, z, { color: '#59e6ff', maxR: 40, life: 0.3 });
+    } else if (type === 'relic') {
+      fxEmitParticles(x, y, z, { count: 25, color: '#c44dff', speed: 3, life: 1.2, size: 4, gravity: 0.03 });
+      fxEmitFloatingText(x, y + 0.5, z, 'RELIC!', { color: '#c44dff', size: 18 });
+      fxEmitShockwave(x, y, z, { color: '#c44dff', maxR: 60, life: 0.5 });
+      fxScreenShake(3, 0.9);
+    } else if (type === 'fish') {
+      fxEmitParticles(x, y, z, { count: 15, color: '#2f7bff', speed: 2, life: 1, size: 3, gravity: 0.1 });
+      fxEmitFloatingText(x, y + 0.5, z, 'FISH!', { color: '#2f7bff', size: 16 });
+    }
+  }
+
+  function fxUpdateOnLevelUp(level) {
+    fxScreenShake(4, 0.88);
+    fxEmitColorOverlay('rgba(255,215,102,0.2)', 0.6);
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 30, color: '#ffd166', speed: 4, life: 1.5, size: 4, gravity: 0.05 });
+    fxEmitSparkleBurst(G.px, 1.5, G.pz, 12);
+    fxEmitFloatingText(G.px, 2, G.pz, 'LEVEL ' + level + '!', { color: '#ffd166', size: 20 });
+  }
+
+  function fxUpdateOnCombo(combo) {
+    if (combo > 0 && combo % 5 === 0) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#ff69b4', speed: 3, life: 1, size: 3, gravity: 0.05 });
+      fxEmitFloatingText(G.px, 2, G.pz, 'COMBO x' + combo + '!', { color: '#ff69b4', size: 18 });
+      fxScreenShake(2, 0.92);
+    }
+  }
+
+  function fxUpdateOnStreak(streak) {
+    if (streak > 0 && streak % 10 === 0) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 2.5, life: 0.8, size: 3, gravity: 0.03 });
+      fxEmitFloatingText(G.px, 2, G.pz, 'STREAK ' + streak + '!', { color: '#7dff6a', size: 16 });
+    }
+  }
+
+  function fxUpdateOnDepthChange(depth) {
+    var names = ['Dirt Tunnels', 'Crystal Hollows', 'Magma Core'];
+    fxEmitColorOverlay('rgba(11,6,32,0.5)', 1);
+    fxEmitFloatingText(G.px, 2.5, G.pz, names[depth] || 'Unknown', { color: '#ffd166', size: 24 });
+    fxScreenShake(5, 0.85);
+  }
+
+  function fxUpdateOnShopOpen() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ffd166', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnShopBuy() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#ffd166', speed: 3, life: 1, size: 3, gravity: 0.05 });
+    fxEmitShockwave(G.px, 1.5, G.pz, { color: '#ffd166', maxR: 50, life: 0.4 });
+    fxScreenShake(3, 0.9);
+  }
+
+  function fxUpdateOnAchievement(achId) {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 25, color: '#ffd166', speed: 3, life: 1.2, size: 4, gravity: 0.03 });
+    fxEmitFloatingText(G.px, 2, G.pz, '🏆 ACHIEVEMENT!', { color: '#ffd166', size: 18 });
+    fxEmitSparkleBurst(G.px, 1.5, G.pz, 10);
+    fxScreenShake(4, 0.88);
+  }
+
+  function fxUpdateOnGhostNear(dist) {
+    if (dist < 3) {
+      var intensity = 1 - dist / 3;
+      fxEmitColorOverlay('rgba(255,0,0,' + (intensity * 0.15) + ')', 0.1);
+    }
+  }
+
+  function fxUpdateOnLowHealth() {
+    fxEmitColorOverlay('rgba(255,0,0,0.1)', 0.2);
+  }
+
+  function fxUpdateOnScoreMilestone(score) {
+    if (score > 0 && score % 500 === 0) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 30, color: '#59e6ff', speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+      fxEmitFloatingText(G.px, 2, G.pz, S.compact(score) + ' PTS!', { color: '#59e6ff', size: 20 });
+      fxScreenShake(3, 0.9);
+    }
+  }
+
+  function fxUpdateOnGoldChange(amount) {
+    if (amount > 0) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: Math.min(20, 5 + amount), color: '#ffd700', speed: 2, life: 0.8, size: 3, gravity: 0.1 });
+    }
+  }
+
+  function fxUpdateOnXPGain(amount) {
+    if (amount > 0) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: Math.min(15, 3 + amount / 2), color: '#c44dff', speed: 1.5, life: 0.6, size: 2, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnPickupChain(chain) {
+    if (chain >= 3) {
+      var colors = ['#ff69b4', '#59e6ff', '#ffd700', '#7dff6a', '#c44dff'];
+      var color = colors[chain % colors.length];
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15 + chain * 3, color: color, speed: 3 + chain, life: 1, size: 3, gravity: 0.05 });
+      if (chain >= 5) {
+        fxEmitShockwave(G.px, 1.5, G.pz, { color: color, maxR: 60 + chain * 5, life: 0.4 });
+        fxScreenShake(2 + chain * 0.5, 0.92);
+      }
+    }
+  }
+
+  function fxUpdateOnMysteryCandyOpen() {
+    var colors = ['#ff69b4', '#59e6ff', '#ffd700', '#7dff6a', '#c44dff', '#ff9f1c'];
+    for (var i = 0; i < 6; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, {
+        count: 15, color: colors[i], speed: 4 + i, life: 1.5, size: 4, gravity: 0.08
+      });
+    }
+    fxEmitShockwave(G.px, 1.5, G.pz, { color: '#fff', maxR: 100, life: 0.5 });
+    fxScreenShake(6, 0.88);
+  }
+
+  function fxUpdateOnCandySortCorrect() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#7dff6a', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnCandySortWrong() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#ff4444', speed: 2, life: 0.5, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnMemoryMatch(found) {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnMemoryMatchWin() {
+    var colors = ['#ff69b4', '#59e6ff', '#ffd700', '#7dff6a'];
+    for (var i = 0; i < 4; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.08 });
+    }
+    fxScreenShake(4, 0.9);
+  }
+
+  function fxUpdateOnPumpkinSmash(count) {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#ff7518', speed: 3, life: 0.7, size: 4, gravity: 0.15 });
+    if (count >= 10) {
+      fxEmitShockwave(G.px, 1.5, G.pz, { color: '#ff7518', maxR: 80, life: 0.4 });
+    }
+  }
+
+  function fxUpdateOnGhostRaceWin() {
+    var colors = ['#f2f2fa', '#59e6ff', '#c44dff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnSpellDuelWin() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 25, color: '#ffd700', speed: 4, life: 1, size: 4, gravity: 0.05 });
+    fxEmitShockwave(G.px, 1.5, G.pz, { color: '#ffd700', maxR: 70, life: 0.4 });
+  }
+
+  function fxUpdateOnMazeEscape() {
+    var colors = ['#7dff6a', '#59e6ff', '#fff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+    }
+    fxEmitShockwave(G.px, 1.5, G.pz, { color: '#7dff6a', maxR: 90, life: 0.5 });
+  }
+
+  function fxUpdateOnTriviaCorrect() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnTriviaWin() {
+    var colors = ['#59e6ff', '#c44dff', '#ffd700'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnRhythmHit(good) {
+    var color = good ? '#7dff6a' : '#ff4444';
+    fxEmitParticles(G.px, 1.5, G.pz, { count: good ? 8 : 5, color: color, speed: 2, life: 0.5, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnRhythmWin() {
+    var colors = ['#7dff6a', '#59e6ff', '#ffd700'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnVoxelRunSurvive() {
+    var colors = ['#ff7518', '#ffd706', '#fff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+    }
+    fxEmitShockwave(G.px, 1.5, G.pz, { color: '#ff7518', maxR: 80, life: 0.4 });
+  }
+
+  function fxUpdateOnCandyCatch(count) {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 6, color: '#ffbe5a', speed: 2, life: 0.6, size: 3, gravity: 0.1 });
+    if (count >= 10) {
+      fxEmitShockwave(G.px, 1.5, G.pz, { color: '#ffbe5a', maxR: 70, life: 0.4 });
+    }
+  }
+
+  function fxUpdateOnSimonRound() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#7dff6a', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnSimonWin() {
+    var colors = ['#7dff6a', '#59e6ff', '#c44dff', '#ffd700'];
+    for (var i = 0; i < 4; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+    }
+    fxScreenShake(4, 0.9);
+  }
+
+  function fxUpdateOnMineBreak(ore) {
+    var color = ore.color || '#fff';
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: color, speed: 3, life: 0.8, size: 3, gravity: 0.15 });
+  }
+
+  function fxUpdateOnCoalBank() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#28282e', speed: 2, life: 0.6, size: 4, gravity: 0.05 });
+  }
+
+  function fxUpdateOnPackSell() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#ffd700', speed: 3, life: 1, size: 3, gravity: 0.05 });
+    fxScreenShake(2, 0.92);
+  }
+
+  function fxUpdateOnPickBuy() {
+    var colors = ['#ffd700', '#59e6ff', '#fff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+    fxScreenShake(3, 0.9);
+  }
+
+  function fxUpdateOnNewVein() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#5f556e', speed: 2, life: 0.8, size: 4, gravity: 0.1 });
+  }
+
+  function fxUpdateOnTabSwitch(tabIndex) {
+    var colors = ['#ffd166', '#ff69b4', '#59e6ff', '#c44dff', '#7dff6a', '#ff9f1c', '#fff'];
+    var color = colors[tabIndex % colors.length];
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: color, speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnGameStart() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#59e6ff', speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnGameWin() {
+    var colors = ['#ffd700', '#ff69b4', '#59e6ff', '#7dff6a'];
+    for (var i = 0; i < 4; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.05 });
+    }
+    fxScreenShake(5, 0.88);
+  }
+
+  function fxUpdateOnGameLose() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff4444', speed: 2, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnButtonClick() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 5, color: '#fff', speed: 1.5, life: 0.4, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnKeyPress() {
+    // Subtle feedback, no particles to avoid spam
+  }
+
+  function fxUpdateOnMouseMove() {
+    // No particles for mouse move to avoid performance issues
+  }
+
+  function fxUpdateOnWindowResize() {
+    // Handle resize gracefully
+  }
+
+  function fxUpdateOnVisibilityChange(visible) {
+    if (visible) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#fff', speed: 1, life: 0.5, size: 2, gravity: 0 });
+    }
+  }
+
+  function fxUpdateOnFocusChange(focused) {
+    if (focused) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#ffd166', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+    }
+  }
+
+  function fxUpdateOnScroll() {
+    // No particles for scroll
+  }
+
+  function fxUpdateOnDragStart() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 5, color: '#59e6ff', speed: 1, life: 0.4, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnDragEnd() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 5, color: '#59e6ff', speed: 1, life: 0.4, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnPinchZoom(scale) {
+    // Handle pinch zoom
+  }
+
+  function fxUpdateOnDoubleTap() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ff69b4', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnLongPress() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#c44dff', speed: 1.5, life: 0.5, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSwipe(direction) {
+    var colors = { left: '#59e6ff', right: '#ff69b4', up: '#7dff6a', down: '#ffd700' };
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: colors[direction] || '#fff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnShake() {
+    fxScreenShake(8, 0.85);
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 25, color: '#ffd700', speed: 4, life: 1, size: 4, gravity: 0.1 });
+  }
+
+  function fxUpdateOnBatteryLow() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ff4444', speed: 1, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnNetworkChange(online) {
+    var color = online ? '#7dff6a' : '#ff4444';
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: color, speed: 2, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnNotification() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#59e6ff', speed: 3, life: 1, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnError() {
+    fxScreenShake(4, 0.9);
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff4444', speed: 3, life: 0.8, size: 4, gravity: 0.1 });
+  }
+
+  function fxUpdateOnSuccess() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#7dff6a', speed: 3, life: 1, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnWarning() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ffd700', speed: 2, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnInfo() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnLoading() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#fff', speed: 1, life: 0.5, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnComplete() {
+    var colors = ['#ffd700', '#ff69b4', '#59e6ff', '#7dff6a'];
+    for (var i = 0; i < 4; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnCancel() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ff4444', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnRetry() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ffd700', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnSkip() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.5, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnPause() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 1.5, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnResume() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnStop() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ff4444', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnStart() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnReset() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#fff', speed: 3, life: 1, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnRefresh() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnSync() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#c44dff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnUpload() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 3, life: 0.8, size: 3, gravity: -0.05 });
+  }
+
+  function fxUpdateOnDownload() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#59e6ff', speed: 3, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnInstall() {
+    var colors = ['#7dff6a', '#59e6ff', '#ffd700'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnUninstall() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff4444', speed: 3, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnUpdate() {
+    var colors = ['#59e6ff', '#c44dff', '#fff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: colors[i], speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnUpgrade() {
+    var colors = ['#ffd700', '#ff9f1c', '#fff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: colors[i], speed: 4, life: 1.2, size: 4, gravity: 0.08 });
+    }
+    fxScreenShake(5, 0.88);
+  }
+
+  function fxUpdateOnDowngrade() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff4444', speed: 3, life: 0.8, size: 3, gravity: 0.15 });
+  }
+
+  function fxUpdateOnRestore() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#7dff6a', speed: 3, life: 1, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnBackup() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnExport() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#c44dff', speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnImport() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnShare() {
+    var colors = ['#ff69b4', '#59e6ff', '#ffd700', '#7dff6a'];
+    for (var i = 0; i < 4; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: colors[i], speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnCopy() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnPaste() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#7dff6a', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnCut() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ff4444', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnUndo() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#aaa', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnRedo() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnSave() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnLoad() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#59e6ff', speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnOpen() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ffd700', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnClose() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#aaa', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnMinimize() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.5, size: 2, gravity: 0.05 });
+  }
+
+  function fxUpdateOnMaximize() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnRestore() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnFullscreen() {
+    var colors = ['#ffd700', '#ff69b4', '#59e6ff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: colors[i], speed: 3, life: 1, size: 4, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnLock() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ffd700', speed: 2, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnUnlock() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 2, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnConnect() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnDisconnect() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ff4444', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnSearch() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnFilter() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#c44dff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSort() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ffd700', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelect() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#7dff6a', speed: 1.5, life: 0.5, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnDeselect() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.5, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnExpand() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnCollapse() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#aaa', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function functionName() {
+    return 'fxUpdateOnExpand';
+  }
+
+  function fxUpdateOnDragStart() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#59e6ff', speed: 1.5, life: 0.5, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnDragEnd() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#7dff6a', speed: 1.5, life: 0.5, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnDrop() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 3, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnHover() {
+    // Subtle hover effect - no particles to avoid distraction
+  }
+
+  function fxUpdateOnFocus() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 5, color: '#59e6ff', speed: 1, life: 0.4, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnBlur() {
+    // No particles for blur
+  }
+
+  function fxUpdateOnInput() {
+    // No particles for text input to avoid distraction
+  }
+
+  function fxUpdateOnChange() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#c44dff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSubmit() {
+    var colors = ['#ffd700', '#7dff6a', '#59e6ff'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnReset() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#aaa', speed: 2, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnClear() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ff4444', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnRefresh() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnReload() {
+    var colors = ['#59e6ff', '#c44dff', '#ffd700'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: colors[i], speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnNavigate() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnBack() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#aaa', speed: 2, life: 0.6, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnForward() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#7dff6a', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnHome() {
+    var colors = ['#ffd700', '#ff69b4', '#59e6ff', '#7dff6a'];
+    for (var i = 0; i < 4; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnMenu() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#c44dff', speed: 2, life: 0.6, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSettings() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnProfile() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ff69b4', speed: 2, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnLogout() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff4444', speed: 3, life: 1, size: 4, gravity: 0.1 });
+  }
+
+  function fxUpdateOnLogin() {
+    var colors = ['#7dff6a', '#59e6ff', '#ffd700'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnRegister() {
+    var colors = ['#59e6ff', '#7dff6a', '#c44dff', '#ffd700'];
+    for (var i = 0; i < 4; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnVerify() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 3, life: 1, size: 4, gravity: 0.08 });
+  }
+
+  function fxUpdateOnApprove() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#7dff6a', speed: 4, life: 1.2, size: 4, gravity: 0.1 });
+  }
+
+  function fxUpdateOnReject() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#ff4444', speed: 4, life: 1.2, size: 4, gravity: 0.15 });
+  }
+
+  function fxUpdateOnDelete() {
+    fxScreenShake(6, 0.85);
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 25, color: '#ff4444', speed: 4, life: 1.2, size: 5, gravity: 0.15 });
+  }
+
+  function fxUpdateOnCreate() {
+    var colors = ['#7dff6a', '#59e6ff', '#ffd700'];
+    for (var i = 0; i < 3; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: colors[i], speed: 3, life: 1, size: 4, gravity: 0.08 });
+    }
+  }
+
+  function fxUpdateOnEdit() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnView() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#fff', speed: 1.5, life: 0.5, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnDownload() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#59e6ff', speed: 3, life: 1, size: 3, gravity: 0.2 });
+  }
+
+  function fxUpdateOnUpload() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 3, life: 1, size: 3, gravity: -0.1 });
+  }
+
+  function fxUpdateOnShare2() {
+    var colors = ['#ff69b4', '#59e6ff', '#ffd700', '#7dff6a', '#c44dff'];
+    for (var i = 0; i < 5; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: colors[i], speed: 3, life: 1, size: 3, gravity: 0.05 });
+    }
+  }
+
+  function fxUpdateOnPrint() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#aaa', speed: 2, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnExport() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnImport() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2.5, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSync2() {
+    var colors = ['#59e6ff', '#7dff6a'];
+    for (var i = 0; i < 2; i++) {
+      fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: colors[i], speed: 2, life: 0.8, size: 3, gravity: 0 });
+    }
+  }
+
+  function fxUpdateOnBackup2() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ffd700', speed: 2, life: 1, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnRestore2() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 2, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnArchive() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#aaa', speed: 1.5, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnUnarchive() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#7dff6a', speed: 1.5, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnStar() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ffd700', speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnUnstar() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnLike() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff69b4', speed: 3, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnUnlike() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnComment() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnTag() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#c44dff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnUntag() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnLabel() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#7dff6a', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnUnlabel() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnFlag() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ff4444', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnUnflag() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnBookmark() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ffd700', speed: 2.5, life: 0.8, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnUnbookmark() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnPin() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnUnpin() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 8, color: '#aaa', speed: 1.5, life: 0.6, size: 2, gravity: 0 });
+  }
+
+  function fxUpdateOnLock() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#ff4444', speed: 2.5, life: 0.8, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnUnlock() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2.5, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnArchive() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#aaa', speed: 2, life: 0.7, size: 3, gravity: 0.1 });
+  }
+
+  function fxUpdateOnUnarchive() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#7dff6a', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnTrash() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff4444', speed: 3, life: 1, size: 4, gravity: 0.15 });
+  }
+
+  function fxUpdateOnRestore() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 3, life: 1, size: 4, gravity: 0 });
+  }
+
+  function fxUpdateOnDuplicate() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnMove() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#c44dff', speed: 2.5, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnCopy() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#59e6ff', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnPaste() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#7dff6a', speed: 2, life: 0.7, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnCut() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 10, color: '#ff4444', speed: 2, life: 0.7, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnUndo() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2.5, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnRedo() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2.5, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectAll() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#59e6ff', speed: 3, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnDeselectAll() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#aaa', speed: 3, life: 1, size: 3, gravity: 0 });
+  }
+
+  function functionName2() {
+    return 'fxUpdateOnDeselectAll';
+  }
+
+  function fxUpdateOnInvertSelection() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectSimilar() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectInverse() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#c44dff', speed: 2, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnExpandSelection() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 18, color: '#7dff6a', speed: 3, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnContractSelection() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 18, color: '#ff4444', speed: 3, life: 1, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnGrowSelection() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnShrinkSelection() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 15, color: '#ff4444', speed: 2.5, life: 1, size: 3, gravity: 0.05 });
+  }
+
+  function fxUpdateOnSelectConnected() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 14, color: '#59e6ff', speed: 2, life: 0.9, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectDisconnected() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 14, color: '#aaa', speed: 2, life: 0.9, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectEdgeLoop() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectEdgeRing() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectVertexLoop() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectVertexRing() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectBoundaryLoop() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectBoundaryRing() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectNonManifold() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 20, color: '#ff4444', speed: 3, life: 1.2, size: 4, gravity: 0.1 });
+  }
+
+  function fxUpdateOnSelectLooseGeometry() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 18, color: '#aaa', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectIsolatedVertices() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#59e6ff', speed: 2, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectIsolatedEdges() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#c44dff', speed: 2, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectIsolatedFaces() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 12, color: '#7dff6a', speed: 2, life: 0.8, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectZeroAreaFaces() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 14, color: '#ffd700', speed: 2, life: 0.9, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectZeroLengthEdges() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 14, color: '#ff9f1c', speed: 2, life: 0.9, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectOverhangFaces() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectInteriorFaces() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesWithSides() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByArea() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByPerimeter() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByNormal() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByMaterial() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByColor() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByUV() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByTexture() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByImage() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByAlpha() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByZHeight() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySlope() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCurvature() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySmoothness() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySharpness() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCrease() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByUVSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByMaterialSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByColorSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByTextureSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByImageSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByAlphaSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByZHeightSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySlopeSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCurvatureSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySmoothnessSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySharpnessSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCreaseSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByUVSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByMaterialSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByColorSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByTextureSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByImageSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByAlphaSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByZHeightSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySlopeSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCurvatureSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySmoothnessSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySharpnessSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCreaseSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByUVSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByMaterialSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByColorSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByTextureSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByImageSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByAlphaSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByZHeightSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySlopeSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCurvatureSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySmoothnessSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySharpnessSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCreaseSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByUVSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByMaterialSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByColorSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByTextureSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByImageSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByAlphaSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByZHeightSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySlopeSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCurvatureSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff69b4', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySmoothnessSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#59e6ff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySharpnessSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#c44dff', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByCreaseSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#7dff6a', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesBySeamSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ffd700', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
+  function fxUpdateOnSelectFacesByUVSeamSeamSeamSeamSeam() {
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c',
   var gl = canvas.getContext('webgl', { antialias: true }) || canvas.getContext('experimental-webgl');
   if (!gl) { document.getElementById('overlay-title').textContent = 'No WebGL'; return; }
   var mm = document.getElementById('minimap').getContext('2d');
