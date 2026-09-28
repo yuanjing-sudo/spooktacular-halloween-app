@@ -4814,4 +4814,772 @@
       setupKingArena();
     }
   };
+
+  /* ================================================================
+   * COMMERCIAL-GRADE ANIMATION SYSTEM
+   * Smooth camera, movement, combat, UI, and visual effects
+   * ================================================================ */
+
+  // ---- Animation State ----
+  var Anim = {
+    // Camera
+    shake: 0, shakeX: 0, shakeY: 0,
+    fov: Math.PI / 2.6, fovTarget: Math.PI / 2.6,
+    pitchSmooth: 0, yawSmooth: 0,
+    // Movement
+    velX: 0, velZ: 0, velY: 0,
+    bobPhase: 0, bobAmp: 0,
+    landDip: 0, landDipVel: 0,
+    // Combat
+    swingT: 0, swingDur: 0.28,
+    hitStop: 0, hitStopDur: 0,
+    damageFlash: 0, damageFlashDur: 0.3,
+    // UI
+    panelT: 0, panelTarget: 0,
+    overlayT: 0, overlayTarget: 0,
+    // Particles
+    trailT: 0,
+    // Portal
+    portalSwirl: 0,
+    // Weather
+    weatherBlend: 0, weatherBlendTarget: 0,
+    // Day/night
+    dayBlend: 0, dayBlendTarget: 0,
+    // Death
+    deathT: 0, deathTarget: 0,
+    // Level up
+    levelUpT: 0, levelUpTarget: 0,
+    // Screen effects
+    vignette: 0, vignetteTarget: 0,
+    chromatic: 0, chromaticTarget: 0
+  };
+
+  // ---- Easing Functions ----
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  function easeOutElastic(t) {
+    var c4 = (2 * Math.PI) / 3;
+    return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+  }
+  function easeOutBack(t) {
+    var c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+  function smoothstep(a, b, x) {
+    var t = clamp((x - a) / (b - a), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  // ---- Camera Shake ----
+  function addShake(intensity, duration) {
+    Anim.shake = Math.max(Anim.shake, intensity);
+    Anim.shakeDur = Math.max(Anim.shakeDur || 0, duration);
+  }
+
+  function updateCameraShake(dt) {
+    if (Anim.shake > 0) {
+      Anim.shake = Math.max(0, Anim.shake - dt * 3);
+      var s = Anim.shake * Anim.shake;
+      Anim.shakeX = (Math.random() - 0.5) * s * 0.1;
+      Anim.shakeY = (Math.random() - 0.5) * s * 0.1;
+    } else {
+      Anim.shakeX = 0;
+      Anim.shakeY = 0;
+    }
+  }
+
+  // ---- FOV Effects ----
+  function setFOV(target, speed) {
+    Anim.fovTarget = target;
+    Anim.fovSpeed = speed || 3;
+  }
+
+  function updateFOV(dt) {
+    var diff = Anim.fovTarget - Anim.fov;
+    if (Math.abs(diff) > 0.001) {
+      Anim.fov += diff * Math.min(1, dt * (Anim.fovSpeed || 3));
+    }
+  }
+
+  // ---- Smooth Camera Look ----
+  function updateSmoothLook(dt) {
+    var lookSpeed = 12;
+    Anim.pitchSmooth = lerp(Anim.pitchSmooth, G.pitch, Math.min(1, dt * lookSpeed));
+    Anim.yawSmooth = lerp(Anim.yawSmooth, G.yaw, Math.min(1, dt * lookSpeed));
+  }
+
+  // ---- Movement Smoothing ----
+  function updateMovementSmoothing(dt) {
+    var accel = G.onGround ? 12 : 4;
+    var friction = G.onGround ? 10 : 1;
+    var maxSpeed = 4.6;
+    // Costume bonus
+    var costume = getCostumeBonus();
+    if (costume && costume.bonus === 'speed') maxSpeed *= costume.mult;
+    // Potion bonus
+    if (hasPotion('speed')) maxSpeed *= 1.4;
+    // Slow effect
+    if (meta().slowTimer > 0) maxSpeed *= 0.5;
+
+    var targetVX = G.vxh;
+    var targetVZ = G.vzh;
+    var targetSpeed = Math.hypot(targetVX, targetVZ);
+    if (targetSpeed > maxSpeed) {
+      targetVX = targetVX / targetSpeed * maxSpeed;
+      targetVZ = targetVZ / targetSpeed * maxSpeed;
+    }
+
+    var rate = (Math.hypot(targetVX, targetVZ) > Math.hypot(Anim.velX, Anim.velZ) ? accel : friction) * dt;
+    Anim.velX = lerp(Anim.velX, targetVX, Math.min(1, rate));
+    Anim.velZ = lerp(Anim.velZ, targetVZ, Math.min(1, rate));
+
+    // Head bob
+    var hSpeed = Math.hypot(Anim.velX, Anim.velZ);
+    var bobTarget = (hSpeed > 0.5 && G.onGround) ? 1 : 0;
+    Anim.bobAmp = lerp(Anim.bobAmp, bobTarget, Math.min(1, dt * 8));
+    Anim.bobPhase += hSpeed * dt * 2.4;
+
+    // Landing dip
+    if (G.onGround && Anim.landDipVel > 0) {
+      Anim.landDip += Anim.landDipVel * dt;
+      Anim.landDipVel -= 30 * dt;
+      if (Anim.landDip < 0) { Anim.landDip = 0; Anim.landDipVel = 0; }
+    }
+  }
+
+  // ---- Combat Animations ----
+  function updateCombatAnimations(dt) {
+    // Swing
+    if (Anim.swingT < 1) {
+      Anim.swingT = Math.min(1, Anim.swingT + dt / Anim.swingDur);
+    }
+    // Hit stop
+    if (Anim.hitStop > 0) {
+      Anim.hitStop -= dt;
+      if (Anim.hitStop < 0) Anim.hitStop = 0;
+    }
+    // Damage flash
+    if (Anim.damageFlash > 0) {
+      Anim.damageFlash -= dt;
+      if (Anim.damageFlash < 0) Anim.damageFlash = 0;
+    }
+  }
+
+  function triggerHitStop(duration) {
+    Anim.hitStop = duration || 0.08;
+  }
+
+  function triggerDamageFlash() {
+    Anim.damageFlash = Anim.damageFlashDur;
+  }
+
+  // ---- UI Animations ----
+  function updateUIAnimations(dt) {
+    // Panel slide
+    Anim.panelT = lerp(Anim.panelT, Anim.panelTarget, Math.min(1, dt * 10));
+    // Overlay fade
+    Anim.overlayT = lerp(Anim.overlayT, Anim.overlayTarget, Math.min(1, dt * 8));
+    // Level up
+    if (Anim.levelUpT > 0) {
+      Anim.levelUpT -= dt;
+      if (Anim.levelUpT < 0) Anim.levelUpT = 0;
+    }
+    // Death fade
+    if (G.state === 'dead') {
+      Anim.deathT = lerp(Anim.deathT, 1, Math.min(1, dt * 2));
+    } else {
+      Anim.deathT = lerp(Anim.deathT, 0, Math.min(1, dt * 3));
+    }
+    // Vignette
+    var danger = dangerLevel();
+    Anim.vignetteTarget = danger * 0.5 + (meta().hp < 30 ? 0.3 : 0);
+    Anim.vignette = lerp(Anim.vignette, Anim.vignetteTarget, Math.min(1, dt * 3));
+    // Chromatic aberration on damage
+    Anim.chromaticTarget = Anim.damageFlash > 0 ? 1 : 0;
+    Anim.chromatic = lerp(Anim.chromatic, Anim.chromaticTarget, Math.min(1, dt * 10));
+  }
+
+  // ---- Portal Swirl Animation ----
+  function updatePortalSwirl(dt) {
+    Anim.portalSwirl += dt * 2;
+  }
+
+  // ---- Weather Transition ----
+  function updateWeatherBlend(dt) {
+    Anim.weatherBlend = lerp(Anim.animBlend || 0, 1, Math.min(1, dt * 0.5));
+  }
+
+  // ---- Particle Trails ----
+  function updateParticleTrails(dt) {
+    Anim.trailT -= dt;
+    if (Anim.trailT <= 0) {
+      Anim.trailT = 0.05;
+      // Player trail when moving fast
+      var speed = Math.hypot(Anim.velX, Anim.velZ);
+      if (speed > 3 && G.onGround) {
+        G.parts.push({
+          x: G.px + (Math.random() - 0.5) * 0.2,
+          y: G.py + 0.1,
+          z: G.pz + (Math.random() - 0.5) * 0.2,
+          vx: -Anim.velX * 0.1 + (Math.random() - 0.5) * 0.2,
+          vy: 0.2 + Math.random() * 0.2,
+          vz: -Anim.velZ * 0.1 + (Math.random() - 0.5) * 0.2,
+          life: 0.3 + Math.random() * 0.2,
+          col: [0.6, 0.5, 0.4],
+          grav: 0.1
+        });
+      }
+    }
+  }
+
+  // ---- Block Break Crack Animation ----
+  var crackStages = [
+    { t: 0.0, verts: 4 },
+    { t: 0.25, verts: 8 },
+    { t: 0.5, verts: 12 },
+    { t: 0.75, verts: 16 },
+    { t: 1.0, verts: 20 }
+  ];
+
+  function getCrackIntensity(dmg, maxHp) {
+    return clamp(dmg / maxHp, 0, 1);
+  }
+
+  function drawCrackOverlay(x, y, z, intensity) {
+    if (intensity <= 0) return;
+    var CP = [], CC = [];
+    var stage = 0;
+    for (var i = 0; i < crackStages.length; i++) {
+      if (intensity >= crackStages[i].t) stage = i;
+    }
+    var numVerts = crackStages[stage].verts;
+    var alpha = 0.3 + intensity * 0.5;
+    var crackCol = [0.1, 0.08, 0.06];
+    // Generate crack lines on each face
+    for (var f = 0; f < 6; f++) {
+      var F = FACES[f];
+      var cx = x + 0.5 + F.d[0] * 0.51;
+      var cy = y + 0.5 + F.d[1] * 0.51;
+      var cz = z + 0.5 + F.d[2] * 0.51;
+      var seed = x * 7 + y * 13 + z * 17 + f * 31;
+      for (var v = 0; v < numVerts; v++) {
+        var a1 = ((seed + v * 17) % 100) / 100 * Math.PI * 2;
+        var a2 = ((seed + v * 23 + 7) % 100) / 100 * Math.PI * 2;
+        var r1 = 0.1 + ((seed + v * 31) % 100) / 100 * 0.3;
+        var r2 = 0.1 + ((seed + v * 37 + 13) % 100) / 100 * 0.3;
+        var ox = F.d[0] === 0 ? Math.cos(a1) * r1 : 0;
+        var oy = F.d[1] === 0 ? Math.cos(a1) * r1 : 0;
+        var oz = F.d[2] === 0 ? Math.cos(a1) * r1 : 0;
+        var ox2 = F.d[0] === 0 ? Math.cos(a2) * r2 : 0;
+        var oy2 = F.d[1] === 0 ? Math.cos(a2) * r2 : 0;
+        var oz2 = F.d[2] === 0 ? Math.cos(a2) * r2 : 0;
+        CP.push(cx + ox, cy + oy, cz + oz);
+        CP.push(cx + ox2, cy + oy2, cz + oz2);
+        CC.push(crackCol[0], crackCol[1], crackCol[2], alpha);
+        CC.push(crackCol[0], crackCol[1], crackCol[2], alpha * 0.5);
+      }
+    }
+    if (CP.length) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      drawDyn(dynP1, dynC1, CP, CC);
+      gl.disable(gl.BLEND);
+    }
+  }
+
+  // ---- Smooth Mob Movement Interpolation ----
+  var mobPrevPos = {};
+  function initMobInterp() {
+    mobPrevPos = {};
+    for (var i = 0; i < G.mobs.length; i++) {
+      var m = G.mobs[i];
+      mobPrevPos[i] = { x: m.x, y: m.y, z: m.z };
+    }
+  }
+
+  function updateMobInterp(dt) {
+    for (var i = 0; i < G.mobs.length; i++) {
+      var m = G.mobs[i];
+      var prev = mobPrevPos[i];
+      if (prev) {
+        m.renderX = lerp(prev.x, m.x, Math.min(1, dt * 15));
+        m.renderY = lerp(prev.y, m.y, Math.min(1, dt * 15));
+        m.renderZ = lerp(prev.z, m.z, Math.min(1, dt * 15));
+      } else {
+        m.renderX = m.x; m.renderY = m.y; m.renderZ = m.z;
+      }
+    }
+  }
+
+  function saveMobInterp() {
+    for (var i = 0; i < G.mobs.length; i++) {
+      var m = G.mobs[i];
+      mobPrevPos[i] = { x: m.x, y: m.y, z: m.z };
+    }
+  }
+
+  // ---- Mob Attack Animation ----
+  function getMobAttackT(m) {
+    if (m.cool > 0.8) return 1 - (m.cool - 0.8) / 0.4;
+    return 0;
+  }
+
+  // ---- Mob Death Animation ----
+  var deathAnims = {};
+  function startDeathAnim(mob) {
+    deathAnims[G.mobs.indexOf(mob)] = {
+      t: 0,
+      dur: 0.5,
+      x: mob.x, y: mob.y, z: mob.z,
+      kind: mob.kind
+    };
+  }
+
+  function updateDeathAnims(dt) {
+    for (var idx in deathAnims) {
+      var da = deathAnims[idx];
+      da.t += dt;
+      if (da.t >= da.dur) {
+        delete deathAnims[idx];
+      }
+    }
+  }
+
+  function drawDeathAnims(P, C) {
+    for (var idx in deathAnims) {
+      var da = deathAnims[idx];
+      var t = da.t / da.dur;
+      var alpha = 1 - t;
+      var scale = 1 + t * 0.5;
+      var yOff = t * 1.5;
+      var col = [0.8, 0.2, 0.2];
+      if (da.kind === 'ghost') col = [0.5, 0.7, 1.0];
+      else if (da.kind === 'skeleton') col = [0.9, 0.9, 0.8];
+      else if (da.kind === 'witch') col = [0.4, 0.1, 0.5];
+      else if (da.kind === 'vampire') col = [0.6, 0.05, 0.05];
+      else if (da.kind === 'reaper') col = [0.1, 0.1, 0.1];
+      else if (da.kind === 'pumpkin') col = [1.0, 0.5, 0.1];
+      emitBox(P, C, [da.x, da.y + yOff, da.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+        0, 0.3 * scale, 0, 0.4 * scale, 0.5 * scale, 0.4 * scale, col, alpha);
+    }
+  }
+
+  // ---- Level Up Animation ----
+  function triggerLevelUp() {
+    Anim.levelUpT = 2;
+    // Burst of particles
+    for (var i = 0; i < 30; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var sp = 1 + Math.random() * 3;
+      G.parts.push({
+        x: G.px, y: G.py + 1, z: G.pz,
+        vx: Math.cos(a) * sp, vy: 2 + Math.random() * 3, vz: Math.sin(a) * sp,
+        life: 1 + Math.random() * 0.5,
+        col: [1.0, 0.9, 0.3],
+        grav: 0.3
+      });
+    }
+    addShake(0.3, 0.3);
+  }
+
+  function drawLevelUpEffect(P, C) {
+    if (Anim.levelUpT <= 0) return;
+    var t = 1 - Anim.levelUpT / 2;
+    var alpha = 1 - t;
+    var radius = 0.5 + t * 3;
+    // Expanding ring
+    for (var i = 0; i < 16; i++) {
+      var a = i * Math.PI / 2 / 4;
+      var x = G.px + Math.cos(a) * radius;
+      var z = G.pz + Math.sin(a) * radius;
+      emitSphere(P, C, x, G.py + 0.5, z, 0.08, [1.0, 0.9, 0.3], alpha, 6, 4);
+    }
+    // Vertical beam
+    emitCylinder(P, C, G.px, G.py, G.pz, 0.1, 3 * (1 - t), [1.0, 0.9, 0.3], alpha * 0.5, 8);
+  }
+
+  // ---- Damage Number Popups ----
+  var damageNumbers = [];
+  function spawnDamageNumber(x, y, z, val, color) {
+    damageNumbers.push({ x: x, y: y, z: z, val: val, color: color || '#ff4444', t: 0, dur: 0.8 });
+  }
+
+  function updateDamageNumbers(dt) {
+    for (var i = damageNumbers.length - 1; i >= 0; i--) {
+      var dn = damageNumbers[i];
+      dn.t += dt;
+      dn.y += dt * 1.5;
+      if (dn.t >= dn.dur) damageNumbers.splice(i, 1);
+    }
+  }
+
+  function drawDamageNumbers(P, C) {
+    for (var i = 0; i < damageNumbers.length; i++) {
+      var dn = damageNumbers[i];
+      var t = dn.t / dn.dur;
+      var alpha = 1 - t * t;
+      var scale = 1 + t * 0.3;
+      // Draw as small boxes forming a cross/plus shape
+      var s = 0.06 * scale;
+      emitBox(P, C, [dn.x, dn.y, dn.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+        0, 0, 0, s, s * 3, s, hexRGB(dn.color), alpha);
+      emitBox(P, C, [dn.x, dn.y, dn.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+        0, 0, 0, s * 3, s, s, hexRGB(dn.color), alpha);
+    }
+  }
+
+  // ---- Smooth Portal Animation ----
+  function drawPortalSwirl(P, C, portal) {
+    var t = Anim.portalSwirl + portal.phase;
+    var numParticles = 8;
+    for (var i = 0; i < numParticles; i++) {
+      var a = t + i * Math.PI * 2 / numParticles;
+      var r = 0.3 + Math.sin(t * 2 + i) * 0.15;
+      var y = portal.y + 0.3 + (i / numParticles) * 1.4 + Math.sin(t * 3 + i) * 0.1;
+      var x = portal.x + Math.cos(a) * r;
+      var z = portal.z + Math.sin(a) * r;
+      var alpha = 0.4 + Math.sin(t * 4 + i) * 0.2;
+      var tc = [1, 0.5, 1];
+      for (var j = 0; j < PORTAL_TYPES.length; j++) {
+        if (PORTAL_TYPES[j].key === portal.type) tc = PORTAL_TYPES[j].col;
+      }
+      emitSphere(P, C, x, y, z, 0.04, tc, alpha, 4, 3);
+    }
+  }
+
+  // ---- Smooth Gate Animation ----
+  function drawGateGlow(P, C, gate) {
+    var t = G.time * 2;
+    var pulse = 0.5 + Math.sin(t) * 0.3;
+    var col = GATE_COLORS[gate.to % GATE_COLORS.length];
+    // Floating particles around gate
+    for (var i = 0; i < 6; i++) {
+      var a = t * 0.5 + i * Math.PI / 3;
+      var r = 0.8 + Math.sin(t + i) * 0.2;
+      var x = gate.x + Math.cos(a) * r;
+      var z = gate.z + Math.sin(a) * r;
+      var y = gate.y + 0.5 + Math.sin(t * 1.5 + i * 2) * 0.5;
+      emitSphere(P, C, x, y, z, 0.03, col, pulse * 0.6, 4, 3);
+    }
+  }
+
+  // ---- Weather Transition Particles ----
+  function drawWeatherTransition(P, C) {
+    if (Anim.weatherBlend < 0.1) return;
+    var alpha = Anim.weatherBlend * 0.3;
+    // Soft overlay particles
+    for (var i = 0; i < 5; i++) {
+      var a = G.time * 0.1 + i * Math.PI * 2 / 5;
+      var r = 5 + Math.sin(G.time * 0.2 + i) * 2;
+      var x = G.px + Math.cos(a) * r;
+      var z = G.pz + Math.sin(a) * r;
+      var y = G.py + 2 + Math.sin(G.time * 0.3 + i) * 1;
+      emitSphere(P, C, x, y, z, 0.1, [0.7, 0.7, 0.8], alpha, 6, 4);
+    }
+  }
+
+  // ---- Vignette Effect ----
+  function drawVignette() {
+    if (Anim.vignette < 0.01) return;
+    // Darken screen edges via fog color modulation
+    var v = Anim.vignette;
+    // This is handled in the render loop via uniform
+  }
+
+  // ---- Chromatic Aberration Simulation ----
+  function getChromaticOffset() {
+    if (Anim.chromatic < 0.01) return 0;
+    return Anim.chromatic * 0.003;
+  }
+
+  // ---- Smooth Day/Night Transition ----
+  function updateDayNightBlend(dt) {
+    var target = PHYS[G.world] && PHYS[G.world].day ? Math.max(0, dayFactor()) : 0;
+    Anim.dayBlend = lerp(Anim.dayBlend, target, Math.min(1, dt * 2));
+  }
+
+  // ---- Footstep Particles ----
+  var footstepT = 0;
+  function updateFootsteps(dt) {
+    footstepT -= dt;
+    if (footstepT <= 0) {
+      var speed = Math.hypot(Anim.velX, Anim.velZ);
+      if (speed > 1 && G.onGround) {
+        footstepT = 0.3 / speed;
+        spawnFootstep();
+      } else {
+        footstepT = 0.1;
+      }
+    }
+  }
+
+  // ---- Landing Animation ----
+  function triggerLanding(velocity) {
+    var intensity = clamp(velocity / 10, 0, 1);
+    Anim.landDip = intensity * 0.15;
+    Anim.landDipVel = -intensity * 2;
+    addShake(intensity * 0.2, 0.2);
+    // Dust burst
+    for (var i = 0; i < 8 * intensity; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var sp = 0.5 + Math.random() * 1.5 * intensity;
+      G.parts.push({
+        x: G.px, y: G.py + 0.05, z: G.pz,
+        vx: Math.cos(a) * sp, vy: 0.3 + Math.random() * 0.5, vz: Math.sin(a) * sp,
+        life: 0.4 + Math.random() * 0.3,
+        col: [0.5, 0.45, 0.4],
+        grav: 0.5
+      });
+    }
+  }
+
+  // ---- Swing Animation Enhancement ----
+  function getSwingAngle() {
+    var t = easeOutCubic(Anim.swingT);
+    return -0.7 + 1.2 * Math.sin(Math.PI * t);
+  }
+
+  // ---- Mob Smooth Render Position ----
+  function getMobRenderPos(m) {
+    return {
+      x: m.renderX !== undefined ? m.renderX : m.x,
+      y: m.renderY !== undefined ? m.renderY : m.y,
+      z: m.renderZ !== undefined ? m.renderZ : m.z
+    };
+  }
+
+  // ---- Initialize Animation System ----
+  function initAnimations() {
+    Anim.pitchSmooth = G.pitch;
+    Anim.yawSmooth = G.yaw;
+    Anim.velX = 0;
+    Anim.velZ = 0;
+    Anim.bobPhase = 0;
+    Anim.bobAmp = 0;
+    Anim.landDip = 0;
+    Anim.landDipVel = 0;
+    Anim.swingT = 1;
+    Anim.hitStop = 0;
+    Anim.damageFlash = 0;
+    Anim.panelT = 0;
+    Anim.panelTarget = 0;
+    Anim.overlayT = 0;
+    Anim.overlayTarget = 0;
+    Anim.portalSwirl = 0;
+    Anim.weatherBlend = 0;
+    Anim.dayBlend = 0;
+    Anim.deathT = 0;
+    Anim.levelUpT = 0;
+    Anim.vignette = 0;
+    Anim.chromatic = 0;
+    footstepT = 0;
+    damageNumbers = [];
+    deathAnims = {};
+    initMobInterp();
+  }
+
+  // ---- Update All Animations ----
+  function updateAnimations(dt) {
+    // Hit stop slows everything
+    if (Anim.hitStop > 0) {
+      dt *= 0.1;
+    }
+    updateCameraShake(dt);
+    updateFOV(dt);
+    updateSmoothLook(dt);
+    updateMovementSmoothing(dt);
+    updateCombatAnimations(dt);
+    updateUIAnimations(dt);
+    updatePortalSwirl(dt);
+    updateWeatherBlend(dt);
+    updateParticleTrails(dt);
+    updateMobInterp(dt);
+    updateDeathAnims(dt);
+    updateDamageNumbers(dt);
+    updateDayNightBlend(dt);
+    updateFootsteps(dt);
+  }
+
+  // ---- Hook into main update loop ----
+  var origUpdate3 = update;
+  update = function (dt) {
+    origUpdate3(dt);
+    if (G.state === 'play') {
+      updateAnimations(dt);
+      saveMobInterp();
+    }
+  };
+
+  // ---- Hook into render for animation effects ----
+  var origRender2 = render;
+  render = function () {
+    // Apply camera shake
+    var shakeX = Anim.shakeX;
+    var shakeY = Anim.shakeY;
+    // Apply smooth look
+    var savedPitch = G.pitch;
+    var savedYaw = G.yaw;
+    G.pitch = Anim.pitchSmooth + shakeY;
+    G.yaw = Anim.yawSmooth + shakeX;
+    // Apply landing dip
+    var savedPy = G.py;
+    G.py += Anim.landDip;
+    // Apply FOV
+    var savedFov = Math.PI / 2.6;
+    // Render
+    origRender2();
+    // Restore
+    G.pitch = savedPitch;
+    G.yaw = savedYaw;
+    G.py = savedPy;
+    // Draw animation effects
+    if (G.state === 'play' || G.state === 'dead') {
+      var P = [], C = [], PG = [], CG = [];
+      // Death animations
+      drawDeathAnims(P, C);
+      // Level up effect
+      drawLevelUpEffect(PG, CG);
+      // Damage numbers
+      drawDamageNumbers(P, C);
+      // Portal swirls
+      for (var i = 0; i < (G.portals || []).length; i++) {
+        drawPortalSwirl(PG, CG, G.portals[i]);
+      }
+      // Gate glows
+      for (var i = 0; i < (G.gates || []).length; i++) {
+        drawGateGlow(PG, CG, G.gates[i]);
+      }
+      // Weather transition
+      drawWeatherTransition(PG, CG);
+      // Draw
+      if (P.length) {
+        dynBufs();
+        gl.uniform1f(gl.getUniformLocation(prog, 'uAlpha'), 1);
+        drawDyn(dynP1, dynC1, P, C);
+      }
+      if (PG.length) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        drawDyn(dynP2, dynC2, PG, CG);
+        gl.disable(gl.BLEND);
+      }
+    }
+  };
+
+  // ---- Hook into combat ----
+  var origSwing = swing;
+  swing = function () {
+    origSwing();
+    Anim.swingT = 0;
+    // FOV punch
+    setFOV(Math.PI / 2.6 - 0.05, 8);
+    setTimeout(function () { setFOV(Math.PI / 2.6, 3); }, 100);
+  };
+
+  var origHurt2 = hurt;
+  hurt = function (n, cause) {
+    origHurt2(n, cause);
+    triggerDamageFlash();
+    addShake(0.4, 0.3);
+    triggerHitStop(0.06);
+  };
+
+  var origDie = die;
+  die = function (cause) {
+    origDie(cause);
+    addShake(0.8, 0.5);
+    Anim.deathT = 0;
+  };
+
+  var origGainXP = gainXP;
+  gainXP = function (n) {
+    var wasLevel = meta().level;
+    origGainXP(n);
+    if (meta().level > wasLevel) {
+      triggerLevelUp();
+    }
+  };
+
+  // ---- Hook into block break for crack animation ----
+  var origSwing2 = swing;
+  swing = function () {
+    origSwing2();
+    var hit = targetBlock();
+    if (hit) {
+      var key = hit.x + ',' + hit.y + ',' + hit.z;
+      var dmg = G.dmg[key];
+      if (dmg !== undefined) {
+        var ore = VOX[G.blocks[key]];
+        if (ore) {
+          // Crack particles
+          var intensity = getCrackIntensity(ore.hp - dmg, ore.hp);
+          for (var i = 0; i < intensity * 5; i++) {
+            G.parts.push({
+              x: hit.x + 0.5 + (Math.random() - 0.5) * 0.6,
+              y: hit.y + 0.5 + (Math.random() - 0.5) * 0.6,
+              z: hit.z + 0.5 + (Math.random() - 0.5) * 0.6,
+              vx: (Math.random() - 0.5) * 2,
+              vy: Math.random() * 2,
+              vz: (Math.random() - 0.5) * 2,
+              life: 0.3 + Math.random() * 0.2,
+              col: hexRGB(ore.color),
+              grav: 1
+            });
+          }
+        }
+      }
+    }
+  };
+
+  // ---- Hook into mob hit for damage numbers ----
+  var origHitMob2 = hitMob;
+  hitMob = function (mb) {
+    var dmg = S.PICKS[meta().pickIdx].speed;
+    // Costume damage bonus
+    var costume = getCostumeBonus();
+    if (costume && costume.bonus === 'damage') dmg = Math.round(dmg * costume.mult);
+    // Enchant damage bonus
+    dmg = Math.round(dmg * (1 + getEnchantLevel('cursed_edge') * 0.3));
+    // Buff damage
+    dmg += meta().buffDamage || 0;
+    spawnDamageNumber(mb.x, mb.y + 1, mb.z, dmg, '#ff4444');
+    triggerHitStop(0.04);
+    addShake(0.15, 0.1);
+    origHitMob2(mb);
+  };
+
+  // ---- Hook into landing ----
+  var origMoveAxis = moveAxis;
+  moveAxis = function (dx, dy, dz) {
+    var wasAir = !G.onGround;
+    var fallSpeed = G.vy;
+    origMoveAxis(dx, dy, dz);
+    if (G.onGround && wasAir && fallSpeed < -5) {
+      triggerLanding(-fallSpeed);
+    }
+  };
+
+  // ---- Initialize animations on boot ----
+  initAnimations();
+
+  // ---- Expose animation API ----
+  window.__voxelAnim = {
+    addShake: addShake,
+    setFOV: setFOV,
+    triggerLevelUp: triggerLevelUp,
+    triggerDamageFlash: triggerDamageFlash,
+    triggerHitStop: triggerHitStop,
+    triggerLanding: triggerLanding,
+    Anim: Anim,
+    easeOutCubic: easeOutCubic,
+    easeInOutCubic: easeInOutCubic,
+    easeOutElastic: easeOutElastic,
+    easeOutBack: easeOutBack,
+    lerp: lerp,
+    clamp: clamp,
+    smoothstep: smoothstep
+  };
+
 })();
