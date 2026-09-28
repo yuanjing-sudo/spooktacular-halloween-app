@@ -187,6 +187,21 @@
 </div>
 <div id="tabs" style="margin:8px 0; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div>
 <p id="help">WASD move · Space jump · drag look · click/F swing · right-click/T place torch · E eat apple · V view · J goals · M help</p>
+  <script>
+  window.__voxelErrors = [];
+  window.addEventListener('error', function (e) {
+    try {
+      var msg = (e.message || 'Script error') + (e.lineno ? ' @ line ' + e.lineno : '');
+      window.__voxelErrors.push(msg);
+      var t = document.getElementById('overlay-title');
+      var x = document.getElementById('overlay-text');
+      var o = document.getElementById('overlay');
+      if (t) t.textContent = 'Voxel failed to start';
+      if (x) x.textContent = msg + (e.filename ? ' in ' + String(e.filename).split('/').pop() : '') + ' — screenshot this and send it back.';
+      if (o) o.classList.remove('hidden');
+    } catch (_) {}
+  });
+  </script>
   <script src="spooky.js?v=9"></script>
   <script src="tabs.js?v=9"></script>
   <script src="games.js?v=9"></script>
