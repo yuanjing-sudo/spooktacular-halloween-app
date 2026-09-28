@@ -705,7 +705,7 @@
           if (!ore.emis && ore.gold > 0 && ((x * 7 + y * 13 + z * 17 + f * 3 + v) % 6) < 2) lamp *= 1.9;
           (leaf ? TP : P).push(x + cn2[0], y + cn2[1], z + cn2[2]);
           var carr = leaf ? TC : C, sarr = leaf ? TSN : SN;
-          var lv = leaf ? (lamp + sun) : lamp;
+          var lv = leaf ? (lamp + sun) : 1;
           carr.push(Math.min(1.5, base[0] * lv), Math.min(1.5, base[1] * lv), Math.min(1.5, base[2] * lv));
           sarr.push(Math.min(1.5, base[0] * sun), Math.min(1.5, base[1] * sun), Math.min(1.5, base[2] * sun));
           if (!leaf) {
