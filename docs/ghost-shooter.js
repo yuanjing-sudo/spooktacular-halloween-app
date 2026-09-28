@@ -1,5 +1,5 @@
-/* Spooky Ghost Shooter — Halloween 3D tab game
- * Smooth SVG ghosts, glowing projectiles, Roblox-like avatar
+/* Spooky Ghost Shooter — 3D Halloween Forest
+ * XYZ interface, autumn trees, walking avatar, blue orb capture mechanic
  */
 (function () {
   'use strict';
@@ -16,11 +16,15 @@
   ];
 
   var projectiles = [];
+  var particles = [];
   var score = 0;
+  var captured = 0;
   var gameActive = false;
   var animFrameId = null;
   var lastTime = 0;
-  var ghostCount = 0;
+  var avatarX = 50;
+  var avatarZ = 80;
+  var keys = {};
 
   function el(tag, cls, html) {
     var e = document.createElement(tag);
@@ -39,7 +43,7 @@
     var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
 
     var bodyGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    bodyGrad.setAttribute('id', 'ghostBody-' + type.name);
+    bodyGrad.setAttribute('id', 'ghostBody-' + type.name + '-' + Date.now());
     bodyGrad.setAttribute('cx', '50%');
     bodyGrad.setAttribute('cy', '35%');
     bodyGrad.setAttribute('r', '60%');
@@ -61,7 +65,7 @@
     defs.appendChild(bodyGrad);
 
     var glowGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    glowGrad.setAttribute('id', 'ghostGlow-' + type.name);
+    glowGrad.setAttribute('id', 'ghostGlow-' + type.name + '-' + Date.now());
     var gStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
     gStop1.setAttribute('offset', '0%');
     gStop1.setAttribute('stop-color', type.glowColor);
@@ -75,7 +79,7 @@
     defs.appendChild(glowGrad);
 
     var filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
-    filter.setAttribute('id', 'ghostBlur-' + type.name);
+    filter.setAttribute('id', 'ghostBlur-' + type.name + '-' + Date.now());
     filter.setAttribute('x', '-50%');
     filter.setAttribute('y', '-50%');
     filter.setAttribute('width', '200%');
@@ -92,20 +96,20 @@
     glow.setAttribute('cy', '55');
     glow.setAttribute('rx', '45');
     glow.setAttribute('ry', '55');
-    glow.setAttribute('fill', 'url(#ghostGlow-' + type.name + ')');
-    glow.setAttribute('filter', 'url(#ghostBlur-' + type.name + ')');
+    glow.setAttribute('fill', 'url(#ghostGlow-' + type.name + '-' + Date.now() + ')');
+    glow.setAttribute('filter', 'url(#ghostBlur-' + type.name + '-' + Date.now() + ')');
     svg.appendChild(glow);
 
     var body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     body.setAttribute('d', 'M50 10 C75 10 90 30 90 55 L90 90 C90 95 85 100 80 95 C75 90 70 95 65 100 C60 105 55 100 50 105 C45 100 40 105 35 100 C30 95 25 90 20 95 C15 100 10 95 10 90 L10 55 C10 30 25 10 50 10 Z');
-    body.setAttribute('fill', 'url(#ghostBody-' + type.name + ')');
+    body.setAttribute('fill', 'url(#ghostBody-' + type.name + '-' + Date.now() + ')');
     body.setAttribute('stroke', type.bodyColor);
     body.setAttribute('stroke-width', '1.5');
     body.setAttribute('stroke-opacity', '0.5');
     svg.appendChild(body);
 
     var eyeGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    eyeGrad.setAttribute('id', 'eyeGrad-' + type.name);
+    eyeGrad.setAttribute('id', 'eyeGrad-' + type.name + '-' + Date.now());
     var eStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
     eStop1.setAttribute('offset', '0%');
     eStop1.setAttribute('stop-color', '#ffffff');
@@ -123,7 +127,7 @@
     leftEye.setAttribute('cy', '45');
     leftEye.setAttribute('rx', '8');
     leftEye.setAttribute('ry', '10');
-    leftEye.setAttribute('fill', 'url(#eyeGrad-' + type.name + ')');
+    leftEye.setAttribute('fill', 'url(#eyeGrad-' + type.name + '-' + Date.now() + ')');
     svg.appendChild(leftEye);
 
     var rightEye = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
@@ -131,7 +135,7 @@
     rightEye.setAttribute('cy', '45');
     rightEye.setAttribute('rx', '8');
     rightEye.setAttribute('ry', '10');
-    rightEye.setAttribute('fill', 'url(#eyeGrad-' + type.name + ')');
+    rightEye.setAttribute('fill', 'url(#eyeGrad-' + type.name + '-' + Date.now() + ')');
     svg.appendChild(rightEye);
 
     var leftPupil = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -158,7 +162,7 @@
     svg.appendChild(mouth);
 
     var cheekGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    cheekGrad.setAttribute('id', 'cheekGrad-' + type.name);
+    cheekGrad.setAttribute('id', 'cheekGrad-' + type.name + '-' + Date.now());
     var cStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
     cStop1.setAttribute('offset', '0%');
     cStop1.setAttribute('stop-color', '#ffffff');
@@ -175,17 +179,106 @@
     leftCheek.setAttribute('cx', '25');
     leftCheek.setAttribute('cy', '58');
     leftCheek.setAttribute('r', '6');
-    leftCheek.setAttribute('fill', 'url(#cheekGrad-' + type.name + ')');
+    leftCheek.setAttribute('fill', 'url(#cheekGrad-' + type.name + '-' + Date.now() + ')');
     svg.appendChild(leftCheek);
 
     var rightCheek = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     rightCheek.setAttribute('cx', '75');
     rightCheek.setAttribute('cy', '58');
     rightCheek.setAttribute('r', '6');
-    rightCheek.setAttribute('fill', 'url(#cheekGrad-' + type.name + ')');
+    rightCheek.setAttribute('fill', 'url(#cheekGrad-' + type.name + '-' + Date.now() + ')');
     svg.appendChild(rightCheek);
 
     return svg;
+  }
+
+  function createTreeSVG(x, z, scale) {
+    var tree = el('div', 'gs-tree');
+    tree.style.left = x + '%';
+    tree.style.bottom = z + '%';
+    tree.style.transform = 'scale(' + scale + ')';
+
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 80 160');
+    svg.setAttribute('width', '80');
+    svg.setAttribute('height', '160');
+
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+    var trunkGrad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    trunkGrad.setAttribute('id', 'trunkGrad' + x + z);
+    trunkGrad.setAttribute('x1', '0%');
+    trunkGrad.setAttribute('y1', '0%');
+    trunkGrad.setAttribute('x2', '100%');
+    trunkGrad.setAttribute('y2', '0%');
+    var tStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    tStop1.setAttribute('offset', '0%');
+    tStop1.setAttribute('stop-color', '#3d2314');
+    var tStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    tStop2.setAttribute('offset', '50%');
+    tStop2.setAttribute('stop-color', '#5a3a1a');
+    var tStop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    tStop3.setAttribute('offset', '100%');
+    tStop3.setAttribute('stop-color', '#2a1505');
+    trunkGrad.appendChild(tStop1);
+    trunkGrad.appendChild(tStop2);
+    trunkGrad.appendChild(tStop3);
+    defs.appendChild(trunkGrad);
+
+    var leafGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+    leafGrad.setAttribute('id', 'leafGrad' + x + z);
+    leafGrad.setAttribute('cx', '50%');
+    leafGrad.setAttribute('cy', '30%');
+    leafGrad.setAttribute('r', '70%');
+    var lStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    lStop1.setAttribute('offset', '0%');
+    lStop1.setAttribute('stop-color', '#ff9f1c');
+    var lStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    lStop2.setAttribute('offset', '50%');
+    lStop2.setAttribute('stop-color', '#e55a00');
+    var lStop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    lStop3.setAttribute('offset', '100%');
+    lStop3.setAttribute('stop-color', '#8b2500');
+    leafGrad.appendChild(lStop1);
+    leafGrad.appendChild(lStop2);
+    leafGrad.appendChild(lStop3);
+    defs.appendChild(leafGrad);
+
+    svg.appendChild(defs);
+
+    var trunk = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    trunk.setAttribute('d', 'M35 160 L38 100 L36 80 L40 60 L44 80 L42 100 L45 160 Z');
+    trunk.setAttribute('fill', 'url(#trunkGrad' + x + z + ')');
+    svg.appendChild(trunk);
+
+    var foliage1 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+    foliage1.setAttribute('cx', '40');
+    foliage1.setAttribute('cy', '45');
+    foliage1.setAttribute('rx', '35');
+    foliage1.setAttribute('ry', '40');
+    foliage1.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+    svg.appendChild(foliage1);
+
+    var foliage2 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+    foliage2.setAttribute('cx', '25');
+    foliage2.setAttribute('cy', '60');
+    foliage2.setAttribute('rx', '25');
+    foliage2.setAttribute('ry', '30');
+    foliage2.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+    foliage2.setAttribute('opacity', '0.8');
+    svg.appendChild(foliage2);
+
+    var foliage3 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+    foliage3.setAttribute('cx', '55');
+    foliage3.setAttribute('cy', '60');
+    foliage3.setAttribute('rx', '25');
+    foliage3.setAttribute('ry', '30');
+    foliage3.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+    foliage3.setAttribute('opacity', '0.8');
+    svg.appendChild(foliage3);
+
+    tree.appendChild(svg);
+    return tree;
   }
 
   function buildAvatar() {
@@ -323,6 +416,7 @@
     leftLeg.setAttribute('height', '50');
     leftLeg.setAttribute('rx', '8');
     leftLeg.setAttribute('fill', 'url(#avatarPants)');
+    leftLeg.setAttribute('class', 'gs-avatar-leg left-leg');
     svg.appendChild(leftLeg);
 
     var rightLeg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -332,6 +426,7 @@
     rightLeg.setAttribute('height', '50');
     rightLeg.setAttribute('rx', '8');
     rightLeg.setAttribute('fill', 'url(#avatarPants)');
+    rightLeg.setAttribute('class', 'gs-avatar-leg right-leg');
     svg.appendChild(rightLeg);
 
     var leftFoot = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
@@ -434,16 +529,116 @@
     return avatar;
   }
 
+  function createXYZOverlay() {
+    var overlay = el('div', 'gs-xyz-overlay');
+
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 200 200');
+    svg.setAttribute('width', '200');
+    svg.setAttribute('height', '200');
+
+    var grid = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    grid.setAttribute('class', 'gs-grid');
+
+    for (var i = 0; i <= 10; i++) {
+      var x = i * 20;
+      var lineX = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      lineX.setAttribute('x1', x);
+      lineX.setAttribute('y1', '0');
+      lineX.setAttribute('x2', x);
+      lineX.setAttribute('y2', '200');
+      lineX.setAttribute('stroke', '#6d28a8');
+      lineX.setAttribute('stroke-width', '0.5');
+      lineX.setAttribute('opacity', '0.3');
+      grid.appendChild(lineX);
+
+      var lineY = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      lineY.setAttribute('x1', '0');
+      lineY.setAttribute('y1', x);
+      lineY.setAttribute('x2', '200');
+      lineY.setAttribute('y2', x);
+      lineY.setAttribute('stroke', '#6d28a8');
+      lineY.setAttribute('stroke-width', '0.5');
+      lineY.setAttribute('opacity', '0.3');
+      grid.appendChild(lineY);
+    }
+    svg.appendChild(grid);
+
+    var xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    xAxis.setAttribute('x1', '10');
+    xAxis.setAttribute('y1', '100');
+    xAxis.setAttribute('x2', '190');
+    xAxis.setAttribute('y2', '100');
+    xAxis.setAttribute('stroke', '#ff4444');
+    xAxis.setAttribute('stroke-width', '2');
+    svg.appendChild(xAxis);
+
+    var xLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    xLabel.setAttribute('x', '185');
+    xLabel.setAttribute('y', '95');
+    xLabel.setAttribute('fill', '#ff4444');
+    xLabel.setAttribute('font-size', '14');
+    xLabel.setAttribute('font-weight', 'bold');
+    xLabel.textContent = 'X';
+    svg.appendChild(xLabel);
+
+    var yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    yAxis.setAttribute('x1', '100');
+    yAxis.setAttribute('y1', '190');
+    yAxis.setAttribute('x2', '100');
+    yAxis.setAttribute('y2', '10');
+    yAxis.setAttribute('stroke', '#44ff44');
+    yAxis.setAttribute('stroke-width', '2');
+    svg.appendChild(yAxis);
+
+    var yLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yLabel.setAttribute('x', '105');
+    yLabel.setAttribute('y', '20');
+    yLabel.setAttribute('fill', '#44ff44');
+    yLabel.setAttribute('font-size', '14');
+    yLabel.setAttribute('font-weight', 'bold');
+    yLabel.textContent = 'Y';
+    svg.appendChild(yLabel);
+
+    var zAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    zAxis.setAttribute('x1', '100');
+    zAxis.setAttribute('y1', '100');
+    zAxis.setAttribute('x2', '160');
+    zAxis.setAttribute('y2', '160');
+    zAxis.setAttribute('stroke', '#4444ff');
+    zAxis.setAttribute('stroke-width', '2');
+    svg.appendChild(zAxis);
+
+    var zLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    zLabel.setAttribute('x', '155');
+    zLabel.setAttribute('y', '175');
+    zLabel.setAttribute('fill', '#4444ff');
+    zLabel.setAttribute('font-size', '14');
+    zLabel.setAttribute('font-weight', 'bold');
+    zLabel.textContent = 'Z';
+    svg.appendChild(zLabel);
+
+    var origin = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    origin.setAttribute('cx', '100');
+    origin.setAttribute('cy', '100');
+    origin.setAttribute('r', '4');
+    origin.setAttribute('fill', '#ffd166');
+    svg.appendChild(origin);
+
+    overlay.appendChild(svg);
+    return overlay;
+  }
+
   function spawnGhost() {
     var type = GHOST_TYPES[(Math.random() * GHOST_TYPES.length) | 0];
     var ghost = el('div', 'gs-ghost');
     var svg = createGhostSVG(type);
     ghost.appendChild(svg);
-    ghost.style.left = (8 + Math.random() * 65) + '%';
-    ghost.style.top = (5 + Math.random() * 35) + '%';
+    ghost.style.left = (10 + Math.random() * 60) + '%';
+    ghost.style.top = (10 + Math.random() * 40) + '%';
     ghost.style.setProperty('--ghost-speed', type.speed);
     ghost.style.setProperty('--ghost-scale', type.size);
-    ghost.dataset.hp = 2;
+    ghost.dataset.hp = 3;
     ghost.dataset.name = type.name;
     ghost.style.transform = 'scale(' + type.size + ')';
     return ghost;
@@ -456,17 +651,48 @@
     var avatar = arena.querySelector('.gs-avatar');
     if (!avatar) return;
 
-    var proj = el('div', 'gs-projectile');
+    var proj = el('div', 'gs-orb');
     var ar = avatar.getBoundingClientRect();
     var cr = arena.getBoundingClientRect();
-    proj.style.left = (ar.left - cr.left + ar.width / 2 - 8) + 'px';
-    proj.style.top = (ar.top - cr.top + 30) + 'px';
+    proj.style.left = (ar.left - cr.left + ar.width / 2 - 10) + 'px';
+    proj.style.top = (ar.top - cr.top + 40) + 'px';
     arena.appendChild(proj);
-    projectiles.push({ el: proj, x: ar.left - cr.left + ar.width / 2 - 8, y: ar.top - cr.top + 30, vy: -10 });
+    projectiles.push({ el: proj, x: ar.left - cr.left + ar.width / 2 - 10, y: ar.top - cr.top + 40, vy: -12, vx: (Math.random() - 0.5) * 2 });
 
     setTimeout(function () {
       if (proj.parentNode) proj.parentNode.removeChild(proj);
-    }, 1500);
+    }, 2000);
+  }
+
+  function explodeOrb(x, y) {
+    var arena = document.getElementById('gs-arena');
+    if (!arena) return;
+
+    for (var i = 0; i < 12; i++) {
+      var p = el('div', 'gs-particle');
+      var angle = (i / 12) * Math.PI * 2;
+      var speed = 2 + Math.random() * 3;
+      p.style.left = x + 'px';
+      p.style.top = y + 'px';
+      p.style.setProperty('--px', Math.cos(angle) * speed * 20 + 'px');
+      p.style.setProperty('--py', Math.sin(angle) * speed * 20 + 'px');
+      arena.appendChild(p);
+      particles.push({ el: p, life: 1 });
+
+      setTimeout(function (pp) {
+        return function () {
+          if (pp.parentNode) pp.parentNode.removeChild(pp);
+        };
+      }(p), 800);
+    }
+
+    var mist = el('div', 'gs-mist');
+    mist.style.left = (x - 30) + 'px';
+    mist.style.top = (y - 30) + 'px';
+    arena.appendChild(mist);
+    setTimeout(function () {
+      if (mist.parentNode) mist.parentNode.removeChild(mist);
+    }, 1200);
   }
 
   function updateProjectiles() {
@@ -477,7 +703,9 @@
     for (var i = projectiles.length - 1; i >= 0; i--) {
       var p = projectiles[i];
       p.y += p.vy;
+      p.x += p.vx;
       p.el.style.top = p.y + 'px';
+      p.el.style.left = p.x + 'px';
 
       var ghostEls = arena.querySelectorAll('.gs-ghost');
       for (var j = 0; j < ghostEls.length; j++) {
@@ -488,7 +716,7 @@
         var gw = gr.width;
         var gh = gr.height;
 
-        if (p.x > gx - 15 && p.x < gx + gw + 15 && p.y > gy - 15 && p.y < gy + gh + 15) {
+        if (p.x > gx - 20 && p.x < gx + gw + 20 && p.y > gy - 20 && p.y < gy + gh + 20) {
           var hp = parseInt(g.dataset.hp) - 1;
           g.dataset.hp = hp;
           g.classList.add('gs-ghost-hit');
@@ -496,10 +724,15 @@
             return function () { gg.classList.remove('gs-ghost-hit'); };
           }(g), 200);
 
+          explodeOrb(p.x, p.y);
+
           if (hp <= 0) {
-            score += 10;
+            score += 25;
+            captured++;
             var scoreEl = document.getElementById('gs-score');
             if (scoreEl) scoreEl.textContent = score;
+            var capEl = document.getElementById('gs-captured');
+            if (capEl) capEl.textContent = captured;
             g.classList.add('gs-ghost-dying');
             setTimeout(function (gg) {
               return function () {
@@ -514,7 +747,8 @@
         }
       }
 
-      if (p.y < -30) {
+      if (p.y < -30 || p.x < -30 || p.x > cr.width + 30) {
+        explodeOrb(p.x, p.y);
         if (p.el.parentNode) p.el.parentNode.removeChild(p.el);
         projectiles.splice(i, 1);
       }
@@ -535,12 +769,54 @@
       var drift = Math.sin(Date.now() / (1000 / speed) + i * 1.7) * 0.4;
       var newLeft = curLeft + drift * speed * dt * 60;
       var newTop = curTop + Math.cos(Date.now() / (1200 / speed) + i * 2.3) * 0.25 * speed * dt * 60;
-      if (newLeft < 5) newLeft = 5;
-      if (newLeft > 72) newLeft = 72;
-      if (newTop < 5) newTop = 5;
+      if (newLeft < 8) newLeft = 8;
+      if (newLeft > 70) newLeft = 70;
+      if (newTop < 8) newTop = 8;
+      if (newTop < 8) newTop = 8;
       if (newTop > 50) newTop = 50;
       g.style.left = newLeft + '%';
       g.style.top = newTop + '%';
+    }
+  }
+
+  function updateAvatar(dt) {
+    var arena = document.getElementById('gs-arena');
+    if (!arena) return;
+    var avatar = arena.querySelector('.gs-avatar');
+    if (!avatar) return;
+
+    var moveSpeed = 30 * dt;
+    var moved = false;
+
+    if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+      avatarX -= moveSpeed;
+      moved = true;
+    }
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+      avatarX += moveSpeed;
+      moved = true;
+    }
+    if (keys['ArrowUp'] || keys['w'] || keys['W']) {
+      avatarZ -= moveSpeed;
+      moved = true;
+    }
+    if (keys['ArrowDown'] || keys['s'] || keys['S']) {
+      avatarZ += moveSpeed;
+      moved = true;
+    }
+
+    if (avatarX < 5) avatarX = 5;
+    if (avatarX > 85) avatarX = 85;
+    if (avatarZ < 40) avatarZ = 40;
+    if (avatarZ > 90) avatarZ = 90;
+
+    avatar.style.left = avatarX + '%';
+    avatar.style.bottom = (100 - avatarZ) + '%';
+
+    if (moved) {
+      avatar.classList.add('gs-avatar-walking');
+    } else {
+      avatar.classList.remove('gs-avatar-walking');
     }
   }
 
@@ -550,6 +826,7 @@
     var dt = Math.min((timestamp - lastTime) / 1000, 0.05);
     lastTime = timestamp;
 
+    updateAvatar(dt);
     updateGhosts(dt);
     updateProjectiles();
 
@@ -561,46 +838,66 @@
     if (!arena) return;
     arena.innerHTML = '';
     projectiles = [];
+    particles = [];
     score = 0;
-    ghostCount = 0;
+    captured = 0;
+    avatarX = 50;
+    avatarZ = 80;
     gameActive = true;
     lastTime = 0;
 
-    var scoreEl = el('div', 'gs-score-board', 'Score: <span id="gs-score">0</span> · Ghosts: <span id="gs-count">0</span>');
+    var scoreEl = el('div', 'gs-score-board', 'Score: <span id="gs-score">0</span> · Captured: <span id="gs-captured">0</span>');
     arena.appendChild(scoreEl);
+
+    var xyzOverlay = createXYZOverlay();
+    arena.appendChild(xyzOverlay);
 
     var scene = el('div', 'gs-scene');
     arena.appendChild(scene);
 
-    for (var i = 0; i < 5; i++) {
-      var g = spawnGhost();
-      scene.appendChild(g);
-      ghostCount++;
+    var trees = [
+      { x: 5, z: 20, s: 0.8 }, { x: 15, z: 35, s: 1.0 }, { x: 25, z: 15, s: 0.7 },
+      { x: 35, z: 40, s: 1.1 }, { x: 45, z: 25, s: 0.9 }, { x: 55, z: 45, s: 1.0 },
+      { x: 65, z: 20, s: 0.8 }, { x: 75, z: 35, s: 1.1 }, { x: 85, z: 15, s: 0.7 },
+      { x: 10, z: 55, s: 1.2 }, { x: 30, z: 60, s: 1.0 }, { x: 50, z: 55, s: 0.9 },
+      { x: 70, z: 60, s: 1.1 }, { x: 90, z: 50, s: 0.8 }, { x: 20, z: 75, s: 1.0 },
+      { x: 40, z: 80, s: 1.2 }, { x: 60, z: 75, s: 0.9 }, { x: 80, z: 80, s: 1.0 }
+    ];
+    trees.forEach(function (t) {
+      scene.appendChild(createTreeSVG(t.x, t.z, t.s));
+    });
+
+    for (var i = 0; i < 6; i++) {
+      scene.appendChild(spawnGhost());
     }
 
     var avatar = buildAvatar();
     scene.appendChild(avatar);
 
-    var shootBtn = el('button', 'gs-shoot-btn', '🔫 SHOOT');
+    var shootBtn = el('button', 'gs-shoot-btn', '🔵 SHOOT ORB');
     shootBtn.onclick = shoot;
     arena.appendChild(shootBtn);
 
     var spawnBtn = el('button', 'gs-spawn-btn', '👻 +Ghost');
     spawnBtn.onclick = function () {
-      if (scene.querySelectorAll('.gs-ghost').length < 12) {
+      if (scene.querySelectorAll('.gs-ghost').length < 15) {
         scene.appendChild(spawnGhost());
-        ghostCount++;
-        var countEl = document.getElementById('gs-count');
-        if (countEl) countEl.textContent = ghostCount;
       }
     };
     arena.appendChild(spawnBtn);
 
+    var help = el('div', 'gs-help', 'WASD / Arrows to walk · SPACE to shoot orb');
+    arena.appendChild(help);
+
     document.addEventListener('keydown', function (e) {
+      keys[e.key] = true;
       if (e.code === 'Space' && gameActive) {
         e.preventDefault();
         shoot();
       }
+    });
+    document.addEventListener('keyup', function (e) {
+      keys[e.key] = false;
     });
 
     animFrameId = requestAnimationFrame(gameLoop);
@@ -613,7 +910,7 @@
   }
 
   function build(box) {
-    var head = el('div', 'phead', '<h2>👻 Spooky Ghost Shooter</h2><div class="psub">Blast the floating ghosts! Smooth SVG Halloween action.</div>');
+    var head = el('div', 'phead', '<h2>👻 Spooky Ghost Shooter 3D</h2><div class="psub">Walk through the autumn forest, shoot blue orbs to capture ghosts!</div>');
     box.appendChild(head);
 
     var arena = el('div', 'gs-arena');
