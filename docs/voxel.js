@@ -705,7 +705,8 @@
           if (!ore.emis && ore.gold > 0 && ((x * 7 + y * 13 + z * 17 + f * 3 + v) % 6) < 2) lamp *= 1.9;
           (leaf ? TP : P).push(x + cn2[0], y + cn2[1], z + cn2[2]);
           var carr = leaf ? TC : C, sarr = leaf ? TSN : SN;
-          carr.push(Math.min(1.5, base[0] * lamp), Math.min(1.5, base[1] * lamp), Math.min(1.5, base[2] * lamp));
+          var lv = leaf ? (lamp + sun) : lamp;
+          carr.push(Math.min(1.5, base[0] * lv), Math.min(1.5, base[1] * lv), Math.min(1.5, base[2] * lv));
           sarr.push(Math.min(1.5, base[0] * sun), Math.min(1.5, base[1] * sun), Math.min(1.5, base[2] * sun));
           if (!leaf) {
             M.push(mp[0], mp[1], mp[2], mp[3]);
@@ -3467,7 +3468,7 @@
   document.addEventListener('mousemove', function (e) {
     if (!drag) return;
     G.yaw -= (e.clientX - drag[0]) * 0.004;
-    G.pitch = Math.max(-1.4, Math.min(1.4, G.pitch - (e.clientY - drag[1]) * 0.003));
+    G.pitch = Math.max(-3.1, Math.min(3.1, G.pitch - (e.clientY - drag[1]) * 0.003));
     drag = [e.clientX, e.clientY];
   });
   document.addEventListener('mouseup', function () { drag = null; });
@@ -3503,7 +3504,7 @@
         joy.x = dx / l * cl; joy.y = -dy / l * cl;
       } else if (t.identifier === lookId && lastT) {
         G.yaw -= (t.clientX - lastT[0]) * 0.006;
-        G.pitch = Math.max(-1.4, Math.min(1.4, G.pitch - (t.clientY - lastT[1]) * 0.004));
+        G.pitch = Math.max(-3.1, Math.min(3.1, G.pitch - (t.clientY - lastT[1]) * 0.004));
         lastT = [t.clientX, t.clientY];
       }
     }
@@ -3647,6 +3648,8 @@
     var sp = 4.6 * dt;
     var fw = ((keys.w || keys.arrowup) ? 1 : 0) - ((keys.s || keys.arrowdown) ? 1 : 0) + joy.y;
     var st = ((keys.d ? 1 : 0) - (keys.a ? 1 : 0)) + joy.x;
+    if (keys.arrowleft) G.yaw += 2.4 * dt;
+    if (keys.arrowright) G.yaw -= 2.4 * dt;
     var sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
     // velocity smoothing: ice (low grip) slides, others snap
     var dvx = (sy * fw + cy * st) * sp, dvz = (-cy * fw + sy * st) * sp;
