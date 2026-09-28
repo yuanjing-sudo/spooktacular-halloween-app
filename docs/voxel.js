@@ -51,10 +51,10 @@
     'attribute vec3 aPos; attribute vec3 aCol; attribute vec3 aNormal; attribute vec2 aTex;' +
     'uniform mat4 uMVP; uniform mat4 uMV; uniform mat3 uNM;' +
     'uniform vec3 uLightDir;' +
-    'varying vec3 vC; varying vec3 vN; varying vec2 vTex;' +
-    'void main(){ vec4 mv = uMV * vec4(aPos,1.0); gl_Position = uMVP * vec4(aPos,1.0); vC = aCol; vN = uNM * aNormal; vTex = aTex; }'));
+    'varying vec3 vC; varying vec3 vN; varying vec2 vTex; varying float vD;' +
+    'void main(){ vec4 mv = uMV * vec4(aPos,1.0); gl_Position = uMVP * vec4(aPos,1.0); vC = aCol; vN = uNM * aNormal; vTex = aTex; vD = -mv.z; }'));
   gl.attachShader(prog, shader(gl.FRAGMENT_SHADER,
-    'precision mediump float; varying vec3 vC; varying vec3 vN; varying vec2 vTex;' +
+    'precision mediump float; varying vec3 vC; varying vec3 vN; varying vec2 vTex; varying float vD;' +
     'uniform sampler2D uAlbedo;' +
     'uniform sampler2D uNormalMap;' +
     'uniform sampler2D uRoughnessMap;' +
