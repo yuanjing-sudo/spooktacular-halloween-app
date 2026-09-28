@@ -438,6 +438,7 @@
     document.body.appendChild(overlay);
     startMusic();
     var ctx = canvas.getContext('2d');
+    if (!ctx) { alert('Failed to get canvas 2d context. 3D animation cannot run.'); document.body.removeChild(overlay); return; }
     var W = 500, H = 500, cx = W / 2, cy = H / 2;
     var particles = [], sparkles = [], confetti = [], rings = [], lightRays = [], bats = [], ghosts = [], pumpkins = [];
     var stage = 'intro';
