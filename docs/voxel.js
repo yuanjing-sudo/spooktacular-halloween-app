@@ -48,6 +48,7 @@
   }
   var prog = gl.createProgram();
   gl.attachShader(prog, shader(gl.VERTEX_SHADER,
+    'precision mediump float;' +
     'attribute vec3 aPos; attribute vec3 aCol; attribute vec3 aNormal; attribute vec2 aTex;' +
     'uniform mat4 uMVP; uniform mat4 uMV; uniform mat3 uNM;' +
     'uniform vec3 uLightDir;' +
@@ -104,6 +105,7 @@
   });
   var progPBR = gl.createProgram();
   gl.attachShader(progPBR, shader(gl.VERTEX_SHADER,
+    'precision mediump float;' +
     'attribute vec3 aPos; attribute vec3 aCol; attribute vec3 aSun; attribute vec4 aMat; attribute float aLamp; attribute vec3 aNrm;' +
     'uniform mat4 uMVP; uniform mat4 uMV; uniform float uTime; uniform float uSway;' +
     'varying vec3 vC; varying vec3 vS; varying float vD; varying vec4 vM; varying float vL; varying vec3 vN; varying vec3 vWp;' +
