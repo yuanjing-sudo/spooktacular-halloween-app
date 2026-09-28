@@ -162,6 +162,12 @@ footer { opacity: .6; font-size: .8rem; margin: 10px 0 4px; }
   transition: transform 0.3s ease;
 }
 .gs-tree:hover { transform: scale(1.05); z-index: 3; }
+.gs-tombstone {
+  position: absolute; z-index: 2;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
+  transition: transform 0.3s ease;
+}
+.gs-tombstone:hover { transform: scale(1.08); z-index: 4; }
 .gs-ghost {
   position: absolute; cursor: pointer; z-index: 6;
   transition: filter 0.15s;

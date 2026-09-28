@@ -192,16 +192,16 @@
     return svg;
   }
 
-  function createTreeSVG(x, z, scale) {
+  function createTreeSVG(x, z, scale, tall) {
     var tree = el('div', 'gs-tree');
     tree.style.left = x + '%';
     tree.style.bottom = z + '%';
     tree.style.transform = 'scale(' + scale + ')';
 
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 80 160');
+    svg.setAttribute('viewBox', tall ? '0 0 80 240' : '0 0 80 160');
     svg.setAttribute('width', '80');
-    svg.setAttribute('height', '160');
+    svg.setAttribute('height', tall ? '240' : '160');
 
     var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
 
@@ -246,39 +246,215 @@
 
     svg.appendChild(defs);
 
+    var trunkH = tall ? 240 : 160;
     var trunk = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    trunk.setAttribute('d', 'M35 160 L38 100 L36 80 L40 60 L44 80 L42 100 L45 160 Z');
+    trunk.setAttribute('d', tall
+      ? 'M33 240 L37 160 L35 120 L39 80 L43 120 L41 160 L45 240 Z'
+      : 'M35 160 L38 100 L36 80 L40 60 L44 80 L42 100 L45 160 Z');
     trunk.setAttribute('fill', 'url(#trunkGrad' + x + z + ')');
     svg.appendChild(trunk);
 
-    var foliage1 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    foliage1.setAttribute('cx', '40');
-    foliage1.setAttribute('cy', '45');
-    foliage1.setAttribute('rx', '35');
-    foliage1.setAttribute('ry', '40');
-    foliage1.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
-    svg.appendChild(foliage1);
+    if (tall) {
+      var branch1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      branch1.setAttribute('d', 'M37 140 Q20 130 10 110');
+      branch1.setAttribute('fill', 'none');
+      branch1.setAttribute('stroke', '#3d2314');
+      branch1.setAttribute('stroke-width', '4');
+      branch1.setAttribute('stroke-linecap', 'round');
+      svg.appendChild(branch1);
 
-    var foliage2 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    foliage2.setAttribute('cx', '25');
-    foliage2.setAttribute('cy', '60');
-    foliage2.setAttribute('rx', '25');
-    foliage2.setAttribute('ry', '30');
-    foliage2.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
-    foliage2.setAttribute('opacity', '0.8');
-    svg.appendChild(foliage2);
+      var branch2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      branch2.setAttribute('d', 'M41 120 Q60 110 70 90');
+      branch2.setAttribute('fill', 'none');
+      branch2.setAttribute('stroke', '#3d2314');
+      branch2.setAttribute('stroke-width', '3');
+      branch2.setAttribute('stroke-linecap', 'round');
+      svg.appendChild(branch2);
 
-    var foliage3 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    foliage3.setAttribute('cx', '55');
-    foliage3.setAttribute('cy', '60');
-    foliage3.setAttribute('rx', '25');
-    foliage3.setAttribute('ry', '30');
-    foliage3.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
-    foliage3.setAttribute('opacity', '0.8');
-    svg.appendChild(foliage3);
+      var foliage1 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      foliage1.setAttribute('cx', '40');
+      foliage1.setAttribute('cy', '50');
+      foliage1.setAttribute('rx', '38');
+      foliage1.setAttribute('ry', '50');
+      foliage1.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+      svg.appendChild(foliage1);
+
+      var foliage2 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      foliage2.setAttribute('cx', '20');
+      foliage2.setAttribute('cy', '80');
+      foliage2.setAttribute('rx', '28');
+      foliage2.setAttribute('ry', '35');
+      foliage2.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+      foliage2.setAttribute('opacity', '0.8');
+      svg.appendChild(foliage2);
+
+      var foliage3 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      foliage3.setAttribute('cx', '60');
+      foliage3.setAttribute('cy', '75');
+      foliage3.setAttribute('rx', '26');
+      foliage3.setAttribute('ry', '32');
+      foliage3.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+      foliage3.setAttribute('opacity', '0.8');
+      svg.appendChild(foliage3);
+
+      var foliage4 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      foliage4.setAttribute('cx', '40');
+      foliage4.setAttribute('cy', '25');
+      foliage4.setAttribute('rx', '30');
+      foliage4.setAttribute('ry', '35');
+      foliage4.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+      foliage4.setAttribute('opacity', '0.9');
+      svg.appendChild(foliage4);
+    } else {
+      var foliage1 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      foliage1.setAttribute('cx', '40');
+      foliage1.setAttribute('cy', '45');
+      foliage1.setAttribute('rx', '35');
+      foliage1.setAttribute('ry', '40');
+      foliage1.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+      svg.appendChild(foliage1);
+
+      var foliage2 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      foliage2.setAttribute('cx', '25');
+      foliage2.setAttribute('cy', '60');
+      foliage2.setAttribute('rx', '25');
+      foliage2.setAttribute('ry', '30');
+      foliage2.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+      foliage2.setAttribute('opacity', '0.8');
+      svg.appendChild(foliage2);
+
+      var foliage3 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      foliage3.setAttribute('cx', '55');
+      foliage3.setAttribute('cy', '60');
+      foliage3.setAttribute('rx', '25');
+      foliage3.setAttribute('ry', '30');
+      foliage3.setAttribute('fill', 'url(#leafGrad' + x + z + ')');
+      foliage3.setAttribute('opacity', '0.8');
+      svg.appendChild(foliage3);
+    }
 
     tree.appendChild(svg);
     return tree;
+  }
+
+  function createTombstoneSVG(x, z, scale) {
+    var tomb = el('div', 'gs-tombstone');
+    tomb.style.left = x + '%';
+    tomb.style.bottom = z + '%';
+    tomb.style.transform = 'scale(' + scale + ')';
+
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 60 80');
+    svg.setAttribute('width', '60');
+    svg.setAttribute('height', '80');
+
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+    var stoneGrad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    stoneGrad.setAttribute('id', 'stoneGrad' + x + z);
+    stoneGrad.setAttribute('x1', '0%');
+    stoneGrad.setAttribute('y1', '0%');
+    stoneGrad.setAttribute('x2', '100%');
+    stoneGrad.setAttribute('y2', '100%');
+    var sStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    sStop1.setAttribute('offset', '0%');
+    sStop1.setAttribute('stop-color', '#8a8a9a');
+    var sStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    sStop2.setAttribute('offset', '50%');
+    sStop2.setAttribute('stop-color', '#6a6a7a');
+    var sStop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    sStop3.setAttribute('offset', '100%');
+    sStop3.setAttribute('stop-color', '#4a4a5a');
+    stoneGrad.appendChild(sStop1);
+    stoneGrad.appendChild(sStop2);
+    stoneGrad.appendChild(sStop3);
+    defs.appendChild(stoneGrad);
+
+    svg.appendChild(defs);
+
+    var base = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    base.setAttribute('x', '5');
+    base.setAttribute('y', '70');
+    base.setAttribute('width', '50');
+    base.setAttribute('height', '8');
+    base.setAttribute('rx', '2');
+    base.setAttribute('fill', '#3a3a4a');
+    svg.appendChild(base);
+
+    var stone = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    stone.setAttribute('d', 'M10 70 L10 25 Q10 5 30 5 Q50 5 50 25 L50 70 Z');
+    stone.setAttribute('fill', 'url(#stoneGrad' + x + z + ')');
+    stone.setAttribute('stroke', '#5a5a6a');
+    stone.setAttribute('stroke-width', '1');
+    svg.appendChild(stone);
+
+    var crack1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    crack1.setAttribute('d', 'M25 15 L28 25 L24 35 L27 45');
+    crack1.setAttribute('fill', 'none');
+    crack1.setAttribute('stroke', '#3a3a4a');
+    crack1.setAttribute('stroke-width', '1');
+    crack1.setAttribute('opacity', '0.6');
+    svg.appendChild(crack1);
+
+    var crack2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    crack2.setAttribute('d', 'M35 20 L33 30 L36 40');
+    crack2.setAttribute('fill', 'none');
+    crack2.setAttribute('stroke', '#3a3a4a');
+    crack2.setAttribute('stroke-width', '0.8');
+    crack2.setAttribute('opacity', '0.5');
+    svg.appendChild(crack2);
+
+    var rip = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    rip.setAttribute('x', '30');
+    rip.setAttribute('y', '40');
+    rip.setAttribute('text-anchor', 'middle');
+    rip.setAttribute('fill', '#3a3a4a');
+    rip.setAttribute('font-size', '10');
+    rip.setAttribute('font-family', 'serif');
+    rip.setAttribute('opacity', '0.7');
+    rip.textContent = 'RIP';
+    svg.appendChild(rip);
+
+    var cross1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    cross1.setAttribute('x', '28');
+    cross1.setAttribute('y', '48');
+    cross1.setAttribute('width', '4');
+    cross1.setAttribute('height', '16');
+    cross1.setAttribute('rx', '1');
+    cross1.setAttribute('fill', '#3a3a4a');
+    cross1.setAttribute('opacity', '0.5');
+    svg.appendChild(cross1);
+
+    var cross2 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    cross2.setAttribute('x', '24');
+    cross2.setAttribute('y', '52');
+    cross2.setAttribute('width', '12');
+    cross2.setAttribute('height', '4');
+    cross2.setAttribute('rx', '1');
+    cross2.setAttribute('fill', '#3a3a4a');
+    cross2.setAttribute('opacity', '0.5');
+    svg.appendChild(cross2);
+
+    var moss = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+    moss.setAttribute('cx', '15');
+    moss.setAttribute('cy', '68');
+    moss.setAttribute('rx', '8');
+    moss.setAttribute('ry', '4');
+    moss.setAttribute('fill', '#2d5a1e');
+    moss.setAttribute('opacity', '0.4');
+    svg.appendChild(moss);
+
+    var moss2 = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+    moss2.setAttribute('cx', '45');
+    moss2.setAttribute('cy', '69');
+    moss2.setAttribute('rx', '6');
+    moss2.setAttribute('ry', '3');
+    moss2.setAttribute('fill', '#2d5a1e');
+    moss2.setAttribute('opacity', '0.3');
+    svg.appendChild(moss2);
+
+    tomb.appendChild(svg);
+    return tomb;
   }
 
   function buildAvatar() {
@@ -887,15 +1063,27 @@
     arena.appendChild(scene);
 
     var trees = [
-      { x: 5, z: 20, s: 0.8 }, { x: 15, z: 35, s: 1.0 }, { x: 25, z: 15, s: 0.7 },
-      { x: 35, z: 40, s: 1.1 }, { x: 45, z: 25, s: 0.9 }, { x: 55, z: 45, s: 1.0 },
-      { x: 65, z: 20, s: 0.8 }, { x: 75, z: 35, s: 1.1 }, { x: 85, z: 15, s: 0.7 },
-      { x: 10, z: 55, s: 1.2 }, { x: 30, z: 60, s: 1.0 }, { x: 50, z: 55, s: 0.9 },
-      { x: 70, z: 60, s: 1.1 }, { x: 90, z: 50, s: 0.8 }, { x: 20, z: 75, s: 1.0 },
-      { x: 40, z: 80, s: 1.2 }, { x: 60, z: 75, s: 0.9 }, { x: 80, z: 80, s: 1.0 }
+      { x: 3, z: 10, s: 1.8, tall: true }, { x: 12, z: 25, s: 0.6 }, { x: 22, z: 8, s: 2.0, tall: true },
+      { x: 32, z: 30, s: 0.5 }, { x: 42, z: 12, s: 1.6, tall: true }, { x: 52, z: 28, s: 0.7 },
+      { x: 62, z: 6, s: 2.2, tall: true }, { x: 72, z: 32, s: 0.55 }, { x: 82, z: 10, s: 1.9, tall: true },
+      { x: 8, z: 50, s: 0.65 }, { x: 18, z: 65, s: 1.4, tall: true }, { x: 28, z: 45, s: 0.5 },
+      { x: 38, z: 70, s: 0.75 }, { x: 48, z: 50, s: 1.7, tall: true }, { x: 58, z: 68, s: 0.6 },
+      { x: 68, z: 42, s: 0.55 }, { x: 78, z: 72, s: 1.5, tall: true }, { x: 88, z: 48, s: 0.7 },
+      { x: 5, z: 85, s: 1.3, tall: true }, { x: 15, z: 90, s: 0.5 }, { x: 25, z: 82, s: 1.8, tall: true },
+      { x: 35, z: 88, s: 0.65 }, { x: 45, z: 80, s: 0.55 }, { x: 55, z: 92, s: 1.6, tall: true },
+      { x: 65, z: 78, s: 0.7 }, { x: 75, z: 88, s: 0.5 }, { x: 85, z: 82, s: 1.4, tall: true }
     ];
     trees.forEach(function (t) {
-      scene.appendChild(createTreeSVG(t.x, t.z, t.s));
+      scene.appendChild(createTreeSVG(t.x, t.z, t.s, t.tall));
+    });
+
+    var tombstones = [
+      { x: 10, z: 38, s: 0.9 }, { x: 30, z: 52, s: 1.1 }, { x: 50, z: 35, s: 0.8 },
+      { x: 70, z: 55, s: 1.0 }, { x: 88, z: 30, s: 0.85 }, { x: 20, z: 70, s: 1.2 },
+      { x: 60, z: 72, s: 0.95 }, { x: 40, z: 65, s: 1.05 }
+    ];
+    tombstones.forEach(function (t) {
+      scene.appendChild(createTombstoneSVG(t.x, t.z, t.s));
     });
 
     for (var i = 0; i < 6; i++) {
