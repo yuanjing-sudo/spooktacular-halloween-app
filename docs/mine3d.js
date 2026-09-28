@@ -2269,9 +2269,18 @@
   }
 
   function fxUpdateOnSelectFacesByUVSeamSeamSeamSeamSeam() {
-    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c',
+    fxEmitParticles(G.px, 1.5, G.pz, { count: 16, color: '#ff9f1c', speed: 2.5, life: 1, size: 3, gravity: 0 });
+  }
+
   var gl = canvas.getContext('webgl', { antialias: true }) || canvas.getContext('experimental-webgl');
-  if (!gl) { document.getElementById('overlay-title').textContent = 'No WebGL'; return; }
+  if (!gl) {
+    document.getElementById('overlay-title').textContent = 'No WebGL';
+    document.getElementById('overlay-text').textContent = 'Your browser could not create a WebGL context, so the 3D maze cannot render. Try Chrome/Firefox with hardware acceleration enabled, or visit https://get.webgl.org to test.';
+    var noGlBtn = document.getElementById('overlay-btn');
+    if (noGlBtn) { noGlBtn.textContent = 'Reload'; noGlBtn.onclick = function () { window.location.reload(); }; }
+    document.getElementById('overlay').classList.remove('hidden');
+    return;
+  }
   var mm = document.getElementById('minimap').getContext('2d');
 
   function shader(type, src) {

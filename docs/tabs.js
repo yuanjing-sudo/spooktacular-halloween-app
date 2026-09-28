@@ -254,7 +254,16 @@
         var mstatus = el('div', 'psub', '');
         // Add 3D mine view button
         var btn3d = el('button', '', '👁️ 3D View');
-        btn3d.onclick = function () { window.location.href = 'mine3d.html'; };
+        btn3d.onclick = function () { 
+          try { 
+            var navigate = confirm('Navigate to 3D Mine?\nURL: mine3d.html'); 
+            if (navigate) { 
+              window.location.href = 'mine3d.html'; 
+            } 
+          } catch (e) { 
+            alert('Navigation error: ' + e.message); 
+          } 
+        };
         box.appendChild(btn3d);
         buildMine(box, snap, opts, mstatus);
         // Add instruction

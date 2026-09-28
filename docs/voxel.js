@@ -31,7 +31,14 @@
 
   var canvas = document.getElementById('gamev');
   var gl = canvas.getContext('webgl', { antialias: true }) || canvas.getContext('experimental-webgl');
-  if (!gl) return;
+  if (!gl) {
+    document.getElementById('overlay-title').textContent = 'No WebGL';
+    document.getElementById('overlay-text').textContent = 'Your browser could not create a WebGL context, so the voxel world cannot render. Try Chrome/Firefox with hardware acceleration enabled, or visit https://get.webgl.org to test.';
+    var noGlBtnV = document.getElementById('overlay-btn');
+    if (noGlBtnV) { noGlBtnV.textContent = 'Reload'; noGlBtnV.onclick = function () { window.location.reload(); }; }
+    document.getElementById('overlay').classList.remove('hidden');
+    return;
+  }
 
   function shader(t, src) {
     var s = gl.createShader(t);
