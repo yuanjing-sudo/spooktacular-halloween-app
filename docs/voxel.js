@@ -1070,6 +1070,12 @@
         vx: Math.cos(a) * sp, vy: up, vz: Math.sin(a) * sp,
         life: 0.5 + Math.random() * 0.3, col: base, grav: 1 });
     }
+    for (var i = 0; i < 6; i++) {
+      var a = Math.random() * Math.PI * 2;
+      G.parts.push({ x: x, y: y, z: z,
+        vx: Math.cos(a) * 0.5, vy: 0.5 + Math.random() * 0.5, vz: Math.sin(a) * 0.5,
+        life: 0.8 + Math.random() * 0.4, col: [1, 1, 1], grav: 0.1, spark: true });
+    }
     if (G.parts.length > 240) G.parts.splice(0, G.parts.length - 240);
   }
   function spawnMote() {
@@ -1192,7 +1198,9 @@
   }
   function playerEye() {
     var bobY = Math.sin((G.bob || 0) * 2) * 0.045 * (G.bobAmt || 0);
-    return [G.px, G.py + EYE + bobY, G.pz];
+    var bobX = Math.cos((G.bob || 0) * 1.0) * 0.02 * (G.bobAmt || 0);
+    var sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
+    return [G.px + cy * bobX, G.py + EYE + bobY, G.pz - sy * bobX];
   }
   function thirdEye() {
     var e = playerEye(), d = lookDir();
@@ -1202,7 +1210,22 @@
     var dist = hit ? Math.max(0.5, hit.dist - 0.35) : 4.2;
     return [e[0] + back[0] * dist, e[1] + back[1] * dist, e[2] + back[2] * dist];
   }
-  function eyePos() { return G.third ? thirdEye() : playerEye(); }
+  var viewMode = 0; // 0 = first person, 1 = third person back, 2 = third person front
+  var VIEW_NAMES = ['⛏️ First person', '👤 Third person (back)', '🪞 Third person (front)'];
+  function cycleView() {
+    viewMode = (viewMode + 1) % 3;
+    G.third = viewMode !== 0;
+    flash(VIEW_NAMES[viewMode], 1.5);
+  }
+  function frontEye() {
+    var e = playerEye(), d = lookDir();
+    var bx = d[0], bz = d[2], bl = Math.hypot(bx, bz) || 1;
+    var fwd = [bx / bl, -0.32, bz / bl];
+    var hit = S.voxelRay(e, fwd, 4.2, solidAt);
+    var dist = hit ? Math.max(0.5, hit.dist - 0.35) : 4.2;
+    return [e[0] + fwd[0] * dist, e[1] + fwd[1] * dist, e[2] + fwd[2] * dist];
+  }
+  function eyePos() { return viewMode === 0 ? playerEye() : (viewMode === 1 ? thirdEye() : frontEye()); }
   function collide(nx, ny, nz) {
     // AABB corners vs solid cells; returns corrected pos
     var xs = [nx - PR, nx + PR], ys = [ny, ny + PH], zs = [nz - PR, nz + PR];
@@ -1688,6 +1711,9 @@
     var diff = DIFFS[meta().diff || 0] || DIFFS[1];
     meta().hp -= Math.max(1, Math.round(n * diff.dmg));
     flash('-' + n + ' HP' + (cause ? ' (' + cause + ')' : ''), 1.5);
+    Anim.shake = Math.max(Anim.shake, Math.min(1, n * 0.08));
+    Anim.shakeDur = Math.max(Anim.shakeDur || 0, 0.3);
+    Anim.damageFlash = Anim.damageFlashDur;
     if (meta().hp <= 0) die(cause || 'the wilds');
     else renderHUD();
   }
@@ -1746,7 +1772,6 @@
   }
   function swing() {
     var mE = meta();
-    // melee: nearest mob within reach in the facing hemisphere
     var e = eyePos();
     var fhx = Math.sin(G.yaw), fhz = -Math.cos(G.yaw);
     var best = null, bscore = 1e9;
@@ -1764,7 +1789,12 @@
     }
     G.swingT = 0;
     AudioSys.swing();
-    if (best) { hitMob(best); return; }
+    if (best) {
+      Anim.shake = Math.max(Anim.shake, 0.15);
+      Anim.shakeDur = Math.max(Anim.shakeDur || 0, 0.15);
+      hitMob(best);
+      return;
+    }
     var hit = targetBlock();
     if (!hit) return;
     var key = hit.x + ',' + hit.y + ',' + hit.z;
@@ -1775,6 +1805,8 @@
     if (hp > 0) { G.dmg[key] = hp; return; }
     delete G.dmg[key];
     AudioSys.break();
+    Anim.shake = Math.max(Anim.shake, 0.1);
+    Anim.shakeDur = Math.max(Anim.shakeDur || 0, 0.1);
     checkQuests('collect', 1);
     breakHalloweenBlock(ore.key, hit.x, hit.y, hit.z);
     if (ore.coal) {
@@ -1796,6 +1828,12 @@
     }
     delete G.blocks[key];
     spawnBurst(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, ore.color);
+    for (var bi = 0; bi < 6; bi++) {
+      var ba = Math.random() * Math.PI * 2;
+      G.parts.push({ x: hit.x + 0.5, y: hit.y + 0.5, z: hit.z + 0.5,
+        vx: Math.cos(ba) * (1.5 + Math.random() * 2), vy: 2 + Math.random() * 2.5, vz: Math.sin(ba) * (1.5 + Math.random() * 2),
+        life: 0.4 + Math.random() * 0.3, col: hexRGB(ore.color), grav: 1.5 });
+    }
     var m = meta();
     G.broken++;
     trackStat('blocks', 1);
@@ -3273,8 +3311,15 @@
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
     var e = eyePos(), d = lookDir();
-    var V = S.mLookAt(e[0], e[1], e[2], e[0] + d[0], e[1] + d[1], e[2] + d[2], 0, 1, 0);
-    var mvp = S.mMul(S.mPerspective(Math.PI / 2.6, canvas.width / canvas.height, 0.05, 200), V);
+    if (viewMode === 2) {
+      var pe = playerEye();
+      var bl = Math.hypot(pe[0] - e[0], pe[1] - e[1], pe[2] - e[2]) || 1;
+      d = [(pe[0] - e[0]) / bl, (pe[1] - e[1]) / bl, (pe[2] - e[2]) / bl];
+    }
+    var shakeX = Anim.shakeX || 0, shakeY = Anim.shakeY || 0;
+    var V = S.mLookAt(e[0], e[1], e[2], e[0] + d[0] + shakeX, e[1] + d[1] + shakeY, e[2] + d[2], 0, 1, 0);
+    var fov = Anim.fov + (keys.shift && (keys.w || keys.arrowup) ? 0.08 : 0);
+    var mvp = S.mMul(S.mPerspective(fov, canvas.width / canvas.height, 0.05, 200), V);
     gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'uMVP'), false, new Float32Array(mvp));
     gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'uMV'), false, new Float32Array(V));
     gl.uniform3fv(gl.getUniformLocation(prog, 'uFog'), new Float32Array(fogC));
@@ -3363,15 +3408,22 @@
       var qm = G.mobs[qi];
       if (qm.kind === 'wolf') {
         var bob = Math.abs(Math.sin(G.time * 8 + qm.phase)) * 0.06;
+        var legSwing = Math.sin(G.time * 10 + qm.phase) * 0.1;
         emitEllipsoid(AP, AC, qm.x, qm.y + 0.35 + bob, qm.z, 0.35, 0.22, 0.22, [0.42, 0.31, 0.18], 1.2, 10, 8);
         emitSphere(AP, AC, qm.x, qm.y + 0.62 + bob, qm.z - 0.15, 0.16, [0.35, 0.25, 0.14], 1.2, 8, 6);
         emitSphere(AP, AC, qm.x - 0.06, qm.y + 0.65 + bob, qm.z - 0.28, 0.03, [0.1, 0.05, 0.05], 1.3, 4, 3);
         emitSphere(AP, AC, qm.x + 0.06, qm.y + 0.65 + bob, qm.z - 0.28, 0.03, [0.1, 0.05, 0.05], 1.3, 4, 3);
+        emitSphere(AP, AC, qm.x - 0.15 + legSwing, qm.y + 0.1, qm.z + 0.1, 0.06, [0.3, 0.2, 0.1], 1.0, 4, 3);
+        emitSphere(AP, AC, qm.x + 0.15 - legSwing, qm.y + 0.1, qm.z + 0.1, 0.06, [0.3, 0.2, 0.1], 1.0, 4, 3);
+        emitSphere(AP, AC, qm.x - 0.15 - legSwing, qm.y + 0.1, qm.z - 0.1, 0.06, [0.3, 0.2, 0.1], 1.0, 4, 3);
+        emitSphere(AP, AC, qm.x + 0.15 + legSwing, qm.y + 0.1, qm.z - 0.1, 0.06, [0.3, 0.2, 0.1], 1.0, 4, 3);
       } else {
         var fl = 0.5 + 0.2 * Math.sin(G.time * 5 + qm.phase);
         var fy = qm.y + 0.6 + 0.1 * Math.sin(G.time * 3 + qm.phase);
+        var tailWag = Math.sin(G.time * 6 + qm.phase) * 0.1;
         emitSphere(AP, AC, qm.x, fy, qm.z, fl * 0.6, [0.35, 0.9, 1.0], 1.4, 10, 8);
         emitSphere(AP, AC, qm.x, fy, qm.z, fl, [0.5, 0.95, 1.0], 0.6, 8, 6);
+        emitSphere(AP, AC, qm.x + tailWag, fy - 0.1, qm.z + 0.3, fl * 0.3, [0.3, 0.8, 0.9], 0.8, 6, 4);
       }
     }
     drawDyn(dynP1, dynC1, AP, AC);
@@ -3397,6 +3449,8 @@
         var as = pt.fog ? 0.35 : (pt.blood ? 0.5 : 0.28);
         var bs = s * (pt.fog ? 4 : 2.2);
         emitSphere(AP, AC, pt.x, pt.y, pt.z, bs * 0.5, pt.col, as, 6, 4);
+      } else if (pt.spark) {
+        emitSphere(AP, AC, pt.x, pt.y, pt.z, s * 0.3, pt.col, 0.8, 4, 3);
       } else {
         emitSphere(PP, PC, pt.x, pt.y, pt.z, s * 0.5, pt.col, 1.3, 6, 4);
       }
@@ -3408,6 +3462,45 @@
       drawDyn(dynP1, dynC1, AP, AC);
       gl.disable(gl.BLEND);
     }
+    var vg = document.getElementById('vignette');
+    if (!vg) {
+      vg = document.createElement('div');
+      vg.id = 'vignette';
+      vg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:15;transition:opacity 0.3s;';
+      vg.style.background = 'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%)';
+      document.getElementById('wrap').appendChild(vg);
+    }
+    var vignetteStrength = Anim.vignette || 0;
+    var lowHp = meta().hp < 30 ? 0.3 : 0;
+    vg.style.opacity = Math.min(1, vignetteStrength + lowHp);
+    var hit = targetBlock();
+    if (hit) {
+      var dmgKey = hit.x + ',' + hit.y + ',' + hit.z;
+      var dmgVal = G.dmg[dmgKey];
+      if (dmgVal !== undefined) {
+        var ore = VOX[G.blocks[dmgKey]];
+        if (ore) {
+          var intensity = 1 - dmgVal / ore.hp;
+          var cx = hit.x + 0.5, cy = hit.y + 0.5, cz = hit.z + 0.5;
+          var CP = [], CC = [];
+          var crackCount = Math.floor(intensity * 5) + 1;
+          for (var ci = 0; ci < crackCount; ci++) {
+            var ca = (ci / crackCount) * Math.PI * 2;
+            var r = 0.3 + intensity * 0.2;
+            CP.push(cx, cy, cz);
+            CP.push(cx + Math.cos(ca) * r, cy + Math.sin(ca) * r * 0.5, cz + Math.sin(ca) * r);
+            CP.push(cx + Math.cos(ca + 0.5) * r * 0.7, cy + Math.sin(ca + 0.5) * r * 0.3, cz + Math.sin(ca + 0.5) * r * 0.7);
+            for (var cj = 0; cj < 3; cj++) CC.push(0.1, 0.1, 0.1);
+          }
+          if (CP.length) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            drawDyn(dynP2, dynC2, CP, CC);
+            gl.disable(gl.BLEND);
+          }
+        }
+      }
+    }
   }
 
   // ---------- input ----------
@@ -3416,9 +3509,9 @@
     AudioSys.init();
     var k = e.key.toLowerCase();
     keys[k] = true;
-    if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].indexOf(k) >= 0) e.preventDefault();
+    if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'f5'].indexOf(k) >= 0) e.preventDefault();
     if (k === 'f') swing();
-    if (k === 'v') { G.third = !G.third; flash(G.third ? '👤 Third person' : '⛏️ First person', 1.5); }
+    if (k === 'v' || k === 'f5') cycleView();
     if (k === 'e') eatApple();
     if (k === 't') placeTorch();
     if (k === 'j') {
@@ -3467,8 +3560,10 @@
   canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   document.addEventListener('mousemove', function (e) {
     if (!drag) return;
-    G.yaw -= (e.clientX - drag[0]) * 0.004;
-    G.pitch = Math.max(-3.1, Math.min(3.1, G.pitch - (e.clientY - drag[1]) * 0.003));
+    var mdx = (typeof e.movementX === 'number') ? e.movementX : (e.clientX - drag[0]);
+    var mdy = (typeof e.movementY === 'number') ? e.movementY : (e.clientY - drag[1]);
+    G.yaw -= mdx * 0.004;
+    G.pitch = Math.max(-3.1, Math.min(3.1, G.pitch - mdy * 0.003));
     drag = [e.clientX, e.clientY];
   });
   document.addEventListener('mouseup', function () { drag = null; });
@@ -3524,15 +3619,68 @@
   document.getElementById('worldm').addEventListener('click', function () { switchWorld(1); });
   document.getElementById('worldfr').addEventListener('click', function () { switchWorld(2); });
   document.getElementById('worldc').addEventListener('click', function () { switchWorld(3); });
+  var minimapCanvas = document.createElement('canvas');
+  minimapCanvas.id = 'minimap';
+  minimapCanvas.width = 120;
+  minimapCanvas.height = 120;
+  minimapCanvas.style.cssText = 'position:absolute;top:10px;right:10px;z-index:15;border:1px solid #6d28a8;border-radius:8px;background:rgba(11,6,32,0.8);pointer-events:none;';
+  document.getElementById('wrap').appendChild(minimapCanvas);
+  var minimapCtx = minimapCanvas.getContext('2d');
+  var minimapExplored = {};
+  function drawMinimap() {
+    if (!minimapCtx || !G.chunks) return;
+    var ctx = minimapCtx;
+    var W = minimapCanvas.width, H = minimapCanvas.height;
+    ctx.clearRect(0, 0, W, H);
+    var scale = Math.min(W / G.W, H / G.D);
+    var offX = (W - G.W * scale) / 2;
+    var offY = (H - G.D * scale) / 2;
+    for (var k in G.blocks) {
+      var p = k.split(',');
+      var x = +p[0], y = +p[1], z = +p[2];
+      if (y < 2) {
+        var key = x + ',' + z;
+        if (!minimapExplored[key]) {
+          minimapExplored[key] = true;
+        }
+      }
+    }
+    for (var ek in minimapExplored) {
+      var ep = ek.split(',');
+      var ex = +ep[0], ez = +ep[1];
+      ctx.fillStyle = 'rgba(109,40,168,0.4)';
+      ctx.fillRect(offX + ex * scale, offY + ez * scale, scale, scale);
+    }
+    for (var k2 in G.blocks) {
+      var p2 = k2.split(',');
+      var x2 = +p2[0], y2 = +p2[1], z2 = +p2[2];
+      if (y2 < 2) {
+        var ore = VOX[G.blocks[k2]];
+        if (ore && ore.gold > 0) {
+          ctx.fillStyle = '#ffd166';
+          ctx.fillRect(offX + x2 * scale, offY + z2 * scale, scale, scale);
+        }
+      }
+    }
+    var px = offX + G.px * scale;
+    var pz = offY + G.pz * scale;
+    ctx.fillStyle = '#ff7518';
+    ctx.beginPath();
+    ctx.arc(px, pz, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, pz);
+    ctx.lineTo(px + Math.sin(G.yaw) * 6, pz - Math.cos(G.yaw) * 6);
+    ctx.stroke();
+  }
   document.getElementById('newmaze').addEventListener('click', function () {
     newGame(G.world, (Math.random() * 1e9) | 0);
     hideOverlay();
   });
   document.getElementById('shopbtn').addEventListener('click', function () { showShop(); });
-  document.getElementById('viewbtn').addEventListener('click', function () {
-    // View mode stays first-person since avatar was removed
-    flash('⛏️ First person view', 1.5);
-  });
+  document.getElementById('viewbtn').addEventListener('click', function () { cycleView(); });
   document.getElementById('craftbtn').addEventListener('click', function () { craftTorch(); });
   document.getElementById('objbtn').addEventListener('click', function () {
     var op = document.getElementById('objpanel');
@@ -3645,7 +3793,8 @@
     var hsp = Math.hypot(G.vxh, G.vzh);
     G.bobAmt = G.bobAmt === undefined ? 0 : G.bobAmt + (((hsp > 0.5 && G.onGround) ? 1 : 0) - G.bobAmt) * Math.min(1, dt * 8);
     G.bob = (G.bob || 0) + hsp * dt * 2.4;
-    var sp = 4.6 * dt;
+    var sprint = keys.shift ? 1.5 : 1;
+    var sp = 4.6 * sprint * dt;
     var fw = ((keys.w || keys.arrowup) ? 1 : 0) - ((keys.s || keys.arrowdown) ? 1 : 0) + joy.y;
     var st = ((keys.d ? 1 : 0) - (keys.a ? 1 : 0)) + joy.x;
     if (keys.arrowleft) G.yaw += 2.4 * dt;
@@ -3674,6 +3823,14 @@
     if (G.onGround && wasAir && G.fallPeak !== undefined && G.fallPeak > -99) {
       var drop = G.fallPeak - G.py;
       if (drop > 3.5) hurt(Math.round((drop - 3.5) * 8), 'a big fall');
+      if (drop > 1.5) {
+        for (var di = 0; di < 8; di++) {
+          var da = Math.random() * Math.PI * 2;
+          G.parts.push({ x: G.px + Math.cos(da) * 0.4, y: G.py + 0.05, z: G.pz + Math.sin(da) * 0.4,
+            vx: Math.cos(da) * (1 + Math.random()), vy: 0.5 + Math.random() * 0.5, vz: Math.sin(da) * (1 + Math.random()),
+            life: 0.3 + Math.random() * 0.2, col: [0.6, 0.55, 0.5], grav: 0.5 });
+        }
+      }
       G.fallPeak = undefined;
     }
     // lava burns + track depth record
@@ -3696,6 +3853,16 @@
     if (G.tab === 0) update(dt);
     if (flashT > 0) document.title = '⛏️ ' + flashMsg;
     if (G.chunks) render();
+    drawMinimap();
+    updateCameraShake(dt);
+    updateFOV(dt);
+    updateSmoothLook(dt);
+    updateMovementSmoothing(dt);
+    updateCombatAnimations(dt);
+    updateUIAnimations(dt);
+    updatePortalSwirl(dt);
+    updateWeatherBlend(dt);
+    updateParticleTrails(dt);
     requestAnimationFrame(loop);
   }
 
@@ -5133,6 +5300,13 @@
       Anim.shakeX = 0;
       Anim.shakeY = 0;
     }
+    if (Anim.shakeDur > 0) {
+      Anim.shakeDur -= dt;
+      if (Anim.shakeDur <= 0) {
+        Anim.shake = 0;
+        Anim.shakeDur = 0;
+      }
+    }
   }
 
   // ---- FOV Effects ----
@@ -5146,6 +5320,11 @@
     if (Math.abs(diff) > 0.001) {
       Anim.fov += diff * Math.min(1, dt * (Anim.fovSpeed || 3));
     }
+    if (keys.shift && (keys.w || keys.arrowup)) {
+      Anim.fovTarget = Math.PI / 2.6 + 0.08;
+    } else {
+      Anim.fovTarget = Math.PI / 2.6;
+    }
   }
 
   // ---- Smooth Camera Look ----
@@ -5153,6 +5332,8 @@
     var lookSpeed = 12;
     Anim.pitchSmooth = lerp(Anim.pitchSmooth, G.pitch, Math.min(1, dt * lookSpeed));
     Anim.yawSmooth = lerp(Anim.yawSmooth, G.yaw, Math.min(1, dt * lookSpeed));
+    G.pitch = Anim.pitchSmooth;
+    G.yaw = Anim.yawSmooth;
   }
 
   // ---- Movement Smoothing ----
@@ -5160,13 +5341,12 @@
     var accel = G.onGround ? 12 : 4;
     var friction = G.onGround ? 10 : 1;
     var maxSpeed = 4.6;
-    // Costume bonus
+    var sprint = keys.shift ? 1.5 : 1;
     var costume = getCostumeBonus();
     if (costume && costume.bonus === 'speed') maxSpeed *= costume.mult;
-    // Potion bonus
     if (hasPotion('speed')) maxSpeed *= 1.4;
-    // Slow effect
     if (meta().slowTimer > 0) maxSpeed *= 0.5;
+    maxSpeed *= sprint;
 
     var targetVX = G.vxh;
     var targetVZ = G.vzh;
@@ -5180,13 +5360,11 @@
     Anim.velX = lerp(Anim.velX, targetVX, Math.min(1, rate));
     Anim.velZ = lerp(Anim.velZ, targetVZ, Math.min(1, rate));
 
-    // Head bob
     var hSpeed = Math.hypot(Anim.velX, Anim.velZ);
     var bobTarget = (hSpeed > 0.5 && G.onGround) ? 1 : 0;
     Anim.bobAmp = lerp(Anim.bobAmp, bobTarget, Math.min(1, dt * 8));
     Anim.bobPhase += hSpeed * dt * 2.4;
 
-    // Landing dip
     if (G.onGround && Anim.landDipVel > 0) {
       Anim.landDip += Anim.landDipVel * dt;
       Anim.landDipVel -= 30 * dt;
@@ -5196,19 +5374,25 @@
 
   // ---- Combat Animations ----
   function updateCombatAnimations(dt) {
-    // Swing
     if (Anim.swingT < 1) {
       Anim.swingT = Math.min(1, Anim.swingT + dt / Anim.swingDur);
     }
-    // Hit stop
     if (Anim.hitStop > 0) {
       Anim.hitStop -= dt;
       if (Anim.hitStop < 0) Anim.hitStop = 0;
     }
-    // Damage flash
     if (Anim.damageFlash > 0) {
       Anim.damageFlash -= dt;
       if (Anim.damageFlash < 0) Anim.damageFlash = 0;
+    }
+    if (Anim.shake > 0) {
+      Anim.shake = Math.max(0, Anim.shake - dt * 3);
+      var s = Anim.shake * Anim.shake;
+      Anim.shakeX = (Math.random() - 0.5) * s * 0.1;
+      Anim.shakeY = (Math.random() - 0.5) * s * 0.1;
+    } else {
+      Anim.shakeX = 0;
+      Anim.shakeY = 0;
     }
   }
 
@@ -5222,26 +5406,20 @@
 
   // ---- UI Animations ----
   function updateUIAnimations(dt) {
-    // Panel slide
     Anim.panelT = lerp(Anim.panelT, Anim.panelTarget, Math.min(1, dt * 10));
-    // Overlay fade
     Anim.overlayT = lerp(Anim.overlayT, Anim.overlayTarget, Math.min(1, dt * 8));
-    // Level up
     if (Anim.levelUpT > 0) {
       Anim.levelUpT -= dt;
       if (Anim.levelUpT < 0) Anim.levelUpT = 0;
     }
-    // Death fade
     if (G.state === 'dead') {
       Anim.deathT = lerp(Anim.deathT, 1, Math.min(1, dt * 2));
     } else {
       Anim.deathT = lerp(Anim.deathT, 0, Math.min(1, dt * 3));
     }
-    // Vignette
     var danger = dangerLevel();
     Anim.vignetteTarget = danger * 0.5 + (meta().hp < 30 ? 0.3 : 0);
     Anim.vignette = lerp(Anim.vignette, Anim.vignetteTarget, Math.min(1, dt * 3));
-    // Chromatic aberration on damage
     Anim.chromaticTarget = Anim.damageFlash > 0 ? 1 : 0;
     Anim.chromatic = lerp(Anim.chromatic, Anim.chromaticTarget, Math.min(1, dt * 10));
   }
@@ -5249,11 +5427,23 @@
   // ---- Portal Swirl Animation ----
   function updatePortalSwirl(dt) {
     Anim.portalSwirl += dt * 2;
+    for (var i = 0; i < (G.portals || []).length; i++) {
+      var p = G.portals[i];
+      if (Math.random() < dt * 8) {
+        var a = Math.random() * Math.PI * 2;
+        var r = 0.3 + Math.random() * 0.3;
+        var tc = [1, 0.5, 1];
+        for (var j = 0; j < PORTAL_TYPES.length; j++) if (PORTAL_TYPES[j].key === p.type) tc = PORTAL_TYPES[j].col;
+        G.parts.push({ x: p.x + Math.cos(a) * r, y: p.y + Math.random() * 1.2, z: p.z + Math.sin(a) * r,
+          vx: -Math.sin(a) * 0.3, vy: 0.3 + Math.random() * 0.3, vz: Math.cos(a) * 0.3,
+          life: 0.6 + Math.random() * 0.4, col: tc, grav: -0.1, portal: true });
+      }
+    }
   }
 
   // ---- Weather Transition ----
   function updateWeatherBlend(dt) {
-    Anim.weatherBlend = lerp(Anim.animBlend || 0, 1, Math.min(1, dt * 0.5));
+    Anim.weatherBlend = lerp(Anim.weatherBlend || 0, 1, Math.min(1, dt * 0.5));
   }
 
   // ---- Particle Trails ----
@@ -5261,7 +5451,6 @@
     Anim.trailT -= dt;
     if (Anim.trailT <= 0) {
       Anim.trailT = 0.05;
-      // Player trail when moving fast
       var speed = Math.hypot(Anim.velX, Anim.velZ);
       if (speed > 3 && G.onGround) {
         G.parts.push({
@@ -5274,6 +5463,19 @@
           life: 0.3 + Math.random() * 0.2,
           col: [0.6, 0.5, 0.4],
           grav: 0.1
+        });
+      }
+      if (keys.shift && speed > 4) {
+        G.parts.push({
+          x: G.px + (Math.random() - 0.5) * 0.3,
+          y: G.py + 0.05,
+          z: G.pz + (Math.random() - 0.5) * 0.3,
+          vx: -Anim.velX * 0.15,
+          vy: 0.1,
+          vz: -Anim.velZ * 0.15,
+          life: 0.2,
+          col: [0.8, 0.7, 0.5],
+          grav: 0.05
         });
       }
     }
