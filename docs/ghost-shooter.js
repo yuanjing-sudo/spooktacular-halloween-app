@@ -852,6 +852,37 @@
     var xyzOverlay = createXYZOverlay();
     arena.appendChild(xyzOverlay);
 
+    var ground = el('div', 'gs-ground');
+    arena.appendChild(ground);
+
+    var hills = el('div', 'gs-hills');
+    var hillData = [
+      { left: '5%', width: '30%', height: '60%' },
+      { left: '25%', width: '35%', height: '80%' },
+      { left: '55%', width: '28%', height: '55%' },
+      { left: '75%', width: '32%', height: '70%' }
+    ];
+    hillData.forEach(function (h) {
+      var hill = el('div', 'gs-hill');
+      hill.style.left = h.left;
+      hill.style.width = h.width;
+      hill.style.height = h.height;
+      hills.appendChild(hill);
+    });
+    arena.appendChild(hills);
+
+    var clouds = el('div', 'gs-clouds');
+    for (var ci = 0; ci < 6; ci++) {
+      var cloud = el('div', 'gs-cloud');
+      cloud.style.top = (5 + Math.random() * 25) + '%';
+      cloud.style.width = (80 + Math.random() * 120) + 'px';
+      cloud.style.height = (30 + Math.random() * 40) + 'px';
+      cloud.style.animationDuration = (40 + Math.random() * 40) + 's';
+      cloud.style.animationDelay = (-Math.random() * 30) + 's';
+      clouds.appendChild(cloud);
+    }
+    arena.appendChild(clouds);
+
     var scene = el('div', 'gs-scene');
     arena.appendChild(scene);
 
