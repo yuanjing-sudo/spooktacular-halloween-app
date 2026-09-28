@@ -274,9 +274,6 @@
         row.appendChild(btn('New Maze', function () { select(0); opts.actions.newMaze(); }));
         box.appendChild(row);
       } else if (i === 3) {
-        var g3d = el('button', '', '👁️ 3D Walk');
-        g3d.onclick = function () { try { window.location.href = 'ghost3d.html'; } catch (e) { alert('Navigation error: ' + e.message); } };
-        box.appendChild(g3d);
         if (window.SpookyGhostShooter) {
           window.SpookyGhostShooter.build(box);
         } else {
