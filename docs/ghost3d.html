@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>🎃 Spooktacular Mine 3D</title>
+<title>👻 Spooktacular Ghosts 3D</title>
 <link rel="stylesheet" href="style.css?v=8">
 <style>
-  #game3d { width: 94vw; max-width: 900px; height: 62vh; display: block; }
+  #gameg { width: 94vw; max-width: 900px; height: 62vh; display: block; }
   #minimap { position: absolute; top: 8px; right: 8px; border: 1px solid #6d28a8; border-radius: 6px; background: rgba(11,6,32,.8); }
   #stick { position: absolute; bottom: 14px; left: 14px; width: 110px; height: 110px; border-radius: 50%; background: rgba(109,40,168,.25); border: 1px solid #6d28a8; display: none; }
   #nub { position: absolute; width: 46px; height: 46px; border-radius: 50%; background: rgba(255,209,102,.5); left: 32px; top: 32px; }
@@ -14,18 +14,16 @@
 </style>
 </head>
 <body>
-<h1>🎃 Spooktacular Mine 3D</h1>
-<p class="sub">The mine, portable — same mazes, same ghost AI, same gold. WASD + drag to look · O for diorama orbit.</p>
+<h1>👻 Spooktacular Ghosts 3D</h1>
+<p class="sub">A walkable haunted maze — same seeded mazes, same A* ghost. WASD + drag to look · ←/→ turn.</p>
 <div id="hud">
   <span>Score <b id="score">0</b></span>
-  <span>Depth <b id="depth">–</b></span>
   <span>Left <b id="candy">0</b></span>
-  <span>Gold <b id="gold">0</b></span>
   <span>Level <b id="level">1</b></span>
-  <span>Pick <b id="pick">Wooden Pick</b></span>
+  <span>Seed <b id="seed">–</b></span>
 </div>
 <div id="wrap">
-  <canvas id="game3d" width="900" height="560"></canvas>
+  <canvas id="gameg" width="900" height="560"></canvas>
   <div id="tabpanels"></div>
   <canvas id="minimap" width="132" height="132"></canvas>
   <div id="stick"><div id="nub"></div></div>
@@ -36,20 +34,31 @@
     <button id="overlay-btn2" style="display:none"></button>
   </div>
 </div>
-<button id="newmaze">🎲 New maze</button> <button id="shopbtn">🛒 Shop</button>
-<button id="orbitbtn">🪐 Diorama</button>
+<button id="newmaze">🎲 New haunt</button>
 <div id="worlds" style="margin:8px 0; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
   <a href="index.html" style="color:#ffd166">⛏️ Maze 2D</a>
-  <a href="mine3d.html" style="color:#ffd166">🧱 3D mine (here)</a>
-  <a href="ghost3d.html" style="color:#ffd166">👻 3D ghosts</a>
+  <a href="mine3d.html" style="color:#ffd166">🧱 3D mine</a>
+  <a href="ghost3d.html" style="color:#ffd166">👻 3D ghosts (here)</a>
   <a href="voxel.html#forest" style="color:#ffd166">🌲 Voxel forest</a>
   <a href="voxel.html#mine" style="color:#ffd166">⛏️ Voxel deep-mine</a>
 </div>
 <div id="tabs"></div>
-<p id="help">WASD/arrows move · mouse/touch drag looks · walk into 🍬💎🗿🎣 · dodge 👻</p>
+<p id="help">WASD/arrows move · ←/→ turn · mouse/touch drag looks · walk into 🍬 · dodge 👻</p>
+<script>
+window.addEventListener('error', function (e) {
+  try {
+    var t = document.getElementById('overlay-title');
+    var x = document.getElementById('overlay-text');
+    var o = document.getElementById('overlay');
+    if (t) t.textContent = 'Ghosts failed to start';
+    if (x) x.textContent = (e.message || 'Script error') + (e.lineno ? ' @ line ' + e.lineno : '') + ' — screenshot this and send it back.';
+    if (o) o.classList.remove('hidden');
+  } catch (_) {}
+});
+</script>
 <script src="spooky.js?v=9"></script>
 <script src="tabs.js?v=9"></script>
 <script src="games.js?v=9"></script>
-<script src="mine3d.js?v=9"></script>
+<script src="ghost3d.js?v=1"></script>
 </body>
 </html>
