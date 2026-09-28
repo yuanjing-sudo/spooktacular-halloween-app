@@ -64,31 +64,9 @@
     'uniform vec3 uLightDir; uniform vec3 uLightColor; uniform vec3 uAmbientColor;' +
     'uniform float uMetallic; uniform float uRoughness; uniform float uAO;' +
     'void main(){' +
-    ' vec3 albedo = texture2D(uAlbedo, vTex).rgb;' +
-    ' vec3 N = normalize(texture2D(uNormalMap, vTex).rgb * 2.0 - 1.0);' +
-    ' float roughness = texture2D(uRoughnessMap, vTex).r;' +
-    ' float metalness = texture2D(uMetalnessMap, vTex).r;' +
-    ' vec3 H = normalize(uLightDir + vC);' +
-    ' float NdotH = max(dot(N, H), 0.0);' +
-    ' float fresnel = pow(1.0 - NdotH, 5.0);' +
-    ' float NdotL = max(dot(N, uLightDir), 0.0);' +
-    ' float NdotV = max(dot(N, vC), 0.0);' +
-    ' float ax = uRoughness*uRoughness;' +
-    ' float ay = uRoughness*uRoughness;' +
-    ' float NdotH2 = NdotH*NdotH;' +
-    ' float num = ax*ay;' +
-    ' float denom = (ax*NdotH2 + ay*(1.0 - NdotH2))*(NdotH2 + 0.5);' +
-    ' float ggx = num / (denom * 3.14159265359);' +
-    ' float G1 = NdotH2 / (NdotH2 + (1.0 - NdotH2) * 0.5);' +
-    ' float geometry = G1 * G1;' +
-    ' float specular = metalness * fresnel;' +
-    ' float diffuse = (1.0 - metalness) * NdotL;' +
-    ' vec3 color = diffuse * uAmbientColor + specular * uLightColor + vec3(0.04) * (1.0 - metalness);' +
-    ' float ao = 1.0 - uAO;' +
-    ' color.rgb *= ao;' +
+    ' vec3 color = vC;' +
     ' float f = smoothstep(uFogR.x, uFogR.y, vD);' +
-    ' gl_FragColor = vec4(color.rgb * ao + uFog * f, uAlpha);' +
-    '}'));
+    ' gl_FragColor = vec4(mix(color, uFog, f), uAlpha); }'));
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
@@ -3295,6 +3273,7 @@
     function bind(w, size, name) {
       gl.bindBuffer(gl.ARRAY_BUFFER, w.b);
       var loc = gl.getAttribLocation(prog, name);
+      if (loc < 0) return;
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
     }
@@ -3342,6 +3321,8 @@
       if (chunkVisible(ch, planes)) drawBufP(ch.op);
     }
     gl.useProgram(prog);
+    gl.uniform3fv(gl.getUniformLocation(prog, 'uFog'), new Float32Array(fogC));
+    gl.uniform2fv(gl.getUniformLocation(prog, 'uFogR'), new Float32Array(fogRNow));
     drawBuf(G.glow);
     drawBuf(G.decor);
     var beams = drawBeams();
