@@ -361,10 +361,441 @@
     };
   }
 
+  var EXTRA_GHOSTS = [
+    { key: "candyWraith", name: "🍬 Candy Wraith", rarity: "common" },
+    { key: "sugarSpecter", name: "🧂 Sugar Specter", rarity: "common" },
+    { key: "chocoPhantom", name: "🍫 Choco Phantom", rarity: "uncommon" },
+    { key: "mintBanshee", name: "🌿 Mint Banshee", rarity: "uncommon" },
+    { key: "caramelWisp", name: "🍯 Caramel Wisp", rarity: "uncommon" },
+    { key: "gummyGolem", name: "🐻 Gummy Golem", rarity: "rare" },
+    { key: "toffeeTitan", name: "🍬 Toffee Titan", rarity: "rare" },
+    { key: "fudgeFiend", name: "🍫 Fudge Fiend", rarity: "rare" },
+    { key: "licorichLord", name: "🖤 Licorice Lord", rarity: "epic" },
+    { key: "peppermintProwler", name: "🍬 Peppermint Prowler", rarity: "epic" },
+    { key: "jawbreakerJuggernaut", name: "🔴 Jawbreaker Juggernaut", rarity: "epic" },
+    { key: "truffleTerror", name: "🍫 Truffle Terror", rarity: "legendary" },
+    { key: "candycornCrusher", name: "🌽 Candy Corn Crusher", rarity: "legendary" },
+    { key: "sugarplumSovereign", name: "👑 Sugarplum Sovereign", rarity: "legendary" },
+    { key: "chocolateChimera", name: "🐉 Chocolate Chimera", rarity: "legendary" },
+    { key: "lollipopLeviathan", name: "🗼 Lollipop Leviathan", rarity: "legendary" },
+    { key: "gummyGorgon", name: "🐻 Gummy Gorgon", rarity: "rare" },
+    { key: "toffeeTemplar", name: "🍬 Toffee Templar", rarity: "uncommon" },
+    { key: "fudgeFalcon", name: "🍫 Fudge Falcon", rarity: "common" },
+    { key: "licoriceLynx", name: "🖤 Licorice Lynx", rarity: "common" },
+    { key: "peppermintPanther", name: "🍬 Peppermint Panther", rarity: "uncommon" },
+    { key: "jawbreakerJackal", name: "🔴 Jawbreaker Jackal", rarity: "common" },
+    { key: "truffleTiger", name: "🍫 Truffle Tiger", rarity: "rare" },
+    { key: "candycornCobra", name: "🌽 Candy Corn Cobra", rarity: "uncommon" },
+    { key: "sugarplumSerpent", name: "👑 Sugarplum Serpent", rarity: "epic" },
+    { key: "chocolateCentaur", name: "🐉 Chocolate Centaur", rarity: "rare" },
+    { key: "lollipopLizard", name: "🗼 Lollipop Lizard", rarity: "common" },
+    { key: "gummyGriffin", name: "🐻 Gummy Griffin", rarity: "epic" },
+    { key: "toffeeToucan", name: "🍬 Toffee Toucan", rarity: "common" },
+    { key: "fudgeFox", name: "🍫 Fudge Fox", rarity: "uncommon" },
+    { key: "licoriceLemur", name: "🖤 Licorice Lemur", rarity: "common" },
+    { key: "peppermintPanda", name: "🍬 Peppermint Panda", rarity: "rare" },
+    { key: "jawbreakerJaguar", name: "🔴 Jawbreaker Jaguar", rarity: "epic" },
+    { key: "truffleTurtle", name: "🍫 Truffle Turtle", rarity: "uncommon" },
+    { key: "candycornCrocodile", name: "🌽 Candy Corn Crocodile", rarity: "rare" },
+    { key: "sugarplumSparrow", name: "👑 Sugarplum Sparrow", rarity: "common" },
+    { key: "chocolateCheetah", name: "🐉 Chocolate Cheetah", rarity: "epic" },
+    { key: "lollipopLion", name: "🗼 Lollipop Lion", rarity: "legendary" },
+    { key: "gummyGazelle", name: "🐻 Gummy Gazelle", rarity: "uncommon" },
+    { key: "toffeeTapir", name: "🍬 Toffee Tapir", rarity: "rare" },
+    { key: "fudgeFerret", name: "🍫 Fudge Ferret", rarity: "common" },
+    { key: "licoriceLobster", name: "🖤 Licorice Lobster", rarity: "uncommon" },
+    { key: "peppermintPenguin", name: "🍬 Peppermint Penguin", rarity: "common" },
+    { key: "jawbreakerJellyfish", name: "🔴 Jawbreaker Jellyfish", rarity: "rare" },
+    { key: "truffleTarantula", name: "🍫 Truffle Tarantula", rarity: "epic" },
+    { key: "candycornCicada", name: "🌽 Candy Corn Cicada", rarity: "uncommon" },
+    { key: "sugarplumScorpion", name: "👑 Sugarplum Scorpion", rarity: "legendary" },
+    { key: "chocolateCockroach", name: "🐉 Chocolate Cockroach", rarity: "common" },
+    { key: "lollipopLocust", name: "🗼 Lollipop Locust", rarity: "rare" },
+    { key: "gummyGnat", name: "🐻 Gummy Gnat", rarity: "common" },
+    { key: "toffeeTermite", name: "🍬 Toffee Termite", rarity: "uncommon" },
+    { key: "fudgeFirefly", name: "🍫 Fudge Firefly", rarity: "rare" },
+    { key: "licoriceLadybug", name: "🖤 Licorice Ladybug", rarity: "common" },
+    { key: "peppermintMoth", name: "🍬 Peppermint Moth", rarity: "uncommon" },
+    { key: "jawbreakerMosquito", name: "🔴 Jawbreaker Mosquito", rarity: "common" },
+    { key: "truffleMantis", name: "🍫 Truffle Mantis", rarity: "rare" },
+    { key: "candycornMite", name: "🌽 Candy Corn Mite", rarity: "common" },
+    { key: "sugarplumMouse", name: "👑 Sugarplum Mouse", rarity: "uncommon" },
+    { key: "chocolateMole", name: "🐉 Chocolate Mole", rarity: "rare" },
+    { key: "lollipopMonkey", name: "🗼 Lollipop Monkey", rarity: "epic" },
+    { key: "gummyMarmot", name: "🐻 Gummy Marmot", rarity: "uncommon" },
+    { key: "toffeeMacaw", name: "🍬 Toffee Macaw", rarity: "common" },
+    { key: "fudgeMagpie", name: "🍫 Fudge Magpie", rarity: "uncommon" },
+    { key: "licoriceMamba", name: "🖤 Licorice Mamba", rarity: "rare" },
+    { key: "peppermintMongoose", name: "🍬 Peppermint Mongoose", rarity: "epic" },
+    { key: "jawbreakerMink", name: "🔴 Jawbreaker Mink", rarity: "uncommon" },
+    { key: "truffleMarten", name: "🍫 Truffle Marten", rarity: "rare" },
+    { key: "candycornMastiff", name: "🌽 Candy Corn Mastiff", rarity: "uncommon" },
+    { key: "sugarplumMastodon", name: "👑 Sugarplum Mastodon", rarity: "legendary" },
+    { key: "chocolateManatee", name: "🐉 Chocolate Manatee", rarity: "rare" },
+    { key: "lollipopMantis Shrimp", name: "🗼 Lollipop Mantis Shrimp", rarity: "epic" },
+    { key: "gummyMuskox", name: "🐻 Gummy Muskox", rarity: "uncommon" },
+    { key: "toffeeMusk Deer", name: "🍬 Toffee Musk Deer", rarity: "rare" },
+    { key: "fudgeMuskellunge", name: "🍫 Fudge Muskellunge", rarity: "uncommon" },
+    { key: "licoriceMussel", name: "🖤 Licorice Mussel", rarity: "common" },
+    { key: "peppermintMyna", name: "🍬 Peppermint Myna", rarity: "uncommon" },
+    { key: "jawbreakerNightingale", name: "🔴 Jawbreaker Nightingale", rarity: "rare" },
+    { key: "truffleNarwhal", name: "🍫 Truffle Narwhal", rarity: "epic" },
+    { key: "candycornNewt", name: "🌽 Candy Corn Newt", rarity: "common" },
+    { key: "sugarplumNumbat", name: "👑 Sugarplum Numbat", rarity: "uncommon" },
+    { key: "chocolateNutria", name: "🐉 Chocolate Nutria", rarity: "rare" },
+    { key: "lollipopNuthatch", name: "🗼 Lollipop Nuthatch", rarity: "uncommon" },
+    { key: "gummyNyala", name: "🐻 Gummy Nyala", rarity: "rare" },
+    { key: "toffeeOcelot", name: "🍬 Toffee Ocelot", rarity: "epic" },
+    { key: "fudgeOctopus", name: "🍫 Fudge Octopus", rarity: "rare" },
+    { key: "licoriceOkapi", name: "🖤 Licorice Okapi", rarity: "epic" },
+    { key: "peppermintOlm", name: "🍬 Peppermint Olm", rarity: "rare" },
+    { key: "jawbreakerOpossum", name: "🔴 Jawbreaker Opossum", rarity: "uncommon" },
+    { key: "truffleOrangutan", name: "🍫 Truffle Orangutan", rarity: "legendary" },
+    { key: "candycornOribi", name: "🌽 Candy Corn Oribi", rarity: "uncommon" },
+    { key: "sugarspoonOryx", name: "👑 Sugarplum Oryx", rarity: "rare" },
+    { key: "chocolateOsprey", name: "🐉 Chocolate Osprey", rarity: "uncommon" },
+    { key: "lollipopOstrich", name: "🗼 Lollipop Ostrich", rarity: "rare" },
+    { key: "gummyOtter", name: "🐻 Gummy Otter", rarity: "uncommon" },
+    { key: "toffeeOwl", name: "🍬 Toffee Owl", rarity: "common" },
+    { key: "fudgeOx", name: "🍫 Fudge Ox", rarity: "uncommon" },
+    { key: "licoriceOyster", name: "🖤 Licorice Oyster", rarity: "common" },
+    { key: "peppermintPaca", name: "🍬 Peppermint Paca", rarity: "uncommon" },
+    { key: "jawbreakerPaddlefish", name: "🔴 Jawbreaker Paddlefish", rarity: "rare" },
+    { key: "trufflePademelon", name: "🍫 Truffle Pademelon", rarity: "uncommon" },
+    { key: "candycornPanda", name: "🌽 Candy Corn Panda", rarity: "rare" },
+    { key: "sugarplumPangolin", name: "👑 Sugarplum Pangolin", rarity: "epic" },
+    { key: "chocolatePanther", name: "🐉 Chocolate Panther", rarity: "rare" },
+    { key: "lollipopPapillon", name: "🗼 Lollipop Papillon", rarity: "uncommon" },
+    { key: "gummyParakeet", name: "🐻 Gummy Parakeet", rarity: "common" },
+    { key: "toffeeParrot", name: "🍬 Toffee Parrot", rarity: "uncommon" },
+    { key: "fudgePartridge", name: "🍫 Fudge Partridge", rarity: "common" },
+    { key: "licoricePeacock", name: "🖤 Licorice Peacock", rarity: "uncommon" },
+    { key: "peppermintPekingese", name: "🍬 Peppermint Pekingese", rarity: "common" },
+    { key: "jawbreakerPelican", name: "🔴 Jawbreaker Pelican", rarity: "uncommon" },
+    { key: "trufflePenguin", name: "🍫 Truffle Penguin", rarity: "rare" },
+    { key: "candycornPeregrine", name: "🌽 Candy Corn Peregrine", rarity: "uncommon" },
+    { key: "sugarplumPersian", name: "👑 Sugarplum Persian", rarity: "common" },
+    { key: "chocolatePheasant", name: "🐉 Chocolate Pheasant", rarity: "uncommon" },
+    { key: "lollipopPig", name: "🗼 Lollipop Pig", rarity: "common" },
+    { key: "gummyPigeon", name: "🐻 Gummy Pigeon", rarity: "common" },
+    { key: "toffeePika", name: "🍬 Toffee Pika", rarity: "rare" },
+    { key: "fudgePilot Whale", name: "🍫 Fudge Pilot Whale", rarity: "epic" },
+    { key: "licoricePine Marten", name: "🖤 Licorice Pine Marten", rarity: "uncommon" },
+    { key: "peppermintPiranha", name: "🍬 Peppermint Piranha", rarity: "rare" },
+    { key: "jawbreakerPlatypus", name: "🔴 Jawbreaker Platypus", rarity: "legendary" },
+    { key: "trufflePointer", name: "🍫 Truffle Pointer", rarity: "common" },
+    { key: "candycornPolar Bear", name: "🌽 Candy Corn Polar Bear", rarity: "rare" },
+    { key: "sugarplumPomeranian", name: "👑 Sugarplum Pomeranian", rarity: "common" },
+    { key: "chocolatePorcupine", name: "🐉 Chocolate Porcupine", rarity: "uncommon" },
+    { key: "lollipopPorpoise", name: "🗼 Lollipop Porpoise", rarity: "rare" },
+    { key: "gummyPossum", name: "🐻 Gummy Possum", rarity: "uncommon" },
+    { key: "toffeePrairie Dog", name: "🍬 Toffee Prairie Dog", rarity: "uncommon" },
+    { key: "fudgePrawn", name: "🍫 Fudge Prawn", rarity: "common" },
+    { key: "licoricePronghorn", name: "🖤 Licorice Pronghorn", rarity: "rare" },
+    { key: "peppermintPug", name: "🍬 Peppermint Pug", rarity: "common" },
+    { key: "jawbreakerPuma", name: "🔴 Jawbreaker Puma", rarity: "rare" },
+    { key: "truffleQuail", name: "🍫 Truffle Quail", rarity: "common" },
+    { key: "candycornQuokka", name: "🌽 Candy Corn Quokka", rarity: "epic" },
+    { key: "sugarplumRabbit", name: "👑 Sugarplum Rabbit", rarity: "common" },
+    { key: "chocolateRaccoon", name: "🐉 Chocolate Raccoon", rarity: "uncommon" },
+    { key: "lollipopRagdoll", name: "🗼 Lollipop Ragdoll", rarity: "common" },
+    { key: "gummyRat", name: "🐻 Gummy Rat", rarity: "common" },
+    { key: "toffeeRattlesnake", name: "🍬 Toffee Rattlesnake", rarity: "rare" },
+    { key: "fudgeRaven", name: "🍫 Fudge Raven", rarity: "uncommon" },
+    { key: "licoriceRed Fox", name: "🖤 Licorice Red Fox", rarity: "uncommon" },
+    { key: "peppermintRed Panda", name: "🍬 Peppermint Red Panda", rarity: "legendary" },
+    { key: "jawbreakerReindeer", name: "🔴 Jawbreaker Reindeer", rarity: "rare" },
+    { key: "truffleRhinoceros", name: "🍫 Truffle Rhinoceros", rarity: "epic" },
+    { key: "candycornRobin", name: "🌽 Candy Corn Robin", rarity: "common" },
+    { key: "sugarplumRockfish", name: "👑 Sugarplum Rockfish", rarity: "common" },
+    { key: "chocolateRottweiler", name: "🐉 Chocolate Rottweiler", rarity: "common" },
+    { key: "lollipopSaber-Toothed Tiger", name: "🗼 Lollipop Saber-Toothed Tiger", rarity: "legendary" },
+    { key: "gummySalamander", name: "🐻 Gummy Salamander", rarity: "rare" },
+    { key: "toffeeSalmon", name: "🍬 Toffee Salmon", rarity: "common" },
+    { key: "fudgeSardine", name: "🍫 Fudge Sardine", rarity: "common" },
+    { key: "licoriceSawfish", name: "🖤 Licorice Sawfish", rarity: "rare" },
+    { key: "peppermintScorpion", name: "🍬 Peppermint Scorpion", rarity: "uncommon" },
+    { key: "jawbreakerSea Lion", name: "🔴 Jawbreaker Sea Lion", rarity: "uncommon" },
+    { key: "truffleSea Otter", name: "🍫 Truffle Sea Otter", rarity: "rare" },
+    { key: "candycornSea Turtle", name: "🌽 Candy Corn Sea Turtle", rarity: "rare" },
+    { key: "sugarplumSeal", name: "👑 Sugarplum Seal", rarity: "uncommon" },
+    { key: "chocolateShark", name: "🐉 Chocolate Shark", rarity: "rare" },
+    { key: "lollipopSheep", name: "🗼 Lollipop Sheep", rarity: "common" },
+    { key: "gummyShrimp", name: "🐻 Gummy Shrimp", rarity: "common" },
+    { key: "toffeeSiamese", name: "🍬 Toffee Siamese", rarity: "common" },
+    { key: "fudgeSiberian", name: "🍫 Fudge Siberian", rarity: "common" },
+    { key: "licoriceSiberian Husky", name: "🖤 Licorice Siberian Husky", rarity: "common" },
+    { key: "peppermintSilver Fox", name: "🍬 Peppermint Silver Fox", rarity: "rare" },
+    { key: "jawbreakerSkunk", name: "🔴 Jawbreaker Skunk", rarity: "uncommon" },
+    { key: "truffleSloth", name: "🍫 Truffle Sloth", rarity: "rare" },
+    { key: "candycornSnail", name: "🌽 Candy Corn Snail", rarity: "common" },
+    { key: "sugarplumSnake", name: "👑 Sugarplum Snake", rarity: "uncommon" },
+    { key: "chocolateSnow Leopard", name: "🐉 Chocolate Snow Leopard", rarity: "legendary" },
+    { key: "lollipopSomali", name: "🗼 Lollipop Somali", rarity: "common" },
+    { key: "gummySpectacled Bear", name: "🐻 Gummy Spectacled Bear", rarity: "rare" },
+    { key: "toffeeSperm Whale", name: "🍬 Toffee Sperm Whale", rarity: "epic" },
+    { key: "fudgeSpider", name: "🍫 Fudge Spider", rarity: "uncommon" },
+    { key: "licoriceSpider Monkey", name: "🖤 Licorice Spider Monkey", rarity: "rare" },
+    { key: "peppermintSquid", name: "🍬 Peppermint Squid", rarity: "rare" },
+    { key: "jawbreakerSquirrel", name: "🔴 Jawbreaker Squirrel", rarity: "common" },
+    { key: "truffleStarfish", name: "🍫 Truffle Starfish", rarity: "common" },
+    { key: "candycornStingray", name: "🌽 Candy Corn Stingray", rarity: "rare" },
+    { key: "sugarplumStoat", name: "👑 Sugarplum Stoat", rarity: "uncommon" },
+    { key: "chocolateSturgeon", name: "🐉 Chocolate Sturgeon", rarity: "rare" },
+    { key: "lollipopSwan", name: "🗼 Lollipop Swan", rarity: "common" },
+    { key: "gummyTarantula", name: "🐻 Gummy Tarantula", rarity: "uncommon" },
+    { key: "toffeeTarsier", name: "🍬 Toffee Tarsier", rarity: "rare" },
+    { key: "fudgeTasmanian Devil", name: "🍫 Fudge Tasmanian Devil", rarity: "epic" },
+    { key: "licoriceTermite", name: "🖤 Licorice Termite", rarity: "common" },
+    { key: "peppermintTetra", name: "🍬 Peppermint Tetra", rarity: "common" },
+    { key: "jawbreakerThrush", name: "🔴 Jawbreaker Thrush", rarity: "common" },
+    { key: "truffleTiger", name: "🍫 Truffle Tiger", rarity: "rare" },
+    { key: "candycornTiger Shark", name: "🌽 Candy Corn Tiger Shark", rarity: "epic" },
+    { key: "sugarplumToad", name: "👑 Sugarplum Toad", rarity: "common" },
+    { key: "chocolateTortoise", name: "🐉 Chocolate Tortoise", rarity: "rare" },
+    { key: "lollipopToucan", name: "🗼 Lollipop Toucan", rarity: "uncommon" },
+    { key: "gummyTree Frog", name: "🐻 Gummy Tree Frog", rarity: "uncommon" },
+    { key: "toffeeTropicbird", name: "🍬 Toffee Tropicbird", rarity: "rare" },
+    { key: "fudgeTrout", name: "🍫 Fudge Trout", rarity: "common" },
+    { key: "licoriceTuatara", name: "🖤 Licorice Tuatara", rarity: "epic" },
+    { key: "peppermintTurkey", name: "🍬 Peppermint Turkey", rarity: "common" },
+    { key: "jawbreakerTurtle", name: "🔴 Jawbreaker Turtle", rarity: "uncommon" },
+    { key: "truffleUakari", name: "🍫 Truffle Uakari", rarity: "rare" },
+    { key: "candycornUmbrellabird", name: "🌽 Candy Corn Umbrellabird", rarity: "epic" },
+    { key: "sugarplumUnicorn", name: "👑 Sugarplum Unicorn", rarity: "legendary" },
+    { key: "chocolateVampire Bat", name: "🐉 Chocolate Vampire Bat", rarity: "rare" },
+    { key: "lollipopVicuña", name: "🗼 Lollipop Vicuña", rarity: "rare" },
+    { key: "gummyViper", name: "🐻 Gummy Viper", rarity: "uncommon" },
+    { key: "toffeeVole", name: "🍬 Toffee Vole", rarity: "common" },
+    { key: "fudgeVulture", name: "🍫 Fudge Vulture", rarity: "uncommon" },
+    { key: "licoriceWallaby", name: "🖤 Licorice Wallaby", rarity: "uncommon" },
+    { key: "peppermintWalrus", name: "🍬 Peppermint Walrus", rarity: "rare" },
+    { key: "jawbreakerWarbler", name: "🔴 Jawbreaker Warbler", rarity: "common" },
+    { key: "truffleWasp", name: "🍫 Truffle Wasp", rarity: "common" },
+    { key: "candycornWater Buffalo", name: "🌽 Candy Corn Water Buffalo", rarity: "rare" },
+    { key: "sugarplumWaterfowl", name: "👑 Sugarplum Waterfowl", rarity: "common" },
+    { key: "chocolateWaxwing", name: "🐉 Chocolate Waxwing", rarity: "uncommon" },
+    { key: "lollipopWeasel", name: "🗼 Lollipop Weasel", rarity: "uncommon" },
+    { key: "gummyWhale", name: "🐻 Gummy Whale", rarity: "epic" },
+    { key: "toffeeWhippet", name: "🍬 Toffee Whippet", rarity: "uncommon" },
+    { key: "fudgeWhite-tailed Deer", name: "🍫 Fudge White-tailed Deer", rarity: "rare" },
+    { key: "licoriceWild Boar", name: "🖤 Licorice Wild Boar", rarity: "uncommon" },
+    { key: "peppermintWildebeest", name: "🍬 Peppermint Wildebeest", rarity: "rare" },
+    { key: "jawbreakerWolf", name: "🔴 Jawbreaker Wolf", rarity: "rare" },
+    { key: "truffleWolverine", name: "🍫 Truffle Wolverine", rarity: "epic" },
+    { key: "candycornWombat", name: "🌽 Candy Corn Wombat", rarity: "rare" },
+    { key: "sugarplumWoodpecker", name: "👑 Sugarplum Woodpecker", rarity: "common" },
+    { key: "chocolateWorm", name: "🐉 Chocolate Worm", rarity: "common" },
+    { key: "lollipopWren", name: "🗼 Lollipop Wren", rarity: "common" },
+    { key: "gummyYak", name: "🐻 Gummy Yak", rarity: "rare" },
+    { key: "toffeeYellowjacket", name: "🍬 Toffee Yellowjacket", rarity: "common" },
+    { key: "fudgeZebra", name: "🍫 Fudge Zebra", rarity: "rare" },
+    { key: "licoriceZebu", name: "🖤 Licorice Zebu", rarity: "rare" },
+    { key: "peppermintZorilla", name: "🍬 Peppermint Zorilla", rarity: "legendary" },
+    { key: "jawbreakerZorse", name: "🔴 Jawbreaker Zorse", rarity: "legendary" }
+  ];
+
+  var ALL_GHOSTS = GHOSTS.concat(EXTRA_GHOSTS);
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function smoothstep(t) { return t * t * (3 - 2 * t); }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  function easeOutBack(t) { var c1 = 1.70158; var c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+  function easeOutElastic(t) { var c4 = (2 * Math.PI) / 3; return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1; }
+  function easeOutBounce(t) { var n1 = 7.5625; var d1 = 2.75; if (t < 1 / d1) return n1 * t * t; else if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75; else if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375; else return n1 * (t -= 2.625 / d1) * t + 0.984375; }
+  function easeInQuad(t) { return t * t; }
+  function easeOutQuad(t) { return t * (2 - t); }
+  function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+  function easeInCubic(t) { return t * t * t; }
+  function easeInQuart(t) { return t * t * t * t; }
+  function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+  function easeInOutQuart(t) { return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2; }
+  function easeInQuint(t) { return t * t * t * t * t; }
+  function easeOutQuint(t) { return 1 - Math.pow(1 - t, 5); }
+  function easeInOutQuint(t) { return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(2 * t + 2, 5) / 2; }
+  function easeInSine(t) { return 1 - Math.cos((t * Math.PI) / 2); }
+  function easeOutSine(t) { return Math.sin((t * Math.PI) / 2); }
+  function easeInOutSine(t) { return -(Math.cos(Math.PI * t) - 1) / 2; }
+  function easeInExpo(t) { return t === 0 ? 0 : Math.pow(2, 10 * t - 10); }
+  function easeOutExpo(t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
+  function easeInOutExpo(t) { return t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2; }
+  function easeInCirc(t) { return 1 - Math.sqrt(1 - t * t); }
+  function easeOutCirc(t) { return Math.sqrt(1 - Math.pow(t - 1, 2)); }
+  function easeInOutCirc(t) { return t < 0.5 ? (1 - Math.sqrt(1 - 4 * t * t)) / 2 : (Math.sqrt(1 - Math.pow(-2 * t + 2, 2)) + 1) / 2; }
+
+  function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360; s = clamp(s, 0, 1); l = clamp(l, 0, 1);
+    var c = (1 - Math.abs(2 * l - 1)) * s;
+    var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    var m = l - c / 2;
+    var r, g, b;
+    if (h < 60) { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+  }
+
+  function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(function (v) { return clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function lerpColor(c1, c2, t) {
+    return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+  }
+
+  function randomRange(rng, min, max) { return min + rng.nextDouble() * (max - min); }
+  function randomInt(rng, min, max) { return Math.floor(randomRange(rng, min, max + 1)); }
+  function pickRandom(rng, arr) { return arr[Math.floor(rng.nextDouble() * arr.length)]; }
+
+  function createParticleSystem() {
+    return {
+      particles: [],
+      emit: function (x, y, opts) {
+        opts = opts || {};
+        var count = opts.count || 10;
+        var speed = opts.speed || 3;
+        var life = opts.life || 1;
+        var colors = opts.colors || ['#fff'];
+        var size = opts.size || 3;
+        var gravity = opts.gravity || 0;
+        var spread = opts.spread || Math.PI * 2;
+        var angle = opts.angle || 0;
+        for (var i = 0; i < count; i++) {
+          var a = angle + (Math.random() - 0.5) * spread;
+          var v = speed * (0.5 + Math.random() * 0.5);
+          this.particles.push({
+            x: x, y: y,
+            vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+            life: life * (0.5 + Math.random() * 0.5),
+            maxLife: life,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: size * (0.5 + Math.random() * 0.5),
+            gravity: gravity
+          });
+        }
+      },
+      update: function (dt) {
+        for (var i = this.particles.length - 1; i >= 0; i--) {
+          var p = this.particles[i];
+          p.x += p.vx * dt * 60;
+          p.y += p.vy * dt * 60;
+          p.vy += p.gravity * dt * 60;
+          p.life -= dt;
+          if (p.life <= 0) this.particles.splice(i, 1);
+        }
+      },
+      draw: function (ctx) {
+        this.particles.forEach(function (p) {
+          ctx.globalAlpha = clamp(p.life / p.maxLife, 0, 1);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * (p.life / p.maxLife), 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+      },
+      clear: function () { this.particles = []; }
+    };
+  }
+
+  function createShockwave() {
+    return {
+      rings: [],
+      emit: function (x, y, opts) {
+        opts = opts || {};
+        this.rings.push({
+          x: x, y: y,
+          r: opts.startR || 5,
+          maxR: opts.maxR || 100,
+          life: opts.life || 0.5,
+          maxLife: opts.life || 0.5,
+          color: opts.color || '#fff',
+          width: opts.width || 3
+        });
+      },
+      update: function (dt) {
+        for (var i = this.rings.length - 1; i >= 0; i--) {
+          var r = this.rings[i];
+          r.life -= dt;
+          var t = 1 - r.life / r.maxLife;
+          r.r = lerp(5, r.maxR, easeOutCubic(t));
+          if (r.life <= 0) this.rings.splice(i, 1);
+        }
+      },
+      draw: function (ctx) {
+        this.rings.forEach(function (r) {
+          ctx.globalAlpha = clamp(r.life / r.maxLife, 0, 1);
+          ctx.strokeStyle = r.color;
+          ctx.lineWidth = r.width * (r.life / r.maxLife);
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+        ctx.globalAlpha = 1;
+      },
+      clear: function () { this.rings = []; }
+    };
+  }
+
+  function createFloatingText() {
+    return {
+      texts: [],
+      emit: function (x, y, str, opts) {
+        opts = opts || {};
+        this.texts.push({
+          x: x, y: y,
+          str: str,
+          vy: opts.vy || -1.5,
+          life: opts.life || 1.2,
+          maxLife: opts.life || 1.2,
+          color: opts.color || '#ffd166',
+          size: opts.size || 16,
+          weight: opts.weight || 'bold'
+        });
+      },
+      update: function (dt) {
+        for (var i = this.texts.length - 1; i >= 0; i--) {
+          var t = this.texts[i];
+          t.y += t.vy * dt * 60;
+          t.life -= dt;
+          if (t.life <= 0) this.texts.splice(i, 1);
+        }
+      },
+      draw: function (ctx) {
+        this.texts.forEach(function (t) {
+          ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
+          ctx.font = t.weight + ' ' + t.size + 'px sans-serif';
+          ctx.fillStyle = t.color;
+          ctx.textAlign = 'center';
+          ctx.fillText(t.str, t.x, t.y);
+        });
+        ctx.globalAlpha = 1;
+      },
+      clear: function () { this.texts = []; }
+    };
+  }
+
   var api = { SeededRNG: SeededRNG, carveDFS: carveDFS, connected: connected, astar: astar, ease: ease, comboMult: comboMult, streakBonus: streakBonus, compact: compact, key: key,
     PICKS: PICKS, LAYERS: LAYERS, RELICS: RELICS, FISH: FISH, FISH_WEIGHT: FISH_WEIGHT, xpNext: xpNext,
-    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS, ORES: ORES,
-    voxelRay: voxelRay, makeNoise2D: makeNoise2D, SWEETS: SWEETS, pickSweet: pickSweet };
+    mIdentity: mIdentity, mMul: mMul, mPerspective: mPerspective, mLookAt: mLookAt, mTransform: mTransform, GHOSTS: ALL_GHOSTS, CANDIES: CANDIES, MINIGAMES: MINIGAMES, REGIONS: REGIONS, ORES: ORES,
+    voxelRay: voxelRay, makeNoise2D: makeNoise2D, SWEETS: SWEETS, pickSweet: pickSweet,
+    lerp: lerp, clamp: clamp, smoothstep: smoothstep,
+    easeOutCubic: easeOutCubic, easeInOutCubic: easeInOutCubic, easeOutBack: easeOutBack,
+    easeOutElastic: easeOutElastic, easeOutBounce: easeOutBounce,
+    easeInQuad: easeInQuad, easeOutQuad: easeOutQuad, easeInOutQuad: easeInOutQuad,
+    easeInCubic: easeInCubic, easeInQuart: easeInQuart, easeOutQuart: easeOutQuart,
+    easeInOutQuart: easeInOutQuart, easeInQuint: easeInQuint, easeOutQuint: easeOutQuint, easeInOutQuint: easeInOutQuint,
+    easeInSine: easeInSine, easeOutSine: easeOutSine, easeInOutSine: easeInOutSine,
+    easeInExpo: easeInExpo, easeOutExpo: easeOutExpo, easeInOutExpo: easeInOutExpo,
+    easeInCirc: easeInCirc, easeOutCirc: easeOutCirc, easeInOutCirc: easeInOutCirc,
+    hslToRgb: hslToRgb, rgbToHex: rgbToHex, lerpColor: lerpColor,
+    randomRange: randomRange, randomInt: randomInt, pickRandom: pickRandom,
+    createParticleSystem: createParticleSystem, createShockwave: createShockwave, createFloatingText: createFloatingText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Spooky = api;
 })(typeof self !== 'undefined' ? self : this);

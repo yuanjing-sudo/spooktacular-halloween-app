@@ -9,6 +9,119 @@
   #gamev { width: 94vw; max-width: 900px; height: 62vh; display: block; cursor: crosshair; }
   #cross { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: #fff; font-size: 20px; pointer-events: none; text-shadow: 0 0 4px #000; }
   #minebtn { position: absolute; bottom: 14px; right: 14px; width: 84px; height: 84px; border-radius: 50%; background: #ff7518; color: #1a0b00; font-weight: 800; border: none; display: none; font-size: .9rem; }
+  .world-plane {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.8s ease, transform 0.8s ease;
+    transform: perspective(800px) rotateX(60deg) rotateZ(-15deg) scale(0.8);
+  }
+  .world-plane.visible {
+    opacity: 1;
+    transform: perspective(800px) rotateX(60deg) rotateZ(-15deg) scale(1);
+  }
+  .world-plane-1 {
+    width: 120px; height: 80px;
+    background: linear-gradient(135deg, rgba(109,40,168,0.4), rgba(59,29,94,0.6));
+    border: 1px solid rgba(109,40,168,0.6);
+    top: 15%; left: 10%;
+    animation: planeFloat1 6s ease-in-out infinite;
+  }
+  .world-plane-2 {
+    width: 90px; height: 60px;
+    background: linear-gradient(135deg, rgba(89,230,255,0.3), rgba(41,128,185,0.5));
+    border: 1px solid rgba(89,230,255,0.5);
+    top: 25%; right: 12%;
+    animation: planeFloat2 7s ease-in-out infinite;
+  }
+  .world-plane-3 {
+    width: 100px; height: 70px;
+    background: linear-gradient(135deg, rgba(255,209,102,0.3), rgba(255,117,24,0.4));
+    border: 1px solid rgba(255,209,102,0.5);
+    bottom: 20%; left: 15%;
+    animation: planeFloat3 8s ease-in-out infinite;
+  }
+  .world-plane-4 {
+    width: 80px; height: 55px;
+    background: linear-gradient(135deg, rgba(196,77,255,0.3), rgba(142,68,173,0.5));
+    border: 1px solid rgba(196,77,255,0.5);
+    bottom: 30%; right: 18%;
+    animation: planeFloat4 5s ease-in-out infinite;
+  }
+  .world-plane-5 {
+    width: 110px; height: 75px;
+    background: linear-gradient(135deg, rgba(46,204,113,0.3), rgba(39,174,96,0.5));
+    border: 1px solid rgba(46,204,113,0.5);
+    top: 40%; left: 5%;
+    animation: planeFloat5 9s ease-in-out infinite;
+  }
+  @keyframes planeFloat1 {
+    0%, 100% { transform: perspective(800px) rotateX(60deg) rotateZ(-15deg) translateY(0); }
+    50% { transform: perspective(800px) rotateX(60deg) rotateZ(-15deg) translateY(-15px); }
+  }
+  @keyframes planeFloat2 {
+    0%, 100% { transform: perspective(800px) rotateX(55deg) rotateZ(10deg) translateY(0); }
+    50% { transform: perspective(800px) rotateX(55deg) rotateZ(10deg) translateY(-12px); }
+  }
+  @keyframes planeFloat3 {
+    0%, 100% { transform: perspective(800px) rotateX(65deg) rotateZ(-8deg) translateY(0); }
+    50% { transform: perspective(800px) rotateX(65deg) rotateZ(-8deg) translateY(-18px); }
+  }
+  @keyframes planeFloat4 {
+    0%, 100% { transform: perspective(800px) rotateX(50deg) rotateZ(20deg) translateY(0); }
+    50% { transform: perspective(800px) rotateX(50deg) rotateZ(20deg) translateY(-10px); }
+  }
+  @keyframes planeFloat5 {
+    0%, 100% { transform: perspective(800px) rotateX(58deg) rotateZ(-12deg) translateY(0); }
+    50% { transform: perspective(800px) rotateX(58deg) rotateZ(-12deg) translateY(-14px); }
+  }
+  .world-transition {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 0%, rgba(11,6,32,0.8) 100%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    z-index: 10;
+  }
+  .world-transition.active {
+    opacity: 1;
+  }
+  .world-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    font-size: 2.5em;
+    font-weight: 800;
+    color: #ffd166;
+    text-shadow: 0 0 20px rgba(255,209,102,0.5), 0 4px 8px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    z-index: 11;
+  }
+  .world-label.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .world-particles {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .world-particles.active {
+    opacity: 1;
+    animation: particleBurst 1.2s ease-out forwards;
+  }
+  @keyframes particleBurst {
+    0% { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+  }
 </style>
 </head>
 <body>
@@ -35,6 +148,19 @@
     <div id="questpanel"></div>
     <div id="awardpanel"></div>
   <div id="cross">+</div>
+  <div class="world-plane world-plane-1"></div>
+  <div class="world-plane world-plane-2"></div>
+  <div class="world-plane world-plane-3"></div>
+  <div class="world-plane world-plane-4"></div>
+  <div class="world-plane world-plane-5"></div>
+  <div class="world-transition" id="worldTransition"></div>
+  <div class="world-label" id="worldLabel"></div>
+  <div class="world-particles" id="wp1" style="--tx:-60px;--ty:-40px;top:45%;left:48%;background:#ffd166;"></div>
+  <div class="world-particles" id="wp2" style="--tx:50px;--ty:-60px;top:42%;left:52%;background:#59e6ff;"></div>
+  <div class="world-particles" id="wp3" style="--tx:-40px;--ty:50px;top:55%;left:45%;background:#c44dff;"></div>
+  <div class="world-particles" id="wp4" style="--tx:60px;--ty:30px;top:50%;left:55%;background:#ff7518;"></div>
+  <div class="world-particles" id="wp5" style="--tx:-70px;--ty:-20px;top:48%;left:50%;background:#2ecc71;"></div>
+  <div class="world-particles" id="wp6" style="--tx:30px;--ty:70px;top:52%;left:47%;background:#ff69b4;"></div>
   <button id="minebtn">MINE</button>
   <div id="overlay" class="hidden">
     <h2 id="overlay-title"></h2>
@@ -65,5 +191,58 @@
   <script src="games.js?v=8"></script>
   <script src="ghost-shooter.js?v=1"></script>
   <script src="voxel.js?v=8"></script>
+  <script>
+  (function() {
+    var planes = document.querySelectorAll('.world-plane');
+    var transition = document.getElementById('worldTransition');
+    var label = document.getElementById('worldLabel');
+    var particles = document.querySelectorAll('.world-particles');
+    var currentWorld = '';
+
+    function showWorldAnimation(name) {
+      transition.classList.add('active');
+      label.textContent = name;
+      label.classList.add('visible');
+      particles.forEach(function(p) { p.classList.add('active'); });
+      setTimeout(function() {
+        transition.classList.remove('active');
+        label.classList.remove('visible');
+        particles.forEach(function(p) { p.classList.remove('active'); });
+      }, 1500);
+    }
+
+    function setPlanesVisible(world) {
+      planes.forEach(function(p) { p.classList.remove('visible'); });
+      if (world === 'mine' || world === 'crystal' || world === 'frost') {
+        setTimeout(function() {
+          planes.forEach(function(p, i) {
+            setTimeout(function() { p.classList.add('visible'); }, i * 150);
+          });
+        }, 300);
+      }
+    }
+
+    var origSwitch = window.switchWorld;
+    window.switchWorld = function(world) {
+      if (origSwitch) origSwitch(world);
+      currentWorld = world;
+      var names = { forest: 'Forest', mine: 'Deep Mine', frost: 'Frost', crystal: 'Crystal' };
+      showWorldAnimation(names[world] || world);
+      setPlanesVisible(world);
+    };
+
+    var obs = new MutationObserver(function() {
+      var depthEl = document.getElementById('depth');
+      if (depthEl) {
+        var txt = depthEl.textContent.toLowerCase();
+        if (txt !== currentWorld) {
+          currentWorld = txt;
+          setPlanesVisible(txt);
+        }
+      }
+    });
+    obs.observe(document.getElementById('hud'), { childList: true, subtree: true, characterData: true });
+  })();
+  </script>
 </body>
 </html>
