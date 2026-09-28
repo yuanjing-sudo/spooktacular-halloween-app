@@ -9,6 +9,9 @@
   #gamev { width: 94vw; max-width: 900px; height: 62vh; display: block; cursor: crosshair; }
   #cross { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: #fff; font-size: 20px; pointer-events: none; text-shadow: 0 0 4px #000; }
   #minebtn { position: absolute; bottom: 14px; right: 14px; width: 84px; height: 84px; border-radius: 50%; background: #ff7518; color: #1a0b00; font-weight: 800; border: none; display: none; font-size: .9rem; }
+  #flyup, #flydn { position: absolute; width: 64px; height: 64px; border-radius: 50%; background: rgba(89,230,255,.35); color: #fff; font-weight: 800; border: 1px solid #59e6ff; display: none; font-size: 1.2rem; }
+  #flyup { bottom: 112px; right: 14px; }
+  #flydn { bottom: 112px; right: 88px; }
   .world-plane {
     position: absolute;
     pointer-events: none;
@@ -163,6 +166,7 @@
   <div class="world-particles" id="wp5" style="--tx:-70px;--ty:-20px;top:48%;left:50%;background:#2ecc71;"></div>
   <div class="world-particles" id="wp6" style="--tx:30px;--ty:70px;top:52%;left:47%;background:#ff69b4;"></div>
   <button id="minebtn">MINE</button>
+  <button id="flyup">▲</button><button id="flydn">▼</button>
   <div id="overlay" class="hidden">
     <h2 id="overlay-title"></h2>
     <p id="overlay-text"></p>
@@ -186,7 +190,7 @@
   <a href="voxel.html#crystal" style="color:#ffd166">🔮 Crystal</a>
 </div>
 <div id="tabs" style="margin:8px 0; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div>
-<p id="help">WASD move · Space jump · drag look · click/F swing · right-click/T place torch · E eat apple · V view · J goals · M help</p>
+<p id="help">WASD move · Space jump · R/X fly up/down · drag look · click/F swing · right-click/T place torch · E eat apple · V view · J goals · M help</p>
   <script>
   window.__voxelErrors = [];
   window.addEventListener('error', function (e) {
@@ -218,7 +222,7 @@
   <script src="tabs.js?v=9"></script>
   <script src="games.js?v=9"></script>
   <script src="ghost-shooter.js?v=2"></script>
-  <script src="voxel.js?v=12"></script>
+  <script src="voxel.js?v=13"></script>
   <script>
   (function() {
     var planes = document.querySelectorAll('.world-plane');

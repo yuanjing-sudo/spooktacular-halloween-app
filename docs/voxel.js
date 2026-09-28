@@ -3467,6 +3467,17 @@
   var minebtn = document.getElementById('minebtn');
   if ('ontouchstart' in window) minebtn.style.display = 'block';
   minebtn.addEventListener('click', function () { swing(); });
+  var flyup = document.getElementById('flyup'), flydn = document.getElementById('flydn');
+  if (flyup && flydn && 'ontouchstart' in window) { flyup.style.display = 'block'; flydn.style.display = 'block'; }
+  function bindHold(el, key) {
+    el.addEventListener('touchstart', function (e) { AudioSys.init(); keys[key] = true; e.preventDefault(); }, { passive: false });
+    el.addEventListener('touchend', function (e) { keys[key] = false; e.preventDefault(); });
+    el.addEventListener('touchcancel', function () { keys[key] = false; });
+    el.addEventListener('mousedown', function () { keys[key] = true; });
+    el.addEventListener('mouseup', function () { keys[key] = false; });
+    el.addEventListener('mouseleave', function () { keys[key] = false; });
+  }
+  if (flyup && flydn) { bindHold(flyup, 'r'); bindHold(flydn, 'x'); }
   canvas.addEventListener('touchstart', function (e) {
     for (var i = 0; i < e.changedTouches.length; i++) {
       var t = e.changedTouches[i];
@@ -3640,8 +3651,12 @@
     moveAxis(G.vxh, 0, G.vzh);
     trackStat('dist', Math.hypot(G.vxh, G.vzh) * dt);
     trackStat('playtime', dt);
-    G.vy -= PH.grav * dt;
-    if ((keys[' '] ) && G.onGround) { G.vy = PH.jump; G.onGround = false; }
+    var climb = ((keys.r ? 1 : 0) - (keys.x ? 1 : 0));
+    if (climb !== 0) { G.vy = climb * 6; G.onGround = false; G.fallPeak = undefined; }
+    else {
+      G.vy -= PH.grav * dt;
+      if ((keys[' '] ) && G.onGround) { G.vy = PH.jump; G.onGround = false; }
+    }
     var wasAir = !G.onGround;
     if (!G.onGround) G.fallPeak = Math.max(G.fallPeak === undefined ? -99 : G.fallPeak, G.py);
     moveAxis(0, G.vy * dt, 0);
