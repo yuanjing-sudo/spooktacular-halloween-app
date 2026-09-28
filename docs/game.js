@@ -146,6 +146,7 @@
         G.score += Math.round((sw.points * S.comboMult(G.combo) + S.streakBonus(G.streak)) * dmgMult());
         m.gold += Math.round(2 * goldMult());
         gainXP(8);
+        sfx('pickup');
         if (sw.name !== 'Candy') flash('🍬 ' + sw.name + ' +' + sw.points, 1.4);
         if (G.score >= 1000) ach('score-1k', 'Score Legend — 1,000 points');
       }
@@ -158,6 +159,7 @@
         G.score += Math.round(50 * S.comboMult(G.combo) * dmgMult());
         m.gold += Math.round(5 * goldMult());
         gainXP(20);
+        sfx('crystal');
       }
     }
     if (G.relicSpot && p.x === G.relicSpot.x && p.y === G.relicSpot.y) {
