@@ -4,13 +4,12 @@ A collection of spooky little games and 3D experiments: the original 2D maze, a
 voxel world, spectral ghost hunts, and a new streaming 3D forest. Most of the web
 demos are dependency-free and run straight from the `docs/` folder.
 
-## Play
+## Play online
 
-```sh
-python3 -m http.server 8000 --directory docs
-```
+**The live site is served by GitHub Pages — not localhost.**
 
-Then open <http://localhost:8000/>.
+- Hub: <https://yuanjing-sudo.github.io/spooktacular-halloween-app/>
+- Endless Spooky Forest: <https://yuanjing-sudo.github.io/spooktacular-halloween-app/forest/endless-forest.html>
 
 | Experience | Page |
 | --- | --- |
@@ -19,6 +18,9 @@ Then open <http://localhost:8000/>.
 | 👻 3D ghosts — spectral shooter | `ghost3d.html` |
 | 🌲 Voxel forest & deep-mine | `voxel.html` |
 | 🌌 **Endless Spooky Forest 3D** — streaming X/Y/Z forest | `forest/endless-forest.html` |
+
+A local server is **optional**, only for editing the code offline. The deployed
+pages are ordinary static files and need no server-side code.
 
 ## 🌌 Endless Spooky Forest
 
@@ -30,10 +32,29 @@ The newest addition is a near-infinite procedural forest with:
 - articulate, tameable rabbits with warrens and twelve AI states;
 - plantable and wild carrots in four growth stages, with detailed ridged roots;
 - campfires you can light, cook on, warm up at, sit beside and hear stories from;
+- carvable jack-o'-lanterns, owls, bats, frogs, hedgehogs, moths and fireflies;
+- a fishing minigame with seven catches, records and campfire cooking;
+- the twelve-step Lantern Road quest chain;
 - a journal, achievements, minimap, compass, photo mode and full touch controls.
 
 See [`docs/forest/README.md`](docs/forest/README.md) for controls, seeds,
 architecture and performance notes.
+
+### Embed in Google Sites
+
+In Google Sites choose **Insert → Embed → Embed code** and paste:
+
+```html
+<div style="position:relative;width:100%;height:0;padding-bottom:62.5%">
+  <iframe src="https://yuanjing-sudo.github.io/spooktacular-halloween-app/forest/endless-forest.html"
+    style="position:absolute;inset:0;width:100%;height:100%;border:0"
+    allow="fullscreen; autoplay" allowfullscreen loading="lazy"
+    title="Endless Spooky Forest 3D"></iframe>
+</div>
+```
+
+That iframe points at the live GitHub Pages server, so nothing runs on your device.
+See [`docs/forest/GOOGLE-SITES.md`](docs/forest/GOOGLE-SITES.md) for a longer guide.
 
 ## Other implementations
 

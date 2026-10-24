@@ -13,7 +13,7 @@
   function UI(game) {
     this.game = game;
     this.el = {};
-    this.tab = 'rabbits';
+    this.tab = 'quests';
     this.toastTimer = null;
     this.lastHud = 0;
     this.lastMap = 0;
@@ -34,7 +34,7 @@
     var ids = [
       'forest-canvas', 'start-screen', 'seed-input', 'btn-start', 'btn-continue', 'btn-new-world',
       'hud', 'hud-coords', 'hud-biome', 'hud-clock', 'hud-day', 'hud-weather', 'hud-compass',
-      'stat-carrots', 'stat-wood', 'stat-marshmallows', 'stat-rabbits', 'stat-fires',
+      'stat-carrots', 'stat-wood', 'stat-marshmallows', 'stat-rabbits', 'stat-fires', 'stat-fish',
       'fps', 'chunks', 'prompt', 'prompt-key', 'prompt-label', 'prompt-sub',
       'minimap', 'toasts', 'fire-menu', 'fire-title', 'fire-sub', 'fire-actions', 'fire-close',
       'journal', 'journal-tabs', 'journal-body', 'journal-close', 'journal-title',
@@ -43,6 +43,8 @@
       'pause', 'btn-resume', 'btn-save', 'btn-settings', 'btn-journal', 'btn-new2', 'btn-pause',
       'photo-bar', 'photo-capture', 'photo-exit',
       'flash', 'vignette', 'frost', 'blood', 'cooking-hud', 'cooking-bar', 'cooking-label',
+      'fishing-hud', 'fishing-label', 'fishing-reel', 'fishing-tension', 'fishing-hint',
+      'quest-tracker', 'quest-icon', 'quest-title', 'quest-hint', 'quest-bar', 'quest-count',
       'mobile-controls', 'joystick-base', 'joystick-knob', 'btn-e', 'btn-jump', 'btn-fly',
       'btn-run', 'btn-cam', 'loading', 'loading-text', 'error', 'error-text',
       'hotbar', 'story-popup', 'story-text', 'story-close', 'debug', 'crosshair',
@@ -379,7 +381,7 @@
 
   UI.prototype.openFireMenu = function (fire) {
     if (!fire) return;
-    var actions = this.game.campfires.actions(fire, this.game.player, this.game.carrots);
+    var actions = this.game.campfires.actions(fire, this.game.player, this.game.carrots, this.game.fishing);
     this.el['fire-title'].textContent = fire.name;
     this.el['fire-sub'].textContent = (fire.lit ? '🔥 Lit · ' + Math.round(fire.fuel * 100) + '% fuel' : 'Cold ashes') +
       (fire.home ? ' · your first hearth' : '');
@@ -432,6 +434,8 @@
       this.updateHud(game);
       this.updatePrompt(game);
       this.updateCooking(game);
+      this.updateFishing(game);
+      this.updateQuests(game);
       this.updateOverlays(game);
     }
     if (now - this.lastMap > 220) {
@@ -462,6 +466,7 @@
     this.el['stat-marshmallows'].textContent = p.marshmallows;
     this.el['stat-rabbits'].textContent = g.rabbits.tamedCount + '/' + g.rabbits.met;
     this.el['stat-fires'].textContent = g.campfires.totalLit;
+    if (this.el['stat-fish']) this.el['stat-fish'].textContent = g.fishing ? g.fishing.fish : 0;
 
     var stats = g.world.chunkStats();
     this.el.fps.textContent = g.renderer.info.fps + ' fps';
@@ -477,6 +482,7 @@
       else if (n === 2) count.textContent = g.carrots.seeds;
       else if (n === 3) count.textContent = p.wood;
       else if (n === 4) count.textContent = p.marshmallows;
+      else if (n === 6 && g.fishing) count.textContent = g.fishing.fish + (g.fishing.cooked ? ' +' + g.fishing.cooked + '🍲' : '');
     }
   };
 
@@ -508,8 +514,54 @@
     var pct = U.clamp((fire.cook.t / 3.1) * 100, 0, 100);
     this.el['cooking-bar'].style.width = pct + '%';
     this.el['cooking-bar'].className = fire.cook.state === 'burnt' ? 'burnt' : (fire.cook.state === 'ready' ? 'ready' : '');
-    this.el['cooking-label'].textContent = fire.cook.state === 'cooking' ? 'Cooking carrot… ' + Math.ceil(3.1 - fire.cook.t) + 's' :
-      (fire.cook.state === 'ready' ? 'Roasted carrot ready — press E' : 'Burnt. Press E to salvage.');
+    var food = fire.cook.kind === 'fish' ? 'fish' : 'carrot';
+    this.el['cooking-label'].textContent = fire.cook.state === 'cooking' ? 'Cooking ' + food + '… ' + Math.ceil(3.1 - fire.cook.t) + 's' :
+      (fire.cook.state === 'ready' ? (food === 'fish' ? 'Smoked fish ready — press E' : 'Roasted carrot ready — press E') :
+        'Burnt. Press E to salvage.');
+  };
+
+  UI.prototype.updateFishing = function (g) {
+    var hud = this.el['fishing-hud'];
+    if (!hud) return;
+    var f = g.fishing;
+    if (!f || f.state === 'idle') {
+      hud.classList.remove('show');
+      return;
+    }
+    hud.classList.add('show');
+    this.el['fishing-label'].textContent = f.label();
+    var reel = Math.round(U.clamp(f.reel, 0, 1) * 100);
+    var tension = Math.round(U.clamp(f.tension, 0, 1) * 100);
+    this.el['fishing-reel'].style.width = reel + '%';
+    this.el['fishing-tension'].style.width = tension + '%';
+    this.el['fishing-tension'].className = 'fishing-tension-fill' +
+      (f.tension > 0.82 ? ' danger' : f.tension > 0.6 ? ' strain' : '');
+    this.el['fishing-hint'].textContent = f.state === 'bite' ? 'Tap E now — strike!' :
+      f.state === 'hooked' ? 'Hold E to reel · release when the line strains' :
+        f.state === 'landed' ? (f.last ? f.last.name + ' · ' + f.last.size + ' cm' : 'Landed!') :
+          'Wait for the bobber to dip…';
+  };
+
+  UI.prototype.updateQuests = function (g) {
+    var box = this.el['quest-tracker'];
+    if (!box || !g.quests) return;
+    var quest = g.quests.active(g);
+    if (!quest) {
+      box.classList.add('complete');
+      this.el['quest-icon'].textContent = '🏮';
+      this.el['quest-title'].textContent = 'The Lantern Road is complete';
+      this.el['quest-hint'].textContent = 'Every small light has been tended. The forest is yours.';
+      this.el['quest-bar'].style.width = '100%';
+      this.el['quest-count'].textContent = g.quests.completedCount() + '/12';
+      return;
+    }
+    box.classList.remove('complete');
+    this.el['quest-icon'].textContent = quest.icon;
+    this.el['quest-title'].textContent = quest.title;
+    this.el['quest-hint'].textContent = quest.hint;
+    var value = Math.min(g.quests.valueOf(quest, g), quest.goal);
+    this.el['quest-bar'].style.width = Math.round(g.quests.progressOf(quest, g) * 100) + '%';
+    this.el['quest-count'].textContent = value + '/' + quest.goal;
   };
 
   UI.prototype.updateOverlays = function (g) {
@@ -638,7 +690,8 @@
     var tabs = this.el['journal-tabs'];
     if (tabs) {
       var tabList = [
-        ['rabbits', '🐇 Rabbits'], ['carrots', '🥕 Carrots'], ['campfires', '🔥 Campfires'],
+        ['quests', '🕯️ Quests'], ['rabbits', '🐇 Rabbits'], ['carrots', '🥕 Carrots'],
+        ['campfires', '🔥 Campfires'], ['critters', '🦉 Wildlife'], ['fishing', '🎣 Fishing'],
         ['achievements', '🏆 Achievements'], ['stats', '🧭 Explorer'], ['world', '🌍 World']
       ];
       tabs.innerHTML = '';
@@ -651,12 +704,93 @@
     }
     var body = this.el['journal-body'];
     if (!body) return;
-    if (this.tab === 'rabbits') body.innerHTML = this._journalRabbits(g);
+    if (this.tab === 'quests') body.innerHTML = this._journalQuests(g);
+    else if (this.tab === 'rabbits') body.innerHTML = this._journalRabbits(g);
     else if (this.tab === 'carrots') body.innerHTML = this._journalCarrots(g);
     else if (this.tab === 'campfires') body.innerHTML = this._journalFires(g);
+    else if (this.tab === 'critters') body.innerHTML = this._journalCritters(g);
+    else if (this.tab === 'fishing') body.innerHTML = this._journalFishing(g);
     else if (this.tab === 'achievements') body.innerHTML = this._journalAchievements(g);
     else if (this.tab === 'stats') body.innerHTML = this._journalStats(g);
     else body.innerHTML = this._journalWorld(g);
+  };
+
+  UI.prototype._journalQuests = function (g) {
+    if (!g.quests) return '<div class="jempty">The lantern road is quiet.</div>';
+    var quests = g.quests.list();
+    var active = g.quests.active(g);
+    var h = '<div class="jintro">A lantern road of small good deeds. Each finished step leaves a little more light in the forest.</div>';
+    h += '<div class="jgrid">';
+    h += '<div class="jcard"><div class="jnum">' + g.quests.completedCount() + '</div><div class="jlabel">steps complete</div></div>';
+    h += '<div class="jcard"><div class="jnum">' + (quests.length - g.quests.completedCount()) + '</div><div class="jlabel">still ahead</div></div>';
+    h += '<div class="jcard"><div class="jnum">' + (active ? active.icon : '🏮') + '</div><div class="jlabel">' + (active ? 'current step' : 'road complete') + '</div></div>';
+    h += '</div><div class="jlist">';
+    for (var i = 0; i < quests.length; i++) {
+      var q = quests[i];
+      var done = !!g.quests.completed[q.id];
+      var value = Math.min(g.quests.valueOf(q, g), q.goal);
+      var pct = Math.round(g.quests.progressOf(q, g) * 100);
+      h += '<div class="jrow quest' + (done ? ' done' : '') + '">' +
+        '<span class="jdot" style="background:' + (done ? '#ffd166' : '#3a2a55') + '"></span>' +
+        '<span class="jname">' + q.icon + ' ' + U.esc(q.title) + (done ? ' ✓' : '') + '</span>' +
+        '<span class="jdesc">' + U.esc(q.hint) + '</span>' +
+        '<span class="jbar"><span style="width:' + pct + '%"></span></span>' +
+        '<span class="jpct">' + (done ? 'done' : value + '/' + q.goal) + '</span></div>';
+    }
+    h += '</div>';
+    return h;
+  };
+
+  UI.prototype._journalCritters = function (g) {
+    var c = g.critters;
+    if (!c) return '<div class="jempty">The undergrowth is still.</div>';
+    var names = { owl: 'Owl', bat: 'Bat', frog: 'Frog', hedgehog: 'Hedgehog', moth: 'Moth' };
+    var icons = { owl: '🦉', bat: '🦇', frog: '🐸', hedgehog: '🦔', moth: '🦋' };
+    var seen = Object.keys(c.typesSeen || {});
+    var h = '<div class="jintro">The forest keeps its own neighbours. Move slowly and they will show themselves — especially after dark.</div>';
+    h += '<div class="jgrid">';
+    h += '<div class="jcard"><div class="jnum">' + seen.length + '/5</div><div class="jlabel">kinds seen</div></div>';
+    h += '<div class="jcard"><div class="jnum">' + c.totalSeen + '</div><div class="jlabel">sightings</div></div>';
+    h += '<div class="jcard"><div class="jnum">' + c.owlsListened + '</div><div class="jlabel">owl whispers</div></div>';
+    h += '</div><div class="jlist">';
+    for (var i = 0; i < SF.Critters.TYPES.length; i++) {
+      var key = SF.Critters.TYPES[i];
+      var count = c.seen[key] || 0;
+      h += '<div class="jrow' + (count ? '' : ' dim') + '"><span class="jdot" style="background:' + (count ? '#b9e28b' : '#332a44') + '"></span>' +
+        '<span class="jname">' + icons[key] + ' ' + names[key] + '</span>' +
+        '<span class="jtag">' + (count ? count + ' seen' : 'not yet') + '</span>' +
+        '<span class="jdesc">' + (key === 'owl' ? 'Perches in pines after dusk. Listen with E.' :
+          key === 'bat' ? 'Circles the canopy at night.' :
+            key === 'frog' ? 'Sits on lily pads and croaks at rain.' :
+              key === 'hedgehog' ? 'Snuffles for grubs and curls when startled.' :
+                'Spirals around lit campfires.') + '</span></div>';
+    }
+    h += '</div>';
+    return h;
+  };
+
+  UI.prototype._journalFishing = function (g) {
+    var f = g.fishing;
+    if (!f) return '<div class="jempty">The ponds are still.</div>';
+    var h = '<div class="jintro">Cast toward open water, wait for the bobber to dip, then strike. Hold E to reel; release when the line strains.</div>';
+    h += '<div class="jgrid">';
+    h += '<div class="jcard"><div class="jnum">' + f.fish + '</div><div class="jlabel">in your creel</div></div>';
+    h += '<div class="jcard"><div class="jnum">' + f.cooked + '</div><div class="jlabel">smoked fish</div></div>';
+    h += '<div class="jcard"><div class="jnum">' + f.totalCaught + '</div><div class="jlabel">landed</div></div>';
+    h += '<div class="jcard"><div class="jnum">' + Object.keys(f.counts || {}).length + '/' + SF.Fishing.FISH.length + '</div><div class="jlabel">species</div></div>';
+    h += '</div><div class="jlist">';
+    for (var i = 0; i < SF.Fishing.FISH.length; i++) {
+      var fish = SF.Fishing.FISH[i];
+      var n = f.counts[fish.key] || 0;
+      var best = f.records[fish.key];
+      h += '<div class="jrow' + (n ? '' : ' dim') + '"><span class="jdot" style="background:' + U.rgbCss(fish.color) + '"></span>' +
+        '<span class="jname">' + U.esc(fish.name) + '</span>' +
+        '<span class="jtag">' + (n ? n + ' caught' : 'unseen') + '</span>' +
+        '<span class="jdesc">' + (best ? 'best ' + best + ' cm · ' : '') + U.esc(fish.desc) + '</span></div>';
+    }
+    h += '</div>';
+    if (f.last) h += '<div class="jsection">Last catch</div><div class="jintro">' + U.esc(f.last.name) + ' · ' + f.last.size + ' cm — ' + U.esc(f.last.desc) + '</div>';
+    return h;
   };
 
   UI.prototype._journalRabbits = function (g) {
@@ -768,6 +902,10 @@
       ['Furthest chunk', g.furthestChunk + ', ' + g.furthestChunkZ],
       ['Rabbits met', g.rabbits.met + ' (' + g.rabbits.tamedCount + ' bonded)'],
       ['Carrots harvested', String(g.carrots.totalHarvested)],
+      ['Fish landed', String(g.fishing ? g.fishing.totalCaught : 0) + (g.fishing && g.fishing.biggest ? ' · best ' + g.fishing.biggest.name + ' ' + g.fishing.biggest.size + ' cm' : '')],
+      ['Pumpkins carved', String(g.pumpkins ? g.pumpkins.carvedCount : 0)],
+      ['Owl whispers', String(g.critters ? g.critters.owlsListened : 0)],
+      ['Quests complete', g.quests ? g.quests.completedCount() + ' / ' + g.quests.list().length : '0'],
       ['Fires lit', String(g.campfires.totalLit)],
       ['Stories heard', String(g.stats.stories)],
       ['Marshmallows roasted', String(g.stats.marshmallows)],

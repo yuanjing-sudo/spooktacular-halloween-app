@@ -310,7 +310,7 @@
   /* ------------------------------------------------------------------ */
   /*  Actions                                                            */
   /* ------------------------------------------------------------------ */
-  Campfires.prototype.actions = function (fire, player, carrots) {
+  Campfires.prototype.actions = function (fire, player, carrots, fishing) {
     if (!fire) return [];
     var out = [];
     if (!fire.lit) {
@@ -321,14 +321,18 @@
       });
       return out;
     }
+    var cookingFish = fire.cook.kind === 'fish';
     if (fire.cook.state === 'ready' || fire.cook.state === 'burnt') {
       out.push({
-        id: 'take-food', label: fire.cook.state === 'burnt' ? '🥀 Take Burnt Carrot' : '🍠 Take Roasted Carrot',
-        sub: fire.cook.state === 'burnt' ? 'A little crunchy' : 'Perfectly glazed', priority: 6
+        id: 'take-food',
+        label: fire.cook.state === 'burnt' ? (cookingFish ? '🥀 Take Burnt Fish' : '🥀 Take Burnt Carrot')
+          : (cookingFish ? '🐟 Take Cooked Fish' : '🍠 Take Roasted Carrot'),
+        sub: fire.cook.state === 'burnt' ? 'A little crunchy' : (cookingFish ? 'Flaking and warm' : 'Perfectly glazed'),
+        priority: 6
       });
     } else if (fire.cook.state === 'cooking') {
       out.push({
-        id: 'cook-wait', label: '🍠 Cooking… ' + Math.max(0, Math.ceil(3.1 - fire.cook.t)) + 's',
+        id: 'cook-wait', label: (cookingFish ? '🐟 Cooking… ' : '🍠 Cooking… ') + Math.max(0, Math.ceil(3.1 - fire.cook.t)) + 's',
         sub: 'Let it turn golden', disabled: true, priority: 2
       });
     } else {
@@ -337,6 +341,12 @@
         sub: carrots && carrots.count > 0 ? 'Uses 1 carrot' : 'No carrots in your pack',
         disabled: !(carrots && carrots.count > 0), priority: 4
       });
+      if (fishing && fishing.fish > 0) {
+        out.push({
+          id: 'cook-fish', label: '🐟 Cook Fish',
+          sub: 'Uses 1 raw fish · ' + fishing.fish + ' in your creel', priority: 4
+        });
+      }
     }
     out.push({
       id: 'roast-marshmallow', label: '🍡 Roast Marshmallow',
@@ -368,6 +378,7 @@
     ctx = ctx || {};
     var player = ctx.player || {};
     var carrots = ctx.carrots || null;
+    var fishing = ctx.fishing || null;
     var game = ctx.game || null;
 
     if (actionId === 'light') {
@@ -394,20 +405,31 @@
     if (actionId === 'cook-carrot') {
       if (!carrots || carrots.count <= 0) return { text: 'No carrots to cook.', kind: 'warn' };
       carrots.count--;
-      fire.cook = { state: 'cooking', t: 0, glow: (carrots.bestCarrot >= 2) };
+      fire.cook = { state: 'cooking', t: 0, glow: (carrots.bestCarrot >= 2), kind: 'carrot' };
       U.Audio.noise(0.18, 0.05, 900);
       return { text: '🍠 Carrot laid on the stones. Watch it closely.', kind: 'good' };
     }
+    if (actionId === 'cook-fish') {
+      if (!fishing || fishing.fish <= 0) return { text: 'No fish to cook.', kind: 'warn' };
+      fishing.fish--;
+      fire.cook = { state: 'cooking', t: 0, glow: false, kind: 'fish' };
+      U.Audio.noise(0.18, 0.05, 900);
+      return { text: '🐟 Fish laid over the coals. The smoke turns silver.', kind: 'good' };
+    }
     if (actionId === 'take-food') {
       var burnt = fire.cook.state === 'burnt';
-      if (carrots) {
-        if (burnt) { carrots.roasted += 0; } else { carrots.roasted++; }
+      var cookedFish = fire.cook.kind === 'fish';
+      if (cookedFish && fishing) {
+        fishing.cooked++;
+        this.totalCooked++;
+      } else if (carrots) {
+        if (!burnt) { carrots.roasted++; }
         this.totalCooked++;
       }
-      fire.cook = { state: 'idle', t: 0, glow: false };
+      fire.cook = { state: 'idle', t: 0, glow: false, kind: 'carrot' };
       U.Audio.pop();
-      if (burnt) return { text: '🥀 Burnt carrot. Still food. Probably.', kind: 'warn' };
-      return { text: '🍠 Roasted carrot! Sweet and smoky.', kind: 'good' };
+      if (burnt) return { text: cookedFish ? '🥀 Burnt fish. The pond would not approve.' : '🥀 Burnt carrot. Still food. Probably.', kind: 'warn' };
+      return { text: cookedFish ? '🐟 Smoked fish! The skin cracks like paper.' : '🍠 Roasted carrot! Sweet and smoky.', kind: 'good' };
     }
     if (actionId === 'roast-marshmallow') {
       if (player.marshmallows <= 0) return { text: 'No marshmallows.', kind: 'warn' };
@@ -655,16 +677,18 @@
     return best;
   };
 
-  Campfires.prototype.interaction = function (player, carrots) {
+  Campfires.prototype.interaction = function (player, carrots, fishing) {
     var fire = this.nearest(player, 3.8);
     if (!fire) return null;
-    var actions = this.actions(fire, player, carrots);
+    var actions = this.actions(fire, player, carrots, fishing);
     var primary = null;
     for (var i = 0; i < actions.length; i++) {
       if (!actions[i].disabled) { primary = actions[i]; break; }
     }
+    var ready = fire.cook.state === 'ready';
+    var fishReady = fire.cook.kind === 'fish';
     return {
-      type: 'campfire', label: fire.lit ? (fire.cook.state === 'ready' ? 'Take Roasted Carrot' :
+      type: 'campfire', label: fire.lit ? (ready ? (fishReady ? 'Take Cooked Fish' : 'Take Roasted Carrot') :
         (primary ? primary.label : 'Warm Your Hands')) : 'Light Campfire',
       sub: fire.name + (fire.lit ? ' · ' + Math.round(fire.fuel * 100) + '% fuel' : ' · cold ashes'),
       target: fire, actions: actions, range: 3.8, priority: 4

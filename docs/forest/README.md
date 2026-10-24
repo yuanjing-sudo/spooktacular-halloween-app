@@ -4,14 +4,23 @@ A streaming, procedurally generated 3D Halloween forest that runs entirely in th
 browser. No build step, no engine, no external assets — just hand-written
 JavaScript, raw WebGL and procedural geometry.
 
-Open **`endless-forest.html`** from a local web server (the page uses ES5-style
-classic scripts, so `file://` works in most browsers too):
+**Play it on the live server:** <https://yuanjing-sudo.github.io/spooktacular-halloween-app/forest/endless-forest.html>
+
+The game is static HTML/CSS/JavaScript served by GitHub Pages. It does **not**
+need Node, Python, a database or any local server. Those are only useful when
+editing the code offline:
 
 ```sh
-# from the repository root
+# optional, for local development only
 python3 -m http.server 8000 --directory docs
 # then visit http://localhost:8000/forest/endless-forest.html
 ```
+
+### Google Sites
+
+Google Sites hosts the page shell; the game itself is embedded from GitHub
+Pages. Choose **Insert → Embed → Embed code** and paste the iframe from
+[`GOOGLE-SITES.md`](GOOGLE-SITES.md).
 
 ---
 
@@ -46,6 +55,16 @@ spider webs, mushrooms, shrubs, wild carrot patches, burrows and campfire sites.
 - **Campfires** — stone rings, crossed logs, tripods, cooking pots and skull
   totems; procedural flames, embers, smoke and sparks. Light, fuel, cook carrots,
   roast marshmallows, warm up, sit down and listen to a story.
+- **Wildlife** — perched owls that turn their heads and trade forest whispers,
+  bats circling at dusk, frogs on lily pads, hedgehogs that curl when startled,
+  moths around firelight and drifting fireflies.
+- **Fishing** — cast into the moon pond, wait for the bobber to dip, strike,
+  then hold and release the line as the fish surges. Seven catches, weighted by
+  night, rain and blood moons, plus cooking at a campfire.
+- **Jack-o'-lanterns** — carve any wild pumpkin into a glowing face. Carved
+  pumpkins persist in the save and cast warm light after dark.
+- **The Lantern Road** — twelve small quests tracked in the HUD and journal,
+  with wood, seed, carrot and fish rewards.
 - **Weather and sky** — a full 24-hour cycle, sun, moon, stars, aurora, drifting
   cloud, rain, fog, snow, wind and occasional blood moons. Lightning flashes are
   timed to thunder.
@@ -61,7 +80,7 @@ spider webs, mushrooms, shrubs, wild carrot patches, burrows and campfire sites.
 | `Shift` | Run (or descend while flying) |
 | `Space` | Jump |
 | `Ctrl` | Crouch |
-| `E` | Interact / harvest / talk / open campfire menu |
+| `E` | Interact / harvest / talk / open campfire menu / cast and reel a line / carve a pumpkin / listen to an owl |
 | `Q` | Call bonded rabbits |
 | `J` | Journal |
 | `M` / `Tab` | Map / explorer tab |
@@ -72,6 +91,7 @@ spider webs, mushrooms, shrubs, wild carrot patches, burrows and campfire sites.
 | `1` | Eat a carrot (roasted carrots first) |
 | `2` | Plant a carrot seed |
 | `5` | Journal |
+| `6` | Eat a fish |
 | `Esc` | Pause |
 | Mouse | Look (click to capture the pointer) |
 
@@ -103,6 +123,10 @@ The forest is deliberately dependency-free and split into small modules:
 | `carrots.js` | Carrot growth simulation, meshes, harvesting, planting, watering, persistence |
 | `campfires.js` | Campfire variants, fire/smoke/ember particles, fuel, cooking, actions, light sources |
 | `rabbits.js` | Rabbit meshes, animation, AI states, warrens, taming, companion behaviour |
+| `pumpkins.js` | Wild pumpkin placement, carving, glowing faces, light and persistence |
+| `critters.js` | Owls, bats, frogs, hedgehogs, moths and fireflies, with ambient AI and whispers |
+| `fishing.js` | Pond detection, cast/bite/hook/reel minigame, fish species, records and cooking |
+| `quests.js` | The twelve-step Lantern Road quest chain, progress checks and rewards |
 | `player.js` | Movement, collision, stamina/warmth/health, mouse and touch look, avatar, photo mode |
 | `atmosphere.js` | Time of day, palettes, sun/moon/stars/aurora, weather, lightning, ambient audio |
 | `ui.js` | HUD, compass, minimap, prompts, toasts, start/pause/settings, fire menu, journal, achievements, touch controls |
@@ -114,7 +138,8 @@ The forest is deliberately dependency-free and split into small modules:
 
 - Chunks are meshed on a time budget and uploaded lazily; distant chunks are
   evicted with a GPU buffer cache.
-- Dynamic geometry (player avatar, carrots, rabbits, fires, markers) is merged
+- Dynamic geometry (player avatar, carrots, rabbits, fires, pumpkins, critters,
+fishing line, markers) is merged
   into one buffer per frame. Carrots use distance LOD and a low-detail silhouette
   beyond 32 m; rabbits and warrens are culled with the rest of the dynamic pass.
 - Quality presets (`low`, `medium`, `high`) scale render resolution, draw

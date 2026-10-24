@@ -66,8 +66,10 @@
         <span>🐇 deep rabbit AI</span>
         <span>🥕 ridged 3D carrots</span>
         <span>🔥 living campfires</span>
+        <span>🎣 haunted fishing</span>
+        <span>🦉 owls &amp; wildlife</span>
       </p>
-      <p class="build-stamp">v2.0 endless · streamed chunks · no assets, all procedural</p>
+      <p class="build-stamp">v2.1 lantern road · streamed chunks · no assets, all procedural</p>
     </div>
   </section>
 
@@ -106,10 +108,21 @@
       <div class="stat-pill" title="Carrots in your pack"><span>🥕</span><b id="stat-carrots">0</b></div>
       <div class="stat-pill" title="Fallen wood"><span>🪵</span><b id="stat-wood">7</b></div>
       <div class="stat-pill" title="Marshmallows"><span>🍡</span><b id="stat-marshmallows">3</b></div>
+      <div class="stat-pill" title="Fish in your creel"><span>🐟</span><b id="stat-fish">0</b></div>
       <div class="stat-pill" title="Rabbits met / bonded"><span>🐇</span><b id="stat-rabbits">0/0</b></div>
       <div class="stat-pill" title="Campfires lit"><span>🔥</span><b id="stat-fires">0</b></div>
       <button id="btn-journal" class="stat-pill action" type="button" title="Open journal">📖 <b>Journal</b></button>
       <button id="btn-pause" class="stat-pill action" type="button" title="Pause">⏸ <b>Pause</b></button>
+    </div>
+
+    <div id="quest-tracker" class="quest-tracker" role="status" aria-live="polite">
+      <span class="quest-icon" id="quest-icon">🕯️</span>
+      <div class="quest-copy">
+        <b id="quest-title">The Lantern Road</b>
+        <i id="quest-hint">Light a campfire to begin.</i>
+        <div class="quest-track"><span id="quest-bar"></span></div>
+      </div>
+      <span class="quest-count" id="quest-count">0/12</span>
     </div>
 
     <div id="prompt" class="prompt" role="status">
@@ -123,6 +136,13 @@
     <div id="cooking-hud" class="cooking">
       <div class="cooking-label" id="cooking-label">Cooking carrot…</div>
       <div class="cooking-track"><div id="cooking-bar" class="cooking-fill"></div></div>
+    </div>
+
+    <div id="fishing-hud" class="fishing">
+      <div class="fishing-label" id="fishing-label">Waiting for a bite…</div>
+      <div class="fishing-track"><div id="fishing-reel" class="fishing-fill"></div></div>
+      <div class="fishing-tension-track"><div id="fishing-tension" class="fishing-tension-fill"></div></div>
+      <div class="fishing-hint" id="fishing-hint">Hold E to reel · release when the line strains</div>
     </div>
 
     <div class="hud-bottom">
@@ -141,6 +161,9 @@
         </button>
         <button class="slot" type="button" data-slot="5" title="Journal">
           <span class="slot-key">5</span><span class="slot-icon">📖</span><span class="slot-count">·</span><span class="slot-label">journal</span>
+        </button>
+        <button class="slot" type="button" data-slot="6" title="Eat a fish (6)">
+          <span class="slot-key">6</span><span class="slot-icon">🐟</span><span class="slot-count">0</span><span class="slot-label">fish</span>
         </button>
       </div>
     </div>
@@ -296,8 +319,23 @@
           </div>
           <div class="help-block">
             <h3>Campfires</h3>
-            <p>Stand close and press <kbd>E</kbd> for the fire menu: light it, add wood, cook carrots, roast marshmallows, warm up or sit for a story.</p>
+            <p>Stand close and press <kbd>E</kbd> for the fire menu: light it, add wood, cook carrots or fish, roast marshmallows, warm up or sit for a story.</p>
             <p>Rain can douse a fire. Fuel burns down. Cold drains warmth; warmth drains health.</p>
+          </div>
+          <div class="help-block">
+            <h3>Fish &amp; pumpkins</h3>
+            <p>Face a misty pond until <b>Cast Line</b> appears, then <kbd>E</kbd> to cast. Strike when the bobber dips, then hold <kbd>E</kbd> to reel and release when the tension bar reddens.</p>
+            <p>Wild pumpkins can be carved into glowing jack-o’-lanterns. Press <kbd>6</kbd> to eat a fish.</p>
+          </div>
+          <div class="help-block">
+            <h3>Wildlife</h3>
+            <p>Owls perch in the pines after dark. Stand beneath one and listen; they trade forest whispers for your attention.</p>
+            <p>Bats circle at dusk, frogs croak from the ponds, hedgehogs curl when you come close, and moths spiral around lit fires.</p>
+          </div>
+          <div class="help-block">
+            <h3>The Lantern Road</h3>
+            <p>Small quests appear in the tracker on the left. They teach the forest's systems and reward wood, seeds, fish and stranger things.</p>
+            <p>Open the journal's <b>Quests</b> tab to see the whole road.</p>
           </div>
           <div class="help-block">
             <h3>Rabbits</h3>
@@ -387,6 +425,10 @@
   <script src="carrots.js"></script>
   <script src="campfires.js"></script>
   <script src="rabbits.js"></script>
+  <script src="pumpkins.js"></script>
+  <script src="critters.js"></script>
+  <script src="fishing.js"></script>
+  <script src="quests.js"></script>
   <script src="player.js"></script>
   <script src="atmosphere.js"></script>
   <script src="ui.js"></script>

@@ -120,6 +120,16 @@
     var d0 = Math.sqrt(x * x + z * z);
     var blend = U.smoothstep(5, 24, d0);
     h = U.lerp(2.3, h, blend);
+
+    // A small moon pond just west of the opening clearing. Without this
+    // guarantee, ponds can be hundreds of metres from spawn and the
+    // fishing loop is easy to miss on a fresh world.
+    var pdx = x + 16, pdz = z + 10;
+    var pondDist = Math.sqrt(pdx * pdx + pdz * pdz);
+    if (pondDist < 10) {
+      var pondBlend = U.smoothstep(10, 4.6, pondDist);
+      h = U.lerp(h, -1.15, pondBlend);
+    }
     return h;
   };
 
@@ -746,16 +756,16 @@
     b.cylinder(x, y + r * 1.22, z, 0.06, 0.04, 0.28, 5, [0.24, 0.32, 0.1], 0, true, false);
     if (lit) {
       // Carved jack-o'-lantern face.
-      b.tri([x - r * 0.55, y + r * 0.78, z + r * 0.82],
-        [x - r * 0.25, y + r * 1.0, z + r * 0.78],
-        [x - r * 0.2, y + r * 0.72, z + r * 0.84], [1.0, 0.75, 0.2], 1.8);
-      b.tri([x + r * 0.55, y + r * 0.78, z + r * 0.82],
-        [x + r * 0.25, y + r * 1.0, z + r * 0.78],
-        [x + r * 0.2, y + r * 0.72, z + r * 0.84], [1.0, 0.75, 0.2], 1.8);
-      b.quad([x - r * 0.5, y + r * 0.42, z + r * 0.86],
-        [x + r * 0.5, y + r * 0.42, z + r * 0.86],
-        [x + r * 0.4, y + r * 0.58, z + r * 0.82],
-        [x - r * 0.4, y + r * 0.58, z + r * 0.82], [1.0, 0.75, 0.2], 1.8);
+      b.tri([x - r * 0.55, y + r * 0.78, z + r * 0.985],
+        [x - r * 0.2, y + r * 0.72, z + r * 0.995],
+        [x - r * 0.25, y + r * 1.0, z + r * 0.86], [1.0, 0.75, 0.2], 1.8, [0, 0, 1]);
+      b.tri([x + r * 0.55, y + r * 0.78, z + r * 0.985],
+        [x + r * 0.2, y + r * 0.72, z + r * 0.995],
+        [x + r * 0.25, y + r * 1.0, z + r * 0.86], [1.0, 0.75, 0.2], 1.8, [0, 0, 1]);
+      b.quad([x - r * 0.5, y + r * 0.42, z + r * 0.972],
+        [x + r * 0.5, y + r * 0.42, z + r * 0.972],
+        [x + r * 0.4, y + r * 0.58, z + r * 0.995],
+        [x - r * 0.4, y + r * 0.58, z + r * 0.995], [1.0, 0.75, 0.2], 1.8, [0, 0, 1]);
     }
     if (rng.chance(0.4)) {
       for (var v = 0; v < 3; v++) {
@@ -950,6 +960,24 @@
           var p = c.props[i];
           if (!p.solid) continue;
           if (U.dist2(p.x, p.z, x, z) <= (radius + p.radius) * (radius + p.radius)) out.push(p);
+        }
+      }
+    }
+    return out;
+  };
+
+  World.prototype.nearbyPumpkins = function (x, z, radius) {
+    var out = [];
+    var rcx = Math.ceil(radius / CHUNK) + 1;
+    var cx = this.chunkCoord(x), cz = this.chunkCoord(z);
+    for (var dx = -rcx; dx <= rcx; dx++) {
+      for (var dz = -rcx; dz <= rcx; dz++) {
+        var c = this.getChunk(cx + dx, cz + dz);
+        if (!c) continue;
+        for (var i = 0; i < c.props.length; i++) {
+          var p = c.props[i];
+          if (p.kind !== 'pumpkin') continue;
+          if (U.dist2(p.x, p.z, x, z) <= radius * radius) out.push(p);
         }
       }
     }

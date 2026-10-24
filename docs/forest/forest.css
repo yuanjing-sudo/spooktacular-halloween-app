@@ -686,6 +686,126 @@ kbd {
 .cooking-fill.ready { background: linear-gradient(90deg, #a8f0a0, #52c46b); }
 .cooking-fill.burnt { background: linear-gradient(90deg, #6b5b52, #332a26); }
 
+/* Fishing HUD ------------------------------------------------------- */
+.fishing {
+  position: absolute;
+  left: 50%;
+  bottom: max(262px, calc(env(safe-area-inset-bottom) + 250px));
+  transform: translateX(-50%);
+  width: min(340px, 78vw);
+  padding: 10px 13px 11px;
+  border: 1px solid rgba(120, 190, 220, 0.28);
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(12, 22, 30, 0.94), rgba(10, 14, 22, 0.92));
+  box-shadow: var(--shadow-soft);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  pointer-events: none;
+}
+
+.fishing.show { opacity: 1; visibility: visible; }
+
+.fishing-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: #d9f0fa;
+  margin-bottom: 7px;
+  letter-spacing: 0.02em;
+}
+
+.fishing-track,
+.fishing-tension-track {
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.fishing-tension-track { height: 4px; margin-top: 6px; }
+
+.fishing-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7fd5ee, #4c9fce);
+  transition: width 0.12s linear;
+}
+
+.fishing-tension-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8fe08a, #e6c257);
+  transition: width 0.1s linear;
+}
+
+.fishing-tension-fill.strain { background: linear-gradient(90deg, #e6c257, #e6903d); }
+.fishing-tension-fill.danger { background: linear-gradient(90deg, #ff8a5c, #e63b3b); }
+
+.fishing-hint {
+  margin-top: 7px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: #8fa9b8;
+}
+
+/* Quest tracker ----------------------------------------------------- */
+.quest-tracker {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(96px, calc(env(safe-area-inset-bottom) + 84px));
+  width: min(274px, 36vw);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 209, 102, 0.26);
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(24, 18, 36, 0.88), rgba(12, 9, 20, 0.86));
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  transition: border-color 0.3s, background 0.3s;
+}
+
+.quest-tracker.complete { border-color: rgba(125, 255, 176, 0.35); }
+
+.quest-icon { font-size: 20px; line-height: 1.2; filter: drop-shadow(0 0 8px rgba(255, 190, 90, 0.5)); }
+
+.quest-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.quest-copy b { font-size: 12px; color: #ffe2b1; letter-spacing: 0.02em; }
+.quest-copy i { font-style: normal; font-size: 10.5px; line-height: 1.4; color: #a99cb8; }
+
+.quest-track {
+  height: 4px;
+  margin-top: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.quest-track span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd166, #ff9f1c);
+  transition: width 0.4s var(--ease);
+}
+
+.quest-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #c9a86a;
+  padding-top: 2px;
+  white-space: nowrap;
+}
+
+.jrow.dim { opacity: 0.48; }
+.jrow.quest.done .jname { color: #ffe2a8; }
+.jrow.quest .jdesc { flex: 1 1 160px; }
+
 .hud-bottom {
   position: absolute;
   left: 50%;
@@ -1305,6 +1425,8 @@ body.touch .minimap-wrap {
 body.touch .hotbar { display: none; }
 body.touch .prompt { bottom: max(174px, calc(env(safe-area-inset-bottom) + 162px)); }
 body.touch .cooking { bottom: max(244px, calc(env(safe-area-inset-bottom) + 232px)); }
+body.touch .fishing { bottom: max(318px, calc(env(safe-area-inset-bottom) + 306px)); width: min(310px, 82vw); }
+body.touch .quest-tracker { display: none; }
 body.touch .hud-stats { top: max(108px, calc(env(safe-area-inset-top) + 96px)); }
 body.touch .hud-stats .stat-pill.action { display: none; }
 body.touch .hud-actions #btn-photo,
@@ -1405,6 +1527,8 @@ body.touch .hud-actions #btn-map { display: none; }
   .modal-card { padding: 19px; }
   .jdesc { flex-basis: 120px; font-size: 10.5px; }
   .help-body { max-height: 62vh; }
+  .quest-tracker { display: none; }
+  .fishing { width: min(320px, 84vw); }
 }
 
 @media (max-width: 560px) {
@@ -1433,6 +1557,8 @@ body.touch .hud-actions #btn-map { display: none; }
   .jrow { flex-wrap: wrap; }
   .jdesc { flex-basis: 100%; text-align: left; padding-left: 16px; }
   .jbar { width: 54px; }
+  .fishing { bottom: max(300px, calc(env(safe-area-inset-bottom) + 288px)); }
+  .fishing-hint { font-size: 10px; }
 }
 
 @media (max-height: 560px) and (orientation: landscape) {

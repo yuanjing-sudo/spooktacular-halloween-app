@@ -117,6 +117,38 @@
     {
       id: 'woodcutter', name: 'Gatherer', desc: 'Gather thirty pieces of fallen wood.',
       progress: function (g) { return U.clamp(g.stats.woodGathered / 30, 0, 1); }
+    },
+    {
+      id: 'first-fish', name: 'Something Bit', desc: 'Land a fish from a misty pond.',
+      progress: function (g) { return U.clamp(g.fishing ? g.fishing.totalCaught : 0, 0, 1); }
+    },
+    {
+      id: 'angler', name: 'Patient Angler', desc: 'Land ten fish.',
+      progress: function (g) { return U.clamp((g.fishing ? g.fishing.totalCaught : 0) / 10, 0, 1); }
+    },
+    {
+      id: 'pumpkin-carver', name: 'A Face in the Dark', desc: 'Carve a jack-o’-lantern.',
+      progress: function (g) { return U.clamp(g.pumpkins ? g.pumpkins.carvedCount : 0, 0, 1); }
+    },
+    {
+      id: 'gourd-garden', name: 'Gourd Garden', desc: 'Carve eight pumpkins.',
+      progress: function (g) { return U.clamp((g.pumpkins ? g.pumpkins.carvedCount : 0) / 8, 0, 1); }
+    },
+    {
+      id: 'wildlife', name: 'Forest Neighbours', desc: 'See an owl, bat, frog, hedgehog and moth.',
+      progress: function (g) { return U.clamp(g.critters ? Object.keys(g.critters.typesSeen).length / 5 : 0, 0, 1); }
+    },
+    {
+      id: 'owl-friend', name: 'The Owl’s Whisper', desc: 'Listen to a perched owl.',
+      progress: function (g) { return U.clamp(g.critters ? g.critters.owlsListened : 0, 0, 1); }
+    },
+    {
+      id: 'deep-water', name: 'Five Fins', desc: 'Catch five different kinds of fish.',
+      progress: function (g) { return U.clamp(g.fishing ? Object.keys(g.fishing.counts).length / 5 : 0, 0, 1); }
+    },
+    {
+      id: 'questkeeper', name: 'Lantern Road', desc: 'Complete every forest quest.',
+      progress: function (g) { return U.clamp(g.quests ? g.quests.completedCount() / 12 : 0, 0, 1); }
     }
   ];
 
@@ -143,6 +175,10 @@
     this.carrots = new SF.Carrots(this.world, { onEvent: this._onCarrotEvent.bind(this) });
     this.campfires = new SF.Campfires(this.world, { onEvent: this._onFireEvent.bind(this) });
     this.rabbits = new SF.Rabbits(this.world, { onEvent: this._onRabbitEvent.bind(this) });
+    this.pumpkins = new SF.Pumpkins(this.world, { onEvent: this._onPumpkinEvent.bind(this) });
+    this.critters = new SF.Critters(this.world, { onEvent: this._onCritterEvent.bind(this) });
+    this.fishing = new SF.Fishing(this.world, { onEvent: this._onFishEvent.bind(this) });
+    this.quests = new SF.Quests({ onEvent: this._onQuestEvent.bind(this) });
     this.ui = new SF.UI(this);
 
     this.state = this._freshState();
@@ -210,7 +246,9 @@
       interactions: 0,
       visited: {},
       deaths: 0,
-      distance: 0
+      distance: 0,
+      fishCaught: 0,
+      pumpkinsCarved: 0
     };
   };
 
@@ -265,6 +303,8 @@
     this.campfires.sync(spawn.x, spawn.z);
     this.carrots.sync(spawn.x, spawn.z);
     this.rabbits.sync(this.player);
+    this.pumpkins.sync(this.player);
+    this.critters.sync(this.player, this.atmosphere.getEnv(), this.campfires);
     this.renderer.syncChunks(this.world);
     this.previewAngle = this.player.yaw;
   };
@@ -291,6 +331,10 @@
     this.carrots.reset();
     this.campfires.reset();
     this.rabbits.reset();
+    this.pumpkins.reset();
+    this.critters.reset();
+    this.fishing.reset();
+    this.quests.reset();
     this.atmosphere.reset({ startHour: 17.4 });
     this.player.reset(spawn);
     this.player.wood = 7;
@@ -312,6 +356,8 @@
     this.campfires.sync(spawn.x, spawn.z);
     this.carrots.sync(spawn.x, spawn.z);
     this.rabbits.sync(this.player);
+    this.pumpkins.sync(this.player);
+    this.critters.sync(this.player, this.atmosphere.getEnv(), this.campfires);
     this.renderer.syncChunks(this.world);
     this.preview = false;
     this.started = true;
@@ -336,6 +382,10 @@
       this.carrots.reset();
       this.campfires.reset();
       this.rabbits.reset();
+      this.pumpkins.reset();
+      this.critters.reset();
+      this.fishing.reset();
+      this.quests.reset();
       this.atmosphere.reset({ startHour: 17.4 });
       this.state = save.state || this._freshState();
       if (!this.state.achievements) this.state.achievements = {};
@@ -348,6 +398,10 @@
       this.carrots.load(save.carrots);
       this.campfires.load(save.campfires);
       this.rabbits.load(save.rabbits);
+      this.pumpkins.load(save.pumpkins);
+      this.critters.load(save.critters);
+      this.fishing.load(save.fishing);
+      this.quests.load(save.quests);
       this.atmosphere.load(save.atmosphere);
       this.player.load(save.player, spawn);
       this.player.enabled = false;
@@ -360,6 +414,8 @@
       this.campfires.sync(this.player.position[0], this.player.position[2]);
       this.carrots.sync(this.player.position[0], this.player.position[2]);
       this.rabbits.sync(this.player);
+      this.pumpkins.sync(this.player);
+      this.critters.sync(this.player, this.atmosphere.getEnv(), this.campfires);
       this.renderer.syncChunks(this.world);
       this.preview = false;
       this.started = true;
@@ -393,13 +449,17 @@
   /* ------------------------------------------------------------------ */
   Game.prototype.serialize = function () {
     return {
-      version: 2,
+      version: 3,
       seed: this.world.seed,
       savedAt: Date.now(),
       player: this.player.serialize(),
       carrots: this.carrots.serialize(),
       campfires: this.campfires.serialize(),
       rabbits: this.rabbits.serialize(),
+      pumpkins: this.pumpkins.serialize(),
+      critters: this.critters.serialize(),
+      fishing: this.fishing.serialize(),
+      quests: this.quests.serialize(),
       atmosphere: this.atmosphere.serialize(),
       state: this.state,
       stats: this.stats,
@@ -512,6 +572,7 @@
       if (value === 1) this.eatCarrot();
       else if (value === 2) this.plantCarrot();
       else if (value === 5) this.ui.openJournal();
+      else if (value === 6) this.eatFish();
       return;
     }
     if (action === 'hurt') {
@@ -585,9 +646,13 @@
       this.stats.marshmallows++;
       this._evaluateAchievements();
     } else if (name === 'fire:cook-ready') {
-      this.ui.toast('🍠 The carrot is ready. Golden at the edges.', 'good', 2.4);
+      var fishReady = data && data.cook && data.cook.kind === 'fish';
+      this.ui.toast(fishReady ? '🐟 The fish is ready. Silver skin, white flakes.' :
+        '🍠 The carrot is ready. Golden at the edges.', 'good', 2.4);
     } else if (name === 'fire:cook-burnt') {
-      this.ui.toast('🥀 The carrot has gone black. Take it before it turns to coal.', 'warn', 3);
+      var fishBurnt = data && data.cook && data.cook.kind === 'fish';
+      this.ui.toast(fishBurnt ? '🥀 The fish has gone black. Take it before it turns to coal.' :
+        '🥀 The carrot has gone black. Take it before it turns to coal.', 'warn', 3);
     } else if (name === 'fire:out') {
       this.ui.toast('💨 A fire goes out somewhere in the dark.', 'info', 2.5);
     } else if (name === 'fire:doused') {
@@ -606,6 +671,54 @@
       this._award('bonded');
       this._evaluateAchievements();
     }
+  };
+
+  Game.prototype._onPumpkinEvent = function (name, data) {
+    if (name === 'pumpkin:carved') {
+      this.stats.interactions++;
+      this._evaluateAchievements();
+    }
+  };
+
+  Game.prototype._onCritterEvent = function (name, data) {
+    if (name === 'critter:first-seen') {
+      var labels = { owl: 'owl', bat: 'bat', frog: 'frog', hedgehog: 'hedgehog', moth: 'moth' };
+      if (data && labels[data.type] && this.started) {
+        this.ui.toast('🦉 A ' + labels[data.type] + ' slips into view.', 'info', 2.2);
+      }
+      this._evaluateAchievements();
+    } else if (name === 'critter:listen') {
+      this.stats.interactions++;
+      this._evaluateAchievements();
+    }
+  };
+
+  Game.prototype._onFishEvent = function (name, data) {
+    if (name === 'fish:caught') {
+      this.stats.fishCaught = (this.stats.fishCaught || 0) + 1;
+      this.stats.interactions++;
+      var size = data && data.size ? ' · ' + data.size + ' cm' : '';
+      this.ui.toast('🐟 <b>' + U.esc(data ? data.name : 'Fish') + '</b>' + size +
+        (data && data.desc ? '<br><span class="toast-sub">' + U.esc(data.desc) + '</span>' : ''), 'good', 4.2);
+      U.Audio.chime();
+      this._evaluateAchievements();
+    } else if (name === 'fish:snapped') {
+      this.ui.toast('💥 The line snaps. Whatever it was, it is gone.', 'warn', 3);
+    } else if (name === 'fish:escaped') {
+      this.ui.toast('💧 The fish slips the hook.', 'info', 2.4);
+    } else if (name === 'fish:lost-line') {
+      this.ui.toast('🎣 You wandered too far. The line comes back empty.', 'info', 2.4);
+    } else if (name === 'fish:eaten') {
+      this._evaluateAchievements();
+    }
+  };
+
+  Game.prototype._onQuestEvent = function (name, quest) {
+    if (name !== 'quest:complete' || !quest) return;
+    this.ui.toast('🕯️ <b>' + U.esc(quest.title) + '</b><br><span class="toast-sub">' +
+      U.esc(quest.hint) + ' · reward: ' + U.esc(quest.rewardText || '') + '</span>', 'good', 5);
+    this._evaluateAchievements();
+    if (this.quests && this.quests.completedCount() >= 12) this._award('questkeeper');
   };
 
   Game.prototype._onAtmosphereEvent = function (name, data) {
@@ -696,12 +809,18 @@
 
   Game.prototype.updateInteraction = function () {
     var list = [];
-    var fire = this.campfires.interaction(this.player, this.carrots);
+    var fire = this.campfires.interaction(this.player, this.carrots, this.fishing);
     if (fire) list.push(fire);
     var rabbit = this.rabbits.interaction(this.player, this.carrots);
     if (rabbit) list.push(rabbit);
     var carrot = this.carrots.interaction(this.player);
     if (carrot) list.push(carrot);
+    var pumpkin = this.pumpkins.interaction(this.player);
+    if (pumpkin) list.push(pumpkin);
+    var fish = this.fishing.interaction(this.player);
+    if (fish) list.push(fish);
+    var critter = this.critters.interaction(this.player);
+    if (critter) list.push(critter);
     var wood = this._gatherInteraction();
     if (wood) list.push(wood);
 
@@ -745,6 +864,31 @@
       this.updateInteraction();
       return;
     }
+    if (inter.type === 'pumpkin') {
+      var carved = this.pumpkins.carve(this.player, inter.target);
+      if (carved) {
+        this.stats.interactions++;
+        this.ui.toast('🎃 A face opens in the pumpkin. Candlelight spills out.', 'good', 3);
+        this._evaluateAchievements();
+      }
+      this.updateInteraction();
+      return;
+    }
+    if (inter.type === 'fish') {
+      var fishOut = this.fishing.action(this.player);
+      if (fishOut && fishOut.text) this.ui.toast(fishOut.text, fishOut.kind || 'info', 3);
+      if (fishOut && this.fishing.state === 'hooked') this._evaluateAchievements();
+      this.updateInteraction();
+      return;
+    }
+    if (inter.type === 'critter') {
+      var critterOut = this.critters.interact(this.player);
+      if (critterOut && critterOut.text) this.ui.toast(critterOut.text, critterOut.kind || 'good', 3.6);
+      this.stats.interactions++;
+      this._evaluateAchievements();
+      this.updateInteraction();
+      return;
+    }
     if (inter.type === 'wood') {
       this._gatherWood(inter.target);
       this.updateInteraction();
@@ -782,7 +926,7 @@
       ? this.currentInteraction.target : this.campfires.nearest(this.player, 4.6);
     if (!fire) { this.ui.toast('No campfire close enough.', 'warn', 2); return; }
     var result = this.campfires.perform(actionId, fire, {
-      player: this.player, carrots: this.carrots, game: this
+      player: this.player, carrots: this.carrots, fishing: this.fishing, game: this
     });
     if (!result) return;
     if (result.story) {
@@ -835,6 +979,21 @@
     this.player.warmth = Math.min(this.player.maxWarmth, this.player.warmth + warmth);
     this.player.health = Math.min(this.player.maxHealth, this.player.health + health);
     if (kind === 'roasted') this.stats.marshmallows += 0;
+  };
+
+  Game.prototype.eatFish = function () {
+    if (!this.running || this.paused) return;
+    var out = null;
+    if (this.fishing.cooked > 0) out = this.fishing.eat(true);
+    else out = this.fishing.eat(false);
+    if (!out) {
+      this.ui.toast('No fish in your pack. Find a pond and cast a line.', 'warn', 2.2);
+      return;
+    }
+    this._eatReward(out.warmth, out.health, out.cooked ? 'roasted' : 'raw');
+    this.ui.toast(out.text, out.cooked ? 'good' : 'warn', 2.8);
+    this.stats.interactions++;
+    this._evaluateAchievements();
   };
 
   Game.prototype.plantCarrot = function () {
@@ -929,6 +1088,8 @@
     this.campfires.sync(this.player.position[0], this.player.position[2]);
     this.carrots.sync(this.player.position[0], this.player.position[2]);
     this.rabbits.sync(this.player);
+    this.pumpkins.sync(this.player);
+    this.critters.sync(this.player, this.atmosphere.getEnv(), this.campfires);
     this._render(env, now, true);
     this.ui.update(this, dt);
   };
@@ -952,6 +1113,9 @@
     this.rabbits.update(dt, this.atmosphere.time, player, {
       env: env, carrots: this.carrots, campfires: this.campfires
     });
+    this.critters.update(dt, this.atmosphere.time, player, env, this.campfires);
+    this.pumpkins.update(dt, this.atmosphere.time, player, env);
+    this.fishing.tick(dt, player, env);
 
     // Vertical bounds: the world is tall, but not infinite in Y.
     if (player.position[1] < -16) {
@@ -992,6 +1156,8 @@
       this.achievementClock = 2;
       this._evaluateAchievements();
     }
+    this.quests.update(this, dt);
+    this.fishing.updateParticles(dt);
 
     if (this.autosaveClock <= 0) this.saveGame(false);
 
@@ -1006,6 +1172,7 @@
   Game.prototype._collectLights = function (env) {
     var lights = this.lights;
     lights.length = 0;
+    this.pumpkins.collectLights(this.player, lights);
     this.campfires.collectLights(this.player, lights);
     // Hand lantern: a soft moving pool of light around the keeper.
     var dark = env.night || env.rain > 0.5 || env.fog > 0.56;
@@ -1032,6 +1199,9 @@
     this.carrots.build(b, this.player, time, this.settings.reduceMotion);
     this.campfires.build(b, time, this.player, this.settings.reduceMotion);
     this.rabbits.build(b, time, this.player, this.settings.reduceMotion);
+    this.pumpkins.build(b, time, this.player, this.settings.reduceMotion, env);
+    this.critters.build(b, time, this.player, this.settings.reduceMotion);
+    this.fishing.build(b, time, this.player, env);
     this._buildGatherMarkers(b, time);
     return b;
   };
@@ -1056,7 +1226,8 @@
   Game.prototype._mergeParticles = function () {
     var out = [];
     var cap = this.settings.quality >= 2 ? 900 : this.settings.quality >= 1 ? 620 : 380;
-    var groups = [this.campfires.particles, this.atmosphere.particles, this.rabbits.particles, this.player.footParticles];
+    var groups = [this.campfires.particles, this.atmosphere.particles, this.rabbits.particles,
+      this.critters.particles, this.fishing.particles, this.player.footParticles];
     for (var g = 0; g < groups.length; g++) {
       var list = groups[g];
       for (var i = 0; i < list.length && out.length < cap; i++) {
@@ -1102,6 +1273,8 @@
     this.campfires.sync(x, z);
     this.carrots.sync(x, z);
     this.rabbits.sync(this.player);
+    this.pumpkins.sync(this.player);
+    this.critters.sync(this.player, this.atmosphere.getEnv(), this.campfires);
     this.renderer.syncChunks(this.world);
     this.ui.toast('✨ Teleported to ' + x.toFixed(1) + ', ' + y.toFixed(1) + ', ' + z.toFixed(1), 'info', 2.4);
   };

@@ -170,6 +170,7 @@
     if (code === 'Digit3') { this.onAction('slot', 3); return; }
     if (code === 'Digit4') { this.onAction('slot', 4); return; }
     if (code === 'Digit5') { this.onAction('slot', 5); return; }
+    if (code === 'Digit6') { this.onAction('slot', 6); return; }
     if (code === 'Tab') { this.onAction('map'); return; }
   };
 
