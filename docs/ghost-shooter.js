@@ -1144,15 +1144,19 @@
     stopBtn.onclick = stopGame;
     box.appendChild(stopBtn);
 
-    var back = el('button', '', '⛏️ Back to Maze');
-    back.onclick = function () {
-      stopGame();
-      if (window.SpookyTabs) window.SpookyTabs.select(0);
-    };
-    box.appendChild(back);
-
     return box;
   }
+
+  // The host Tabs component supplies the Back to Maze button. Stop the
+  // animation whenever the user leaves the panel so it cannot keep running
+  // invisibly in the background.
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var b = t.closest('button');
+    if (t.closest('.tabbtn') || t.closest('.panel-close') ||
+        (b && b.textContent.indexOf('Back to Maze') >= 0)) stopGame();
+  }, true);
 
   window.SpookyGhostShooter = { build: build, start: startGame, stop: stopGame };
 })();
