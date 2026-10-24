@@ -18,13 +18,19 @@
   VOX.ice = { key: 'ice', name: 'Ice', emoji: '🧊', color: '#9fd8ff', hp: 2, gold: 0, xp: 1, tier: 0 };
   VOX.vine = { key: 'vine', name: 'Vine', emoji: '🌿', color: '#3f9142', hp: 1, gold: 0, xp: 0, tier: 0, leafy: true };
   VOX.glowcrystal = { key: 'glowcrystal', name: 'Glow Crystal', emoji: '🔮', color: '#c98fff', hp: 4, gold: 22, xp: 26, tier: 1, emis: 1 };
+  VOX.birch = { key: 'birch', name: 'Birch Bark', emoji: '🪵', color: '#d8d2c0', hp: 2, gold: 1, xp: 2, tier: 0 };
+  VOX.birchleaves = { key: 'birchleaves', name: 'Birch Leaves', emoji: '🍃', color: '#9fbe61', hp: 1, gold: 0, xp: 0, tier: 0, leafy: true };
+  VOX.redwood = { key: 'redwood', name: 'Redwood Bark', emoji: '🪵', color: '#5b2a1e', hp: 3, gold: 2, xp: 3, tier: 0 };
+  VOX.redwoodleaves = { key: 'redwoodleaves', name: 'Redwood Needles', emoji: '🌲', color: '#1f5c3a', hp: 1, gold: 0, xp: 0, tier: 0, leafy: true };
+  VOX.moss = { key: 'moss', name: 'Moon Moss', emoji: '🟩', color: '#3f7a42', hp: 1, gold: 0, xp: 0, tier: 0 };
+  VOX.glowshroom = { key: 'glowshroom', name: 'Glow Shroom', emoji: '🍄', color: '#7df9ff', hp: 1, gold: 3, xp: 3, tier: 0, emis: 1 };
 
   /* Per-world physics + mood. Frost is slippery, Crystal is floaty. */
   var PHYS = [
     { name: 'Forest', grav: 22, jump: 7.6, grip: 1, day: true, fog: [0.53, 0.71, 0.88], fogR: [20, 70] },
     { name: 'Deep Mine', grav: 22, jump: 7.6, grip: 1, day: false, fog: [0.02, 0.01, 0.04], fogR: [6, 30] },
     { name: 'Frost Depths', grav: 22, jump: 7.6, grip: 0.14, day: true, fog: [0.75, 0.83, 0.92], fogR: [18, 60] },
-    { name: 'Crystal Caverns', grav: 9, jump: 7.0, grip: 1, day: false, fog: [0.09, 0.03, 0.16], fogR: [8, 34] }
+    { name: 'Crystal Caverns', grav: 9, jump: 7.0, grip: 1, day: false, fly: true, fog: [0.09, 0.03, 0.16], fogR: [12, 58] }
   ];
   /* Portal ring: each world gates forward/back through all four worlds. */
   function portalTargets(w) { return [(w + 1) % 4, (w + 3) % 4]; }
@@ -76,7 +82,10 @@
     grass: [0, 0.92, 0, 0], dirt: [0, 0.95, 0, 0], stone: [0.05, 0.8, 0, 0],
     wood: [0, 0.72, 0.18, 0], leaves: [0, 0.9, 0, 0], bedrock: [0.12, 0.95, 0, 0],
     lava: [0, 0.4, 0, 1.2], torchcube: [0, 0.5, 0, 1.5], snow: [0, 0.55, 0.4, 0],
-    ice: [0.18, 0.12, 0.65, 0], vine: [0, 0.9, 0, 0], glowcrystal: [0.35, 0.22, 0.45, 1.0]
+    ice: [0.18, 0.12, 0.65, 0], vine: [0, 0.9, 0, 0], glowcrystal: [0.35, 0.22, 0.45, 1.0],
+    birch: [0, 0.78, 0.05, 0], birchleaves: [0, 0.92, 0, 0],
+    redwood: [0, 0.68, 0.2, 0], redwoodleaves: [0, 0.88, 0, 0],
+    moss: [0, 0.97, 0, 0], glowshroom: [0.2, 0.3, 0.2, 1.1]
   };
   S.ORES.forEach(function (o) {
     if (!PBR[o.key]) PBR[o.key] = [o.tier >= 2 ? 0.55 : 0.12, Math.max(0.2, 0.6 - o.tier * 0.12), o.tier >= 3 ? 0.5 : 0, 0];
@@ -164,10 +173,11 @@
       meta: (old && world === undefined) ? old.m : { gold: 0, coal: 0, level: 1, xp: 0, pickIdx: 0, ach: {} },
       pack: 0, packCap: 50, sellValue: 0,
       px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, vxh: 0, vzh: 0, yaw: 0, pitch: 0, onGround: false,
-      blocks: {}, torches: [], W: 0, H: 0, D: 0,
+      blocks: {}, torches: [], W: 0, H: 0, D: 0, infinite: false,
+      forestHeight: {}, forestLoaded: {}, forestNoise: null, forestChunkCX: null, forestChunkCZ: null,
       dmg: {}, chunks: null, glow: null, state: 'title',
       third: false, swingT: 1, parts: [], dayT: 0.12,
-      mobs: [], mobT: 5, kills: 0, apples: 0, wood: 0,
+      mobs: [], ambientBats: [], mobT: 5, kills: 0, apples: 0, wood: 0,
       torchesInv: 4, fallPeak: null, stats: null,
       gates: [], gateHinted: {}, gateCD: 0,
       portals: [], portalNet: loadPortalNet(), portalCD: 0,
@@ -206,8 +216,16 @@
   // ---------- world gen ----------
   function K(x, y, z) { return x + ',' + y + ',' + z; }
   function get(x, y, z) {
-    if (x < 0 || z < 0 || y < 0 || x >= G.W || z >= G.D || y >= G.H) return 'bedrock';
+    if (y < 0) return 'bedrock';
+    if (G.infinite) {
+      if (y >= G.H) return null;
+      return G.blocks[K(x, y, z)] || null;
+    }
+    if (x < 0 || z < 0 || x >= G.W || z >= G.D || y >= G.H) return 'bedrock';
     return G.blocks[K(x, y, z)] || null;
+  }
+  function leafyKey(key) {
+    return key === 'leaves' || key === 'vine' || key === 'birchleaves' || key === 'redwoodleaves';
   }
   function solidAt(x, y, z) { return get(x, y, z) !== null; }
 
@@ -250,10 +268,181 @@
   // note: only keys present in S.ORES are rolled here
 
   function groundY(x, z) {
+    if (G.infinite) {
+      x = Math.floor(x); z = Math.floor(z);
+      ensureForestChunk(Math.floor(x / CH), Math.floor(z / CH));
+      return (G.forestHeight[x + ',' + z] || 2) + 1;
+    }
     for (var y = Math.min(G.H - 1, 20); y >= 0; y--) {
       if (G.blocks[K(Math.floor(x), y, Math.floor(z))]) return y + 1;
     }
     return 1;
+  }
+
+  /* ---- Endless forest: deterministic 16 x 16 columns, streamed around you ---- */
+  var FOREST_STREAM = 3; // chunks in each direction
+  function forestPut(x, y, z, key, force) {
+    if (y < 0 || y >= G.H) return;
+    var kk = K(x, y, z);
+    if (force || !G.blocks[kk]) G.blocks[kk] = key;
+  }
+  function ensureForestChunk(cx, cz) {
+    if (!G.infinite) return;
+    var ck = cx + ',' + cz;
+    if (G.forestLoaded[ck]) return;
+    G.forestLoaded[ck] = true;
+    var rng = new S.SeededRNG((G.seed + cx * 374761393 + cz * 668265263) | 0);
+    var noise = G.forestNoise;
+    var baseX = cx * CH, baseZ = cz * CH;
+    var lx, lz, y, x, z;
+    for (lx = 0; lx < CH; lx++) for (lz = 0; lz < CH; lz++) {
+      x = baseX + lx; z = baseZ + lz;
+      var n1 = noise(x * 0.052, z * 0.052);
+      var n2 = noise(x * 0.17 + 41, z * 0.17 - 23);
+      var h = 3 + Math.floor(n1 * 9 + n2 * 4);
+      if (h > 18) h = 18;
+      if (h < 3) h = 3;
+      G.forestHeight[x + ',' + z] = h;
+      for (y = 0; y <= h; y++) {
+        var key;
+        if (y === 0) key = 'bedrock';
+        else if (y === h) key = (n2 > 0.74 ? 'moss' : 'grass');
+        else if (y >= h - 2) key = 'dirt';
+        else {
+          var roll = rng.nextDouble();
+          if (roll < 0.035 && y < h - 4) key = 'coal';
+          else if (roll < 0.052 && y < h - 5) key = 'iron';
+          else if (roll < 0.060 && y < h - 6) key = 'gold';
+          else key = 'stone';
+        }
+        G.blocks[K(x, y, z)] = key;
+      }
+    }
+    // Trees stay four blocks inside the chunk, so their crowns never spill
+    // into an ungenerated neighbour.
+    var trees = rng.nextInt(4);
+    for (var tr = 0; tr < trees; tr++) {
+      var tx = baseX + 4 + rng.nextInt(8);
+      var tz = baseZ + 4 + rng.nextInt(8);
+      var th = G.forestHeight[tx + ',' + tz] || 4;
+      if (G.blocks[K(tx, th + 1, tz)]) continue;
+      var species = rng.nextInt(6);
+      if (species === 3) { tx = Math.min(tx, 10); tz = Math.min(tz, 10); }
+      var height = 10 + rng.nextInt(7);
+      if (species === 0) height = 14 + rng.nextInt(11);       // towering spruce
+      else if (species === 1) height = 8 + rng.nextInt(6);    // broad oak
+      else if (species === 2) height = 10 + rng.nextInt(7);   // pale birch
+      else if (species === 3) height = 20 + rng.nextInt(7);   // giant redwood
+      else if (species === 4) height = 6 + rng.nextInt(6);    // hollow dead tree
+      else height = 9 + rng.nextInt(6);                       // glow grove
+      height = Math.min(height, G.H - th - 3);
+      var bark = species === 2 ? 'birch' : (species === 0 || species === 3 ? 'redwood' : 'wood');
+      var leaf = species === 2 ? 'birchleaves' : (species === 0 || species === 3 ? 'redwoodleaves' : 'leaves');
+      if (species === 3) {
+        forestPut(tx, th, tz, bark, true); forestPut(tx + 1, th, tz, bark, true);
+        forestPut(tx, th, tz + 1, bark, true); forestPut(tx + 1, th, tz + 1, bark, true);
+        for (var sy = 1; sy <= height; sy++) {
+          forestPut(tx, th + sy, tz, bark, true); forestPut(tx + 1, th + sy, tz, bark, true);
+          forestPut(tx, th + sy, tz + 1, bark, true); forestPut(tx + 1, th + sy, tz + 1, bark, true);
+        }
+      } else {
+        for (var ty = 1; ty <= height; ty++) forestPut(tx, th + ty, tz, bark, true);
+      }
+      var top = th + height;
+      if (species === 4) {
+        // bare crooked branches and a lantern-like glow at the base
+        for (var br = 0; br < 3; br++) {
+          var bd = br * 2 + 2, ba = rng.nextDouble() * Math.PI * 2;
+          for (var bl = 1; bl <= 4; bl++) {
+            forestPut(tx + Math.round(Math.cos(ba) * bl), th + bd + Math.round(bl * 0.35), tz + Math.round(Math.sin(ba) * bl), bark, true);
+          }
+        }
+        forestPut(tx + 1, th + 1, tz, 'glowshroom', true);
+      } else if (species === 0 || species === 3) {
+        var maxR = species === 3 ? 4 : 3;
+        for (var ly = 0; ly <= height - 2; ly++) {
+          var layerY = th + 3 + ly;
+          if (layerY > top + 1) break;
+          var rr = Math.max(0, Math.min(maxR, Math.floor((height - ly) / 4)));
+          for (var dx = -rr; dx <= rr; dx++) for (var dz = -rr; dz <= rr; dz++) {
+            if (dx * dx + dz * dz > rr * rr + 1) continue;
+            forestPut(tx + dx, layerY, tz + dz, leaf);
+          }
+        }
+      } else if (species === 2) {
+        for (var by = -2; by <= 2; by++) {
+          var br2 = 2 - Math.abs(by);
+          for (var bx = -br2; bx <= br2; bx++) for (var bz = -br2; bz <= br2; bz++) {
+            if (bx * bx + bz * bz > br2 * br2 + 1) continue;
+            forestPut(tx + bx, top + by, tz + bz, leaf);
+          }
+        }
+      } else {
+        for (var oy = -2; oy <= 2; oy++) {
+          var or = 3 - Math.abs(oy);
+          for (var ox = -or; ox <= or; ox++) for (var oz = -or; oz <= or; oz++) {
+            if (ox * ox + oz * oz > or * or + 1) continue;
+            forestPut(tx + ox, top + oy, tz + oz, leaf);
+          }
+        }
+        if (species === 5) forestPut(tx + 2, th + 2, tz, 'glowshroom', true);
+      }
+    }
+    // small ground finds: mushrooms, pumpkins, fallen logs and boulders
+    for (var d = 0; d < 7; d++) {
+      var dx2 = baseX + 1 + rng.nextInt(CH - 2), dz2 = baseZ + 1 + rng.nextInt(CH - 2);
+      var dh = G.forestHeight[dx2 + ',' + dz2];
+      if (dh === undefined || G.blocks[K(dx2, dh + 1, dz2)]) continue;
+      var dr = rng.nextDouble();
+      if (dr < 0.26) forestPut(dx2, dh + 1, dz2, 'glowshroom');
+      else if (dr < 0.40) forestPut(dx2, dh + 1, dz2, 'pumpkin');
+      else if (dr < 0.55) {
+        var ll = 2 + rng.nextInt(3);
+        for (var li = 0; li < ll; li++) forestPut(dx2 + li, dh + 1, dz2, 'wood');
+      } else if (dr < 0.70) {
+        forestPut(dx2, dh + 1, dz2, 'stone');
+        forestPut(dx2 + 1, dh + 1, dz2, 'stone');
+        forestPut(dx2, dh + 2, dz2, 'stone');
+      }
+    }
+  }
+  function ensureForestAround(px, pz, radius) {
+    if (!G.infinite) return;
+    var cx = Math.floor(px / CH), cz = Math.floor(pz / CH);
+    radius = radius === undefined ? FOREST_STREAM : radius;
+    for (var dx = -radius; dx <= radius; dx++)
+      for (var dz = -radius; dz <= radius; dz++)
+        ensureForestChunk(cx + dx, cz + dz);
+  }
+  function disposeChunk(ch) {
+    if (!ch) return;
+    ['op', 'tr'].forEach(function (g) {
+      if (!ch[g]) return;
+      ['pos', 'col', 'sun', 'mat', 'lamp', 'nrm'].forEach(function (n) {
+        if (ch[g][n] && ch[g][n].b) gl.deleteBuffer(ch[g][n].b);
+      });
+    });
+  }
+  function syncForestChunks(force) {
+    if (!G.infinite) return;
+    var cx = Math.floor(G.px / CH), cz = Math.floor(G.pz / CH);
+    if (!force && G.forestChunkCX === cx && G.forestChunkCZ === cz && G.chunks) return;
+    G.forestChunkCX = cx; G.forestChunkCZ = cz;
+    ensureForestAround(G.px, G.pz, FOREST_STREAM);
+    if (!G.chunks) G.chunks = {};
+    var wanted = {}, maxCY = Math.ceil(G.H / CH);
+    for (var dx = -FOREST_STREAM; dx <= FOREST_STREAM; dx++) {
+      for (var dz = -FOREST_STREAM; dz <= FOREST_STREAM; dz++) {
+        for (var cy = 0; cy < maxCY; cy++) {
+          var key = chunkKey(cx + dx, cy, cz + dz);
+          wanted[key] = true;
+          if (!G.chunks[key]) G.chunks[key] = buildChunk(cx + dx, cy, cz + dz);
+        }
+      }
+    }
+    for (var old in G.chunks) {
+      if (!wanted[old]) { disposeChunk(G.chunks[old]); delete G.chunks[old]; }
+    }
   }
   var GATE_COLORS = [[1, 0.35, 0.9], [0.3, 0.9, 1], [0.55, 0.85, 1], [0.75, 0.45, 1]];
   /* Portal gates: two per world, stepping through travels the ring.
@@ -275,8 +464,8 @@
       G.gates.push({ x: hx + 2.5, y: 2, z: hz + 0.5, to: tos[1] });
       if (G.world === 3) {
         var rng = new S.SeededRNG(G.seed + 555);
-        for (i = 0; i < 10; i++) {
-          G.torches.push({ x: 2 + rng.nextDouble() * (G.W - 4), y: 3 + rng.nextDouble() * 4, z: 2 + rng.nextDouble() * (G.D - 4) });
+        for (i = 0; i < 22; i++) {
+          G.torches.push({ x: 2 + rng.nextDouble() * (G.W - 4), y: 2 + rng.nextDouble() * (G.H - 5), z: 2 + rng.nextDouble() * (G.D - 4) });
         }
       }
     }
@@ -405,56 +594,24 @@
   function genWorld() {
     var rng = new S.SeededRNG(G.seed + G.world * 131071);
     var noise = S.makeNoise2D(G.seed + G.world * 977);
-    G.blocks = {}; G.torches = [];
+    G.blocks = {}; G.torches = []; G.infinite = false; G.ambientBats = [];
     if (G.world === 0) {
-      G.W = 48; G.H = 12; G.D = 48; // tall enough for full tree crowns
-      var hmap = [];
-      for (var x = 0; x < G.W; x++) for (var z = 0; z < G.D; z++) {
-        var h = 2 + Math.floor(noise(x * 0.08, z * 0.08) * 4);
-        hmap[x * G.D + z] = h;
-        for (var y = 0; y <= h; y++) {
-          var key;
-          if (y === h) key = 'grass';
-          else if (y >= h - 2) key = BAND.dirt[rng.nextInt(BAND.dirt.length)];
-          else {
-            var t = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'coal', 'iron', 'gold'].indexOf(o.key) >= 0; }));
-            key = t.key;
-          }
-          G.blocks[K(x, y, z)] = key;
-        }
-      }
-      // trees
-      var placed = 0, guard = 0;
-      while (placed < 14 && guard++ < 200) {
-        var tx = 4 + rng.nextInt(G.W - 8), tz = 4 + rng.nextInt(G.D - 8);
-        if (Math.abs(tx - G.W / 2) < 5 && Math.abs(tz - G.D / 2) < 5) continue;
-        var th = hmap[tx * G.D + tz];
-        var i, j, k;
-        for (i = 1; i <= 4; i++) G.blocks[K(tx, th + i, tz)] = 'wood';
-        for (i = -2; i <= 2; i++) for (j = 0; j <= 1; j++) for (k = -2; k <= 2; k++) {
-          if (Math.abs(i) + Math.abs(k) + j > 4) continue;
-          var kk = K(tx + i, th + 4 + j, tz + k);
-          if (!G.blocks[kk]) G.blocks[kk] = 'leaves';
-        }
-        G.blocks[K(tx, th + 6, tz)] = 'leaves';
-        placed++;
-      }
-      var sh = hmap[(G.W / 2 | 0) * G.D + (G.D / 2 | 0)];
-      G.px = G.W / 2 + 0.5; G.pz = G.D / 2 + 0.5; G.py = sh + 1.01;
-      // shallow worm tunnels under the hills (coal-lined hideouts)
-      for (var w = 0; w < 3; w++) {
-        carveWorm(rng, 8 + rng.nextInt(G.W - 16), 1, 8 + rng.nextInt(G.D - 16), 22, 0);
-      }
-      // hanging vines under dense canopies
-      for (var vx = 2; vx < G.W - 2; vx++) for (var vz = 2; vz < G.D - 2; vz++) {
-        if (G.blocks[K(vx, 6, vz)] === 'leaves' && !G.blocks[K(vx, 5, vz)] && rng.nextDouble() < 0.25) {
-          var vl = 1 + rng.nextInt(3);
-          for (var vy = 0; vy < vl; vy++) {
-            if (G.blocks[K(vx, 5 - vy, vz)]) break;
-            G.blocks[K(vx, 5 - vy, vz)] = 'vine';
-          }
-        }
-      }
+      // Endless forest: only the home 64 x 64 area is pre-generated. Chunks
+      // stream in deterministically as the player walks, so there is no wall,
+      // no edge and no loading screen.
+      G.infinite = true;
+      G.W = 64; G.H = 48; G.D = 64;
+      G.forestHeight = {}; G.forestLoaded = {};
+      G.forestNoise = S.makeNoise2D(G.seed + 7077);
+      G.px = 32.5; G.pz = 32.5;
+      ensureForestAround(G.px, G.pz, 2);
+      var spawnTop = G.forestHeight['32,32'];
+      G.py = (spawnTop === undefined ? 4 : spawnTop) + 1.01;
+      // two warm lanterns and a shallow coal seam under the first clearing
+      G.torches.push({ x: G.px + 2.5, y: G.py + 0.35, z: G.pz + 2.5 });
+      G.torches.push({ x: G.px - 3.5, y: G.py + 0.35, z: G.pz - 1.5 });
+      carveWorm(rng, 28, 1, 28, 18, 0);
+      carveWorm(rng, 36, 1, 34, 18, 0);
     } else if (G.world === 2) {
       // Frost Depths: snowy surface, ice sheets, snow pines, slippery everywhere
       G.W = 48; G.H = 12; G.D = 48;
@@ -559,29 +716,42 @@
         }
       }
     } } else {
-      // Crystal Caverns: big glowing caverns, rich crystal veins, floaty air
-      G.W = 36; G.H = 11; G.D = 36;
-      for (var gx = 0; gx < G.W; gx++) for (var gz = 0; gz < G.D; gz++) for (var gy = 0; gy <= 9; gy++) {
+      // Crystal Caverns: a 64 x 24 x 64 multi-level geode you can fly through.
+      G.W = 64; G.H = 24; G.D = 64;
+      for (var gx = 0; gx < G.W; gx++) for (var gz = 0; gz < G.D; gz++) for (var gy = 0; gy <= G.H - 2; gy++) {
         if (gy === 0) { G.blocks[K(gx, gy, gz)] = 'bedrock'; continue; }
-        var gcv = noise(gx * 0.12, gz * 0.12 + gy * 0.3);
-        if (gcv < 0.45 && gy > 1 && gy < 9) continue; // wide caverns
-        var gkey, gdepth = 9 - gy;
-        if (gy === 1 && noise(gx * 0.3 + 9, gz * 0.3) > 0.78) gkey = 'lava';
-        else if (gdepth <= 3) gkey = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'coal', 'iron', 'crystal'].indexOf(o.key) >= 0; })).key;
-        else gkey = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'emerald', 'diamond', 'crystal', 'lapis'].indexOf(o.key) >= 0; })).key;
-        if (rng.nextDouble() < 0.04) gkey = 'glowcrystal';
+        var gcv = noise(gx * 0.075, gz * 0.075 + gy * 0.23) * 0.72 +
+          noise(gx * 0.19 + 31, gz * 0.19 + gy * 0.42) * 0.28;
+        var shelf = noise(gx * 0.055 + 90, gz * 0.055 + gy * 0.11);
+        if (gcv < 0.46 && gy > 1 && gy < G.H - 2) continue;
+        if (shelf > 0.74 && gy > 4 && gy < G.H - 5 && gcv < 0.6) continue;
+        var gkey, gdepth = G.H - 1 - gy;
+        if (gy === 1 && noise(gx * 0.3 + 9, gz * 0.3) > 0.84) gkey = 'lava';
+        else if (gdepth <= 4) gkey = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'coal', 'iron', 'crystal'].indexOf(o.key) >= 0; })).key;
+        else gkey = pickOre(rng, S.ORES.filter(function (o) { return ['stone', 'emerald', 'diamond', 'crystal', 'lapis', 'frost'].indexOf(o.key) >= 0; })).key;
+        if (rng.nextDouble() < 0.055) gkey = 'glowcrystal';
         G.blocks[K(gx, gy, gz)] = gkey;
       }
       var ccx = G.W >> 1, ccz = G.D >> 1;
-      for (var csx = 0; csx < 2; csx++) for (var csz = 0; csz < 2; csz++)
-        for (var cti = 1; cti <= 9; cti++) delete G.blocks[K(ccx + csx, cti, ccz + csz)];
-      var chx, chy, chz;
-      for (chx = -2; chx <= 3; chx++) for (chz = -2; chz <= 3; chz++) for (chy = 1; chy <= 4; chy++) {
-        if (chx >= 0 && chx < 2 && chz >= 0 && chz < 2 && chy <= 9) continue;
+      // Central launch cavern with a tall chimney up through the geode.
+      for (var chx = -4; chx <= 5; chx++) for (var chz = -4; chz <= 5; chz++) for (var chy = 1; chy <= 10; chy++) {
         delete G.blocks[K(ccx + chx, chy, ccz + chz)];
       }
-      for (var cw = 0; cw < 8; cw++) {
-        carveWorm(rng, ccx + (rng.nextDouble() - 0.5) * 6, 3, ccz + (rng.nextDouble() - 0.5) * 6, 70 + rng.nextInt(50), 2);
+      for (var csx = 0; csx < 2; csx++) for (var csz = 0; csz < 2; csz++)
+        for (var cti = 1; cti <= 18; cti++) delete G.blocks[K(ccx + csx, cti, ccz + csz)];
+      // Glowing geode clusters embedded in the rock.
+      for (var gg = 0; gg < 28; gg++) {
+        var gcx = 3 + rng.nextInt(G.W - 6), gcy = 2 + rng.nextInt(G.H - 5), gcz = 3 + rng.nextInt(G.D - 6);
+        for (var gdx = -1; gdx <= 1; gdx++) for (var gdy = -1; gdy <= 1; gdy++) for (var gdz = -1; gdz <= 1; gdz++) {
+          var gk = K(gcx + gdx, gcy + gdy, gcz + gdz);
+          if (G.blocks[gk] && G.blocks[gk] !== 'bedrock' && rng.nextDouble() < 0.55) G.blocks[gk] = 'glowcrystal';
+        }
+      }
+      // Branching worm tunnels at several altitudes; R/X/Space fly lets you
+      // follow them vertically instead of being trapped on one ledge.
+      for (var cw = 0; cw < 14; cw++) {
+        carveWorm(rng, ccx + (rng.nextDouble() - 0.5) * 18, 3 + rng.nextInt(14),
+          ccz + (rng.nextDouble() - 0.5) * 18, 80 + rng.nextInt(90), 2);
       }
       G.px = ccx + 1; G.pz = ccz + 1; G.py = 2.05;
     }
@@ -610,10 +780,15 @@
   }
   function opaqueAt(x, y, z) {
     var b = get(x, y, z);
-    return b !== null && b !== 'leaves' && b !== 'vine';
+    return b !== null && !leafyKey(b);
   }
   function skyLight(x, y, z) {
     if (G.world === 1 || G.world === 3) return 0;
+    if (G.infinite) {
+      var top = G.forestHeight[x + ',' + z];
+      if (top === undefined || y >= top) return 1.0;
+      return 0.32;
+    }
     var f = 1.0;
     for (var yy = y + 1; ; yy++) {
       if (yy >= G.H) return f; // open sky above the world (out-of-bounds is NOT rock here)
@@ -677,20 +852,21 @@
     var P = [], C = [], SN = [], TP = [], TC = [], TSN = [];
     var M = [], L = [], N = [];
     var x0 = cx * CH, y0 = cy * CH, z0 = cz * CH;
-    for (var k in G.blocks) {
-      var p = k.split(','), x = +p[0], y = +p[1], z = +p[2];
-      if (x < x0 || x >= x0 + CH || y < y0 || y >= y0 + CH || z < z0 || z >= z0 + CH) continue;
-      var key = G.blocks[k];
+    for (var lx = 0; lx < CH; lx++) for (var ly = 0; ly < CH; ly++) for (var lz = 0; lz < CH; lz++) {
+      var x = x0 + lx, y = y0 + ly, z = z0 + lz;
+      if (!G.infinite && (x >= G.W || z >= G.D || y >= G.H)) continue;
+      var key = G.blocks[K(x, y, z)];
+      if (!key) continue;
       var ore = VOX[key] || VOX.stone;
       var base = hexRGB(ore.color);
-      var leaf = key === 'leaves' || key === 'vine';
+      var leaf = leafyKey(key);
       for (var f = 0; f < 6; f++) {
         var F = FACES[f];
-        // cull only against in-bounds opaque neighbors: border faces draw
-        // so you never see through the edge of the world into the void
+        // Cull against opaque neighbours. In the endless forest a missing
+        // neighbour is air, so the border face still draws into the distance.
         var dx = F.d[0], dy = F.d[1], dz = F.d[2];
-        if (x + dx >= 0 && y + dy >= 0 && z + dz >= 0 && x + dx < G.W && y + dy < G.H && z + dz < G.D
-            && opaqueAt(x + dx, y + dy, z + dz)) continue;
+        var inBounds = x + dx >= 0 && y + dy >= 0 && z + dz >= 0 && x + dx < G.W && y + dy < G.H && z + dz < G.D;
+        if ((G.infinite || inBounds) && opaqueAt(x + dx, y + dy, z + dz)) continue;
         var nAxis = dx !== 0 ? 0 : (dy !== 0 ? 1 : 2);
         var bcell = [x + dx, y + dy, z + dz];
         var quad = [F.c[0], F.c[1], F.c[2], F.c[5]];
@@ -724,6 +900,12 @@
     };
   }
   function buildAll() {
+    if (G.infinite) {
+      G.chunks = {};
+      syncForestChunks(true);
+      buildGlow();
+      return;
+    }
     G.chunks = {};
     for (var cx = 0; cx * CH < G.W; cx++)
       for (var cy = 0; cy * CH < G.H + 2; cy++)
@@ -735,6 +917,11 @@
   function rebuildAround(x, y, z) {
     var cx = Math.floor(x / CH), cy = Math.floor(y / CH), cz = Math.floor(z / CH);
     function need(ix, iy, iz) {
+      if (G.infinite) {
+        if (iy < 0 || iy >= Math.ceil(G.H / CH)) return false;
+        G.chunks[chunkKey(ix, iy, iz)] = buildChunk(ix, iy, iz);
+        return true;
+      }
       if (ix < 0 || iy < 0 || iz < 0) return false;
       var key = chunkKey(ix, iy, iz);
       if (!G.chunks[key]) return false;
@@ -806,7 +993,7 @@
       for (i = 0; i < 90; i++) {
         x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
         var gy = -1;
-        for (y = 8; y >= 1; y--) { if (solidAt(x, y, z)) { gy = y; break; } }
+        for (y = G.H - 3; y >= 1; y--) { if (solidAt(x, y, z)) { gy = y; break; } }
         if (gy < 2) continue;
         if (G.blocks[K(x, gy, z)] === 'lava') continue;
         if (!solidAt(x, gy - 1, z) && rng.nextDouble() < 0.5) {
@@ -831,7 +1018,7 @@
       for (i = 0; i < 26; i++) {
         x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
         var cy = -1;
-        for (y = 9; y >= 2; y--) { if (solidAt(x, y, z)) { cy = y; break; } }
+        for (y = G.H - 2; y >= 2; y--) { if (solidAt(x, y, z)) { cy = y; break; } }
         if (cy < 3) continue;
         var cl = 1 + rng.nextInt(4);
         for (var c2 = 1; c2 <= cl; c2++) {
@@ -867,7 +1054,7 @@
         for (y = 1; y <= 8; y++) { if (solidAt(x, y, z)) { fy = y; break; } }
         if (fy < 2) continue;
         var top = -1;
-        for (y = 9; y >= fy; y--) { if (solidAt(x, y, z)) { top = y; break; } }
+        for (y = G.H - 3; y >= fy; y--) { if (solidAt(x, y, z)) { top = y; break; } }
         if (top < fy + 3) continue;
         var hgt = top - fy;
         var mossy = rng.nextDouble() < 0.5;
@@ -894,7 +1081,7 @@
         for (i = 0; i < 40; i++) {
           x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
           var gy3 = -1;
-          for (y = 1; y <= 8; y++) { if (solidAt(x, y, z)) { gy3 = y; break; } }
+          for (y = 1; y <= G.H - 3; y++) { if (solidAt(x, y, z)) { gy3 = y; break; } }
           if (gy3 < 1) continue;
           if (solidAt(x, gy3 + 1, z)) continue;
           var n = 1 + rng.nextInt(4);
@@ -909,7 +1096,7 @@
         for (i = 0; i < 25; i++) {
           x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
           var gy5 = -1;
-          for (y = 8; y >= 1; y--) { if (solidAt(x, y, z)) { gy5 = y; break; } }
+          for (y = G.H - 3; y >= 1; y--) { if (solidAt(x, y, z)) { gy5 = y; break; } }
           if (gy5 < 2) continue;
           if (G.blocks[K(x, gy5, z)] === 'lava') continue;
           var sh = 0.5 + rng.nextDouble() * 1.2;
@@ -921,7 +1108,7 @@
         for (i = 0; i < 20; i++) {
           x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
           var gy6 = -1;
-          for (y = 1; y <= 8; y++) { if (solidAt(x, y, z)) { gy6 = y; break; } }
+          for (y = 1; y <= G.H - 3; y++) { if (solidAt(x, y, z)) { gy6 = y; break; } }
           if (gy6 < 1) continue;
           if (solidAt(x, gy6 + 1, z)) continue;
           var ah = 0.4 + rng.nextDouble() * 0.8;
@@ -933,7 +1120,7 @@
         for (i = 0; i < 10; i++) {
           x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
           var gy9 = -1;
-          for (y = 1; y <= 8; y++) { if (solidAt(x, y, z)) { gy9 = y; break; } }
+          for (y = 1; y <= G.H - 3; y++) { if (solidAt(x, y, z)) { gy9 = y; break; } }
           if (gy9 < 1) continue;
           if (solidAt(x, gy9 + 1, z)) continue;
           var oh = 0.3 + rng.nextDouble() * 0.4;
@@ -944,7 +1131,7 @@
         for (i = 0; i < 15; i++) {
           x = 2 + rng.nextInt(G.W - 4); z = 2 + rng.nextInt(G.D - 4);
           var gy8 = -1;
-          for (y = 8; y >= 1; y--) { if (solidAt(x, y, z)) { gy8 = y; break; } }
+          for (y = G.H - 3; y >= 1; y--) { if (solidAt(x, y, z)) { gy8 = y; break; } }
           if (gy8 < 3) continue;
           if (solidAt(x, gy8 - 1, z)) continue;
           var dh = 0.3 + rng.nextDouble() * 0.6;
@@ -1262,8 +1449,10 @@
       if (!collide(G.px, G.py + dy, G.pz)) { G.py += dy; G.onGround = false; }
       else { if (dy < 0) G.onGround = true; G.vy = 0; }
     }
-    G.px = Math.max(PR, Math.min(G.W - PR, G.px));
-    G.pz = Math.max(PR, Math.min(G.D - PR, G.pz));
+    if (!G.infinite) {
+      G.px = Math.max(PR, Math.min(G.W - PR, G.px));
+      G.pz = Math.max(PR, Math.min(G.D - PR, G.pz));
+    }
   }
 
   // ---------- objectives: live goals with gold payouts ----------
@@ -1471,7 +1660,8 @@
     for (var t = 0; t < 12; t++) {
       var a = rng.nextDouble() * Math.PI * 2, r = 12 + rng.nextDouble() * 8;
       var x = Math.floor(G.px + Math.cos(a) * r), z = Math.floor(G.pz + Math.sin(a) * r);
-      if (x < 1 || z < 1 || x >= G.W - 1 || z >= G.D - 1) continue;
+      if (!G.infinite && (x < 1 || z < 1 || x >= G.W - 1 || z >= G.D - 1)) continue;
+      if (G.infinite) ensureForestChunk(Math.floor(x / CH), Math.floor(z / CH));
       var gy = -1;
       for (var y = Math.min(G.H - 1, Math.floor(G.py) + 2); y >= 0; y--) {
         if (solidAt(x, y, z)) { gy = y + 1; break; }
@@ -1555,8 +1745,10 @@
   }
   function astar(sx, sz, tx, tz, yLevel) {
     var W = G.W, D = G.D;
+    var minX = 1, minZ = 1, maxX = W - 1, maxZ = D - 1;
+    if (G.infinite) { minX = Math.floor(G.px) - 24; minZ = Math.floor(G.pz) - 24; maxX = Math.floor(G.px) + 24; maxZ = Math.floor(G.pz) + 24; }
     function walkable(x, z) {
-      if (x < 1 || z < 1 || x >= W - 1 || z >= D - 1) return false;
+      if (x < minX || z < minZ || x > maxX || z > maxZ) return false;
       return !solidAt(x, yLevel, z) && !solidAt(x, yLevel + 1, z);
     }
     if (!walkable(tx, tz)) return null;
@@ -1694,7 +1886,7 @@
     var r = 0.3, feet = wy === undefined ? G.py : wy;
     for (var ox = -1; ox <= 1; ox++) for (var oz = -1; oz <= 1; oz++) {
       var cx = Math.floor(wx) + ox, cz = Math.floor(wz) + oz;
-      if (cx < 0 || cz < 0 || cx >= G.W || cz >= G.D) continue;
+      if (!G.infinite && (cx < 0 || cz < 0 || cx >= G.W || cz >= G.D)) continue;
       // check all heights overlapped by a 1.2-tall body later; here: any solid column cell near feet
       var cy = Math.floor(feet);
       if (solidAt(cx, cy, cz) || solidAt(cx, cy + 1, cz)) {
@@ -1896,13 +2088,13 @@
     var hit = S.voxelRay(e, d, 6, solidAt);
     if (!hit) return;
     var px = hit.x + hit.nx, py = hit.y + hit.ny, pz = hit.z + hit.nz;
-    if (px < 0 || pz < 0 || py < 0 || px >= G.W || pz >= G.D || py >= G.H) return;
+    if (!G.infinite && (px < 0 || pz < 0 || py < 0 || px >= G.W || pz >= G.D || py >= G.H)) return;
     if (solidAt(px, py, pz)) return;
     m.torchesInv--;
     trackStat('torchesPlaced', 1);
     G.torches.push({ x: px + 0.5, y: py + 0.5, z: pz + 0.5 });
-    buildGlow();
-    buildAll();
+    if (G.infinite) { rebuildAround(px, py, pz); buildGlow(); }
+    else { buildGlow(); buildAll(); }
     flash('🔥 Torch placed');
     saveMeta(); renderHUD();
   }
@@ -2499,7 +2691,8 @@
       var r = 10 + rng.nextDouble() * 10;
       var x = Math.floor(G.px + Math.cos(a) * r);
       var z = Math.floor(G.pz + Math.sin(a) * r);
-      if (x < 1 || z < 1 || x >= G.W - 1 || z >= G.D - 1) continue;
+      if (!G.infinite && (x < 1 || z < 1 || x >= G.W - 1 || z >= G.D - 1)) continue;
+      if (G.infinite) ensureForestChunk(Math.floor(x / CH), Math.floor(z / CH));
       var gy = -1;
       for (var y = Math.min(G.H - 1, Math.floor(G.py) + 2); y >= 0; y--) {
         if (solidAt(x, y, z)) { gy = y + 1; break; }
@@ -2947,6 +3140,85 @@
     if (m.darkTimer > 0) m.darkTimer -= dt;
   }
 
+  // A small but readable bat: leathery body, oversized ears, glowing eyes,
+  // fangs, and two-segment membrane wings that beat as it flies.
+  function emitBat(P, C, m, bob, scale) {
+    scale = scale || 1;
+    var bx = m.x, by = m.y + bob * scale, bz = m.z;
+    var hd = (m.heading === undefined ? Math.atan2(G.px - m.x, -(G.pz - m.z)) : m.heading);
+    var fx = Math.sin(hd), fz = -Math.cos(hd);
+    var rx = Math.cos(hd), rz = Math.sin(hd);
+    var flap = Math.sin(G.time * 13 + (m.phase || 0));
+    var bodyCol = [0.22, 0.17, 0.15], wingCol = [0.16, 0.12, 0.11];
+    emitEllipsoid(P, C, bx, by, bz, 0.11 * scale, 0.17 * scale, 0.12 * scale, bodyCol, 1.2, 8, 6);
+    var hx = bx + fx * 0.12 * scale, hz = bz + fz * 0.12 * scale;
+    emitSphere(P, C, hx, by + 0.10 * scale, hz, 0.085 * scale, [0.26, 0.20, 0.17], 1.3, 8, 6);
+    // ears
+    emitCone(P, C, hx + rx * 0.045 * scale, by + 0.16 * scale, hz + rz * 0.045 * scale, 0.028 * scale, 0.095 * scale, [0.18, 0.13, 0.12], 1.2, 5);
+    emitCone(P, C, hx - rx * 0.045 * scale, by + 0.16 * scale, hz - rz * 0.045 * scale, 0.028 * scale, 0.095 * scale, [0.18, 0.13, 0.12], 1.2, 5);
+    // eyes
+    emitSphere(P, C, hx + rx * 0.04 * scale + fx * 0.03 * scale, by + 0.11 * scale, hz + rz * 0.04 * scale + fz * 0.03 * scale, 0.018 * scale, [1.0, 0.15, 0.08], 1.8, 5, 4);
+    emitSphere(P, C, hx - rx * 0.04 * scale + fx * 0.03 * scale, by + 0.11 * scale, hz - rz * 0.04 * scale + fz * 0.03 * scale, 0.018 * scale, [1.0, 0.15, 0.08], 1.8, 5, 4);
+    // fangs
+    emitBox(P, C, [hx, by + 0.07 * scale, hz], [fx, 0, fz], [0, 1, 0], [-fz, 0, fx],
+      0.012 * scale, -0.025 * scale, 0.04 * scale, 0.008 * scale, 0.045 * scale, 0.008 * scale, [0.95, 0.92, 0.82], 1.1);
+    // two-segment wings, one on each side
+    for (var side = -1; side <= 1; side += 2) {
+      var sx = rx * side, sz = rz * side;
+      emitBox(P, C, [bx, by + 0.02 * scale, bz], [sx, 0, sz], [0, 1, 0], [-sz, 0, sx],
+        0.15 * scale, 0, 0, 0.24 * scale, 0.018 * scale, 0.21 * scale, wingCol, 1.05);
+      emitBox(P, C, [bx, by + (0.03 + flap * 0.09) * scale, bz], [sx, 0, sz], [0, 1, 0], [-sz, 0, sx],
+        0.37 * scale, 0, 0, 0.27 * scale, 0.012 * scale, 0.15 * scale, [0.13, 0.10, 0.10], 1.0);
+      // wing bones
+      emitBox(P, C, [bx, by + 0.03 * scale, bz], [sx, 0, sz], [0, 1, 0], [-sz, 0, sx],
+        0.28 * scale, 0, 0, 0.30 * scale, 0.012 * scale, 0.012 * scale, [0.30, 0.22, 0.18], 1.15);
+    }
+  }
+  function spawnAmbientBat() {
+    if (!G.ambientBats) G.ambientBats = [];
+    if (G.ambientBats.length >= 8) return;
+    var a = Math.random() * Math.PI * 2, r = 5 + Math.random() * 8;
+    var x = Math.floor(G.px + Math.cos(a) * r), z = Math.floor(G.pz + Math.sin(a) * r);
+    if (G.infinite) ensureForestChunk(Math.floor(x / CH), Math.floor(z / CH));
+    var gy = -1;
+    for (var y = Math.min(G.H - 1, Math.floor(G.py) + 3); y >= 0; y--) if (solidAt(x, y, z)) { gy = y + 1; break; }
+    if (gy < 1) return;
+    var ceil = -1;
+    if (G.world === 1 || G.world === 3) {
+      for (var yy = Math.floor(gy) + 2; yy < G.H; yy++) if (solidAt(x, yy, z)) { ceil = yy; break; }
+    }
+    var hang = ceil > 0 && Math.random() < 0.45;
+    var batY = hang ? ceil - 0.35 : gy + 2.0 + Math.random() * 2.5;
+    G.ambientBats.push({ x: x + 0.5, y: batY, z: z + 0.5, cx: x + 0.5, cz: z + 0.5,
+      baseY: batY, r: 1.4 + Math.random() * 3.5, a: Math.random() * 6.28,
+      speed: 0.7 + Math.random() * 0.9, phase: Math.random() * 6.28, heading: 0, t: 0, hang: hang });
+  }
+  function updateAmbientBats(dt) {
+    if (!G.ambientBats) G.ambientBats = [];
+    var dark = G.world === 1 || G.world === 3 || (G.world === 0 && dayFactor() < 0.16);
+    if (dark && G.ambientBats.length < 7 && Math.random() < dt / 3.2) spawnAmbientBat();
+    for (var i = G.ambientBats.length - 1; i >= 0; i--) {
+      var b = G.ambientBats[i];
+      b.t += dt;
+      if (b.hang) {
+        b.y = b.baseY + Math.sin(b.t * 2.2 + b.phase) * 0.025;
+        if (Math.hypot(G.px - b.x, G.pz - b.z) < 2.4) { b.hang = false; b.baseY += 0.8; b.t = 0; }
+        continue;
+      }
+      b.a += dt * b.speed;
+      b.x = b.cx + Math.cos(b.a) * b.r;
+      b.z = b.cz + Math.sin(b.a) * b.r;
+      b.y = b.baseY + Math.sin(b.t * 2.4 + b.phase) * 0.35;
+      b.heading = Math.atan2(-Math.sin(b.a), -Math.cos(b.a));
+      if (Math.hypot(G.px - b.cx, G.pz - b.cz) > 28) { b.cx = G.px; b.cz = G.pz; }
+    }
+  }
+  function renderAmbientBats() {
+    if (!G.ambientBats || !G.ambientBats.length) return;
+    var P = [], C = [];
+    for (var i = 0; i < G.ambientBats.length; i++) emitBat(P, C, G.ambientBats[i], 0, 0.9);
+    if (P.length) drawDyn(dynP1, dynC1, P, C);
+  }
   // Render Halloween mobs
   function renderHalloweenMobs() {
     var HP = [], HC = [];
@@ -2966,13 +3238,7 @@
         emitBox(HP, HC, [m.x, m.y + bob, m.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
           0, 0.75, 0, 0.25, 0.25, 0.25, [0.95, 0.95, 0.85], 1.2);
       } else if (m.kind === 'bat') {
-        var wingSpan = 0.4 + Math.sin(G.time * 10 + m.phase) * 0.2;
-        emitBox(HP, HC, [m.x, m.y + bob, m.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
-          0, 0, 0, 0.15, 0.15, 0.15, [0.3, 0.3, 0.3], 1.2);
-        emitBox(HP, HC, [m.x, m.y + bob, m.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
-          wingSpan, 0, 0, wingSpan, 0.05, 0.2, [0.25, 0.25, 0.25], 1.1);
-        emitBox(HP, HC, [m.x, m.y + bob, m.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
-          -wingSpan, 0, 0, wingSpan, 0.05, 0.2, [0.25, 0.25, 0.25], 1.1);
+        emitBat(HP, HC, m, bob, 1);
       } else if (m.kind === 'spider') {
         emitBox(HP, HC, [m.x, m.y + bob, m.z], [1, 0, 0], [0, 1, 0], [0, 0, 1],
           0, 0.2, 0, 0.4, 0.3, 0.4, [0.2, 0.2, 0.2], 1.2);
@@ -3442,6 +3708,7 @@
       gl.disable(gl.BLEND);
     }
     renderHalloweenMobs();
+    renderAmbientBats();
     var PP = [], PC = [], AP = [], AC = [];
     for (var pi = 0; pi < G.parts.length; pi++) {
       var pt = G.parts[pi], s = 0.09;
@@ -3632,6 +3899,32 @@
     var ctx = minimapCtx;
     var W = minimapCanvas.width, H = minimapCanvas.height;
     ctx.clearRect(0, 0, W, H);
+    if (G.infinite) {
+      // A moving local map: the forest never runs out, so there is no fixed
+      // world rectangle to squeeze into 120 pixels.
+      var view = 64, half = view / 2, scale = W / view;
+      var minX = Math.floor(G.px) - half, minZ = Math.floor(G.pz) - half;
+      for (var mx = 0; mx < view; mx += 2) for (var mz = 0; mz < view; mz += 2) {
+        var wx = minX + mx, wz = minZ + mz;
+        var hh = G.forestHeight[wx + ',' + wz];
+        if (hh === undefined) continue;
+        var top = get(wx, hh + 1, wz);
+        var col = '#2f6b37';
+        if (top === 'wood' || top === 'birch' || top === 'redwood') col = '#5a3a21';
+        else if (top === 'leaves' || top === 'birchleaves' || top === 'redwoodleaves') col = '#1f4d2c';
+        else if (top === 'moss' || top === 'grass') col = '#3f8a48';
+        else if (top === 'glowshroom') col = '#7df9ff';
+        else if (hh > 13) col = '#6b7280';
+        ctx.fillStyle = col;
+        ctx.fillRect(mx * scale, mz * scale, scale * 2 + .5, scale * 2 + .5);
+      }
+      var px = (G.px - minX) * scale, pz = (G.pz - minZ) * scale;
+      ctx.fillStyle = '#ff7518';
+      ctx.beginPath(); ctx.arc(px, pz, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px, pz); ctx.lineTo(px + Math.sin(G.yaw) * 6, pz - Math.cos(G.yaw) * 6); ctx.stroke();
+      return;
+    }
     var scale = Math.min(W / G.W, H / G.D);
     var offX = (W - G.W * scale) / 2;
     var offY = (H - G.D * scale) / 2;
@@ -3662,17 +3955,17 @@
         }
       }
     }
-    var px = offX + G.px * scale;
-    var pz = offY + G.pz * scale;
+    var px2 = offX + G.px * scale;
+    var pz2 = offY + G.pz * scale;
     ctx.fillStyle = '#ff7518';
     ctx.beginPath();
-    ctx.arc(px, pz, 3, 0, Math.PI * 2);
+    ctx.arc(px2, pz2, 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(px, pz);
-    ctx.lineTo(px + Math.sin(G.yaw) * 6, pz - Math.cos(G.yaw) * 6);
+    ctx.moveTo(px2, pz2);
+    ctx.lineTo(px2 + Math.sin(G.yaw) * 6, pz2 - Math.cos(G.yaw) * 6);
     ctx.stroke();
   }
   document.getElementById('newmaze').addEventListener('click', function () {
@@ -3739,6 +4032,7 @@
   var last = 0;
   function update(dt) {
     G.time += dt;
+    syncForestChunks(false);
     var PH = PHYS[G.world] || PHYS[0];
     var prevDayT = G.dayT;
     if (PH.day) G.dayT = (G.dayT + dt / 360) % 1; // 6-minute days
@@ -3748,6 +4042,7 @@
     updateMobs(dt);
     updateGhostAI(dt);
     updateHalloween(dt);
+    updateAmbientBats(dt);
     updateGates(dt);
     updatePortals(dt);
     updateWeather(dt);
@@ -3812,7 +4107,16 @@
     trackStat('dist', Math.hypot(G.vxh, G.vzh) * dt);
     trackStat('playtime', dt);
     var climb = ((keys.r ? 1 : 0) - (keys.x ? 1 : 0));
-    if (climb !== 0) { G.vy = climb * 6; G.onGround = false; G.fallPeak = undefined; }
+    if (PH.fly) {
+      // Crystal Caverns is a true 3D playground: Space/Shift glide up/down
+      // and R/X provide precise vertical movement between ledges.
+      if (climb !== 0) G.vy = climb * 5;
+      else if (keys[' ']) G.vy = 4.2;
+      else if (keys.shift) G.vy = -3.8;
+      else G.vy += (0 - G.vy) * Math.min(1, dt * 2.5);
+      G.onGround = false;
+      G.fallPeak = undefined;
+    } else if (climb !== 0) { G.vy = climb * 6; G.onGround = false; G.fallPeak = undefined; }
     else {
       G.vy -= PH.grav * dt;
       if ((keys[' '] ) && G.onGround) { G.vy = PH.jump; G.onGround = false; }
@@ -3820,6 +4124,11 @@
     var wasAir = !G.onGround;
     if (!G.onGround) G.fallPeak = Math.max(G.fallPeak === undefined ? -99 : G.fallPeak, G.py);
     moveAxis(0, G.vy * dt, 0);
+    if (PH.fly) {
+      if (G.py < 1.02) { G.py = 1.02; G.vy = Math.max(0, G.vy); }
+      if (G.py > G.H - 1.4) { G.py = G.H - 1.4; G.vy = Math.min(0, G.vy); }
+    }
+    syncForestChunks(false);
     if (G.onGround && wasAir && G.fallPeak !== undefined && G.fallPeak > -99) {
       var drop = G.fallPeak - G.py;
       if (drop > 3.5) hurt(Math.round((drop - 3.5) * 8), 'a big fall');

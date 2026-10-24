@@ -7,10 +7,38 @@
   var S = window.Spooky;
   var WALL_H = 2.4, EYE = 1.15;
   var DEPTHS = [
-    { layer: 'Dirt Tunnels', size: 15, candies: 8, crystals: 2, ghostSpeed: 3.4, ghostThink: 0.55, wall: [0.23, 0.11, 0.37], wallTop: [0.32, 0.18, 0.48], fog: [0.04, 0.02, 0.10] },
-    { layer: 'Crystal Hollows', size: 19, candies: 12, crystals: 3, ghostSpeed: 3.8, ghostThink: 0.45, wall: [0.05, 0.29, 0.37], wallTop: [0.10, 0.40, 0.50], fog: [0.02, 0.06, 0.12] },
-    { layer: 'Magma Core', size: 23, candies: 16, crystals: 4, ghostSpeed: 4.2, ghostThink: 0.35, wall: [0.37, 0.11, 0.11], wallTop: [0.50, 0.16, 0.14], fog: [0.10, 0.03, 0.03] }
+    { layer: 'Dirt Tunnels', size: 15, candies: 8, crystals: 2, ghostSpeed: 3.4, ghostThink: 0.55, wall: [0.23, 0.11, 0.37], wallTop: [0.32, 0.18, 0.48], fog: [0.04, 0.02, 0.10], theme: 'dirt' },
+    { layer: 'Crystal Hollows', size: 19, candies: 12, crystals: 3, ghostSpeed: 3.8, ghostThink: 0.45, wall: [0.05, 0.29, 0.37], wallTop: [0.10, 0.40, 0.50], fog: [0.02, 0.06, 0.12], theme: 'crystal' },
+    { layer: 'Magma Core', size: 23, candies: 16, crystals: 4, ghostSpeed: 4.2, ghostThink: 0.35, wall: [0.37, 0.11, 0.11], wallTop: [0.50, 0.16, 0.14], fog: [0.10, 0.03, 0.03], theme: 'magma' },
+    { layer: 'Frozen Adit', size: 27, candies: 20, crystals: 5, ghostSpeed: 4.5, ghostThink: 0.30, wall: [0.10, 0.20, 0.30], wallTop: [0.18, 0.33, 0.46], fog: [0.02, 0.05, 0.10], theme: 'frost' },
+    { layer: 'Sunken Crypt', size: 31, candies: 24, crystals: 6, ghostSpeed: 4.8, ghostThink: 0.26, wall: [0.12, 0.15, 0.19], wallTop: [0.20, 0.25, 0.31], fog: [0.02, 0.035, 0.055], theme: 'crypt' }
   ];
+
+  var DEPTH_NAMES = ['Bone Orchard', 'Abyssal Vault', 'Mirror Galleries', 'Ashen Sanctum', 'Rootworks', 'Obsidian Sea', 'Clockwork Tomb', 'Hollow Choir'];
+  var DEPTH_PALETTES = [
+    { wall: [0.18, 0.13, 0.22], wallTop: [0.28, 0.22, 0.34], fog: [0.03, 0.02, 0.05], theme: 'crypt' },
+    { wall: [0.08, 0.19, 0.30], wallTop: [0.14, 0.30, 0.44], fog: [0.02, 0.05, 0.09], theme: 'frost' },
+    { wall: [0.25, 0.08, 0.30], wallTop: [0.38, 0.15, 0.44], fog: [0.06, 0.02, 0.08], theme: 'crystal' },
+    { wall: [0.32, 0.12, 0.08], wallTop: [0.46, 0.18, 0.10], fog: [0.09, 0.03, 0.02], theme: 'magma' },
+    { wall: [0.22, 0.12, 0.30], wallTop: [0.32, 0.18, 0.44], fog: [0.04, 0.02, 0.09], theme: 'dirt' }
+  ];
+  // The first five layers are hand-authored; after that the mine keeps
+  // descending procedurally, cycling palettes and growing the maze.
+  function depthCfg(d) {
+    d = Math.max(0, d | 0);
+    if (DEPTHS[d]) return DEPTHS[d];
+    var pal = DEPTH_PALETTES[(d - 5) % DEPTH_PALETTES.length];
+    var cycle = Math.floor((d - 5) / DEPTH_NAMES.length);
+    return {
+      layer: DEPTH_NAMES[(d - 5) % DEPTH_NAMES.length] + (cycle ? ' ' + (cycle + 1) : ''),
+      size: Math.min(37, 31 + (d - 5) * 2),
+      candies: Math.min(42, 22 + (d - 5) * 3),
+      crystals: Math.min(16, 7 + Math.floor((d - 5) / 2)),
+      ghostSpeed: Math.min(6.4, 4.8 + (d - 5) * 0.12),
+      ghostThink: Math.max(0.18, 0.26 - (d - 5) * 0.008),
+      wall: pal.wall, wallTop: pal.wallTop, fog: pal.fog, theme: pal.theme
+    };
+  }
 
   var canvas = document.getElementById('game3d');
 
@@ -735,7 +763,7 @@
   }
 
   function fxRenderWorldGlow() {
-    var cfg = DEPTHS[G.depth];
+    var cfg = depthCfg(G.depth);
     gl.useProgram(worldProg);
     gl.uniform1f(gl.getUniformLocation(worldProg, 'uTime'), FX.time);
     gl.uniform1f(gl.getUniformLocation(worldProg, 'uAmbientGlow'), 0.1 + Math.sin(FX.time * 2) * 0.05);
@@ -749,7 +777,7 @@
   }
 
   function fxRenderFogDensity() {
-    var cfg = DEPTHS[G.depth];
+    var cfg = depthCfg(G.depth);
     var fogDensity = 0.5 + Math.sin(FX.time * 0.5) * 0.2;
     gl.useProgram(worldProg);
     gl.uniform1f(gl.getUniformLocation(worldProg, 'uFogDensity'), fogDensity);
@@ -2452,12 +2480,42 @@
       g.beginPath(); g.moveTo(32, 8); g.lineTo(39, 30); g.lineTo(25, 30); g.closePath(); g.fill();
       g.fillStyle = '#ffd166';
       g.beginPath(); g.moveTo(28, 38); g.lineTo(36, 38); g.lineTo(44, 52); g.lineTo(20, 52); g.closePath(); g.fill();
+    } else if (kind.indexOf('bat') === 0) {
+      // Three wing-beat frames: up, level, down. The sprite stays readable
+      // against both torchlight and the near-black mine fog.
+      var fr = Math.max(0, Math.min(2, +kind.slice(3) || 0));
+      var tipY = [10, 22, 42][fr], lowY = [44, 45, 50][fr];
+      var body = '#2b211d', membrane = '#3b2a23', bone = '#6a4a36';
+      g.fillStyle = membrane;
+      g.strokeStyle = bone; g.lineWidth = 2.2;
+      for (var sd = -1; sd <= 1; sd += 2) {
+        g.beginPath();
+        g.moveTo(32, 29);
+        g.quadraticCurveTo(sd < 0 ? 19 : 45, tipY + 2, sd < 0 ? 5 : 59, tipY);
+        g.quadraticCurveTo(sd < 0 ? 13 : 51, 34, sd < 0 ? 10 : 54, lowY);
+        g.quadraticCurveTo(sd < 0 ? 22 : 42, 41, 32, 37);
+        g.closePath(); g.fill(); g.stroke();
+        g.beginPath(); g.moveTo(32, 30); g.lineTo(sd < 0 ? 8 : 56, lowY - 1); g.stroke();
+      }
+      g.fillStyle = body;
+      g.beginPath(); g.ellipse(32, 34, 6.5, 10, 0, 0, 7); g.fill();
+      g.beginPath(); g.arc(32, 23, 6.5, 0, 7); g.fill();
+      // ears
+      g.beginPath(); g.moveTo(27, 19); g.lineTo(25, 8); g.lineTo(32, 16); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(37, 19); g.lineTo(39, 8); g.lineTo(32, 16); g.closePath(); g.fill();
+      // eyes and fangs
+      g.fillStyle = '#ff3b30';
+      g.beginPath(); g.arc(29, 23, 1.4, 0, 7); g.fill();
+      g.beginPath(); g.arc(35, 23, 1.4, 0, 7); g.fill();
+      g.fillStyle = '#f6f0dc';
+      g.beginPath(); g.moveTo(30, 28); g.lineTo(32, 34); g.lineTo(34, 28); g.closePath(); g.fill();
     }
     return glTex(c, false);
   }
   var TEX = { ghost: makeArt('ghost'), candy: makeArt('candy'), gem: makeArt('gem'),
     relic: makeArt('relic'), pond: makeArt('pond'), torch: makeArt('torch'),
-    lollipop: makeArt('lollipop'), choco: makeArt('choco'), gummy: makeArt('gummy'), corn: makeArt('corn') };
+    lollipop: makeArt('lollipop'), choco: makeArt('choco'), gummy: makeArt('gummy'), corn: makeArt('corn'),
+    bat0: makeArt('bat0'), bat1: makeArt('bat1'), bat2: makeArt('bat2') };
 
   var brickHeights = {};
   /* Procedural masonry at 128px: crisp mortar joints; tint comes from vertex
@@ -2482,11 +2540,15 @@
         if (depth === 1 && rng.nextDouble() < 0.015) v = 1.3; // crystal flecks
         if (depth === 2 && ((x * 7 + y * 13) % 61) < 3) v = 1.35; // lava cracks
         else if (depth === 2 && !mortar) v *= 0.82; // dark basalt
+        if (depth === 3 && rng.nextDouble() < 0.018) v = 1.28; // ice glints
+        if (depth === 4 && ((x * 11 + y * 3) % 83) < 2) v = 1.22; // phosphor veins
       } else if (kind === 'floor') {
         v = (((x >> 5) + (y >> 5)) % 2) ? 0.5 : 0.62;
         v *= 0.9 + rng.nextDouble() * 0.2;
         if (depth === 1 && rng.nextDouble() < 0.01) v = 1.25;
         if (depth === 2 && ((x * 5 + y * 11) % 71) < 2) v = 1.3;
+        if (depth === 3 && ((x * 3 + y * 17) % 89) < 2) v = 1.35;
+        if (depth === 4 && ((x * 13 + y * 7) % 97) < 2) v = 1.25;
       } else {
         v = 0.30 + rng.nextDouble() * 0.12;
       }
@@ -2498,8 +2560,8 @@
     if (kind === 'brick') brickHeights[depth || 0] = heights;
     return glTex(c, true);
   }
-  var TEXWALLS = [makePattern('brick', 0), makePattern('brick', 1), makePattern('brick', 2)];
-  var TEXFLOORS = [makePattern('floor', 0), makePattern('floor', 1), makePattern('floor', 2)];
+  var TEXWALLS = [makePattern('brick', 0), makePattern('brick', 1), makePattern('brick', 2), makePattern('brick', 3), makePattern('brick', 4)];
+  var TEXFLOORS = [makePattern('floor', 0), makePattern('floor', 1), makePattern('floor', 2), makePattern('floor', 3), makePattern('floor', 4)];
   var TEXCEIL = makePattern('ceil'), TEXWHITE = makePattern('white');
 
   /* Tangent-space normal map from heights (Sobel). Flat normal for misc. */
@@ -2525,7 +2587,7 @@
     g.putImageData(img, 0, 0);
     return glTex(c, true);
   }
-  var NRMWALLS = [makeNormalTex(brickHeights[0], 2.2), makeNormalTex(brickHeights[1], 2.2), makeNormalTex(brickHeights[2], 2.2)];
+  var NRMWALLS = [makeNormalTex(brickHeights[0], 2.2), makeNormalTex(brickHeights[1], 2.2), makeNormalTex(brickHeights[2], 2.2), makeNormalTex(brickHeights[3], 2.0), makeNormalTex(brickHeights[4], 2.3)];
   var NRMFLAT = makeNormalTex(null, 0);
 
   function buf(data, size, prog, name) {
@@ -2558,12 +2620,12 @@
       meta: { gold: 0, coal: 0, level: 1, xp: 0, pickIdx: 0, relics: [], ach: {}, best: best },
       px: 1.5, pz: 1.5, yaw: 0, pitch: 0, orbit: false,
       ghost: { x: 1, y: 1, fx: 1, fz: 1, t: 1, path: [], think: 0 },
-      candies: [], crystals: [], relicSpot: null, pond: null, pondUsed: false, torches: [],
+      candies: [], crystals: [], relicSpot: null, pond: null, pondUsed: false, torches: [], bats: [],
       maze: null, rng: null, world: null };
     loadDepth(0);
   }
   function loadDepth(d) {
-    var cfg = DEPTHS[d];
+    var cfg = depthCfg(d);
     var rng = new S.SeededRNG(G.seed + d * 7919);
     var maze = S.carveDFS(cfg.size, cfg.size, G.seed + d * 7919);
     var rooms = [];
@@ -2584,6 +2646,20 @@
     G.relicSpot = rooms[n] ? map(rooms[n]) : null; n++;
     G.pond = rooms[n] ? map(rooms[n]) : null; G.pondUsed = false;
     G.torches = rooms.filter(function (_, k) { return k % 3 === 0; }).slice(0, 24).map(map);
+    // Cave bats: some roost near the ceiling, others circle the tunnels.
+    G.bats = [];
+    var batCount = Math.min(28, 5 + d * 2);
+    for (var bi = 0; bi < batCount; bi++) {
+      var br = rooms.length ? rooms[rng.nextInt(rooms.length)] : [1, 1];
+      var bx = br[0] + 0.25 + rng.nextDouble() * 0.5;
+      var bz = br[1] + 0.25 + rng.nextDouble() * 0.5;
+      var hang = rng.nextDouble() < 0.4;
+      G.bats.push({ cx: bx, cz: bz, x: bx, z: bz,
+        y: hang ? WALL_H - 0.3 - rng.nextDouble() * 0.25 : 1.25 + rng.nextDouble() * 0.65,
+        baseY: 1.25 + rng.nextDouble() * 0.65, a: rng.nextDouble() * 6.28,
+        r: 0.35 + rng.nextDouble() * 1.15, speed: 0.8 + rng.nextDouble() * 0.9,
+        phase: rng.nextDouble() * 6.28, hang: hang });
+    }
     var gx = 1.5, gz = 1.5, best = -1;
     rooms.forEach(function (r) {
       var dist = Math.abs(r[0] - 1) + Math.abs(r[1] - 1);
@@ -2613,7 +2689,7 @@
     }
   }
   function buildWorld() {
-    var cfg = DEPTHS[G.depth];
+    var cfg = depthCfg(G.depth);
     var wall = newGroup(), floor = newGroup(), ceil = newGroup(), glow = newGroup();
     var w0 = cfg.wall, w1 = cfg.wallTop;
     var x, z, len;
@@ -2645,7 +2721,7 @@
       quad(glow, ox - s, WALL_H, oz + s, ox - s, WALL_H, oz - s, ox - s, WALL_H + s * 2, oz, ox - s, WALL_H + s * 2, oz + s, cc, 0.9, 1, 1, 0, 0, -1);
     }
     // magma depth: lava veins drooling down random walls + floor pools
-    if (G.depth === 2) {
+    if (cfg.theme === 'magma') {
       for (var li = 0; li < 16; li++) {
         var lx = 1 + rng.nextInt(G.maze.w - 2), lz = 1 + rng.nextInt(G.maze.d - 2);
         if (!walkable(lx, lz)) continue;
@@ -2667,13 +2743,79 @@
         quad(glow, px0 - ps, 0.03, pz0 - ps, px0 + ps, 0.03, pz0 - ps, px0 + ps, 0.03, pz0 + ps, px0 - ps, 0.03, pz0 + ps, [1.1, 0.4, 0.1], 0.9, 1, 1, 0, 1, 0);
       }
     }
+    // Frost, crypt, crystal and root themes get their own floor debris and
+    // light sources so a deep procedural descent never looks like a reskin.
+    if (cfg.theme === 'frost') {
+      for (var fi2 = 0; fi2 < 22; fi2++) {
+        var fx2 = 1 + rng.nextInt(G.maze.w - 2), fz2 = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(fx2, fz2)) continue;
+        var fs2 = 0.18 + rng.nextDouble() * 0.34;
+        var fcx = fx2 + 0.2 + rng.nextDouble() * 0.6, fcz = fz2 + 0.2 + rng.nextDouble() * 0.6;
+        quad(glow, fcx - fs2, 0.035, fcz - fs2, fcx + fs2, 0.035, fcz - fs2,
+          fcx + fs2, 0.035, fcz + fs2, fcx - fs2, 0.035, fcz + fs2,
+          [0.32, 0.72, 0.98], 0.32, 1, 1, 0, 1, 0);
+      }
+      for (var ii2 = 0; ii2 < 14; ii2++) {
+        var ix2 = 1 + rng.nextInt(G.maze.w - 2), iz2 = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(ix2, iz2)) continue;
+        var iw = 0.04 + rng.nextDouble() * 0.05, ih = 0.28 + rng.nextDouble() * 0.5;
+        var ix0 = ix2 + 0.25 + rng.nextDouble() * 0.5, iz0 = iz2 + 0.25 + rng.nextDouble() * 0.5;
+        quad(glow, ix0 - iw, WALL_H - ih, iz0, ix0 + iw, WALL_H - ih, iz0,
+          ix0 + iw, WALL_H, iz0, ix0 - iw, WALL_H, iz0, [0.55, 0.9, 1.0], 0.55, 1, 1, 0, 0, 1);
+        quad(glow, ix0, WALL_H - ih, iz0 - iw, ix0, WALL_H - ih, iz0 + iw,
+          ix0, WALL_H, iz0 + iw, ix0, WALL_H, iz0 - iw, [0.4, 0.8, 1.0], 0.5, 1, 1, 1, 0, 0);
+      }
+    }
+    if (cfg.theme === 'crypt') {
+      for (var bi2 = 0; bi2 < 18; bi2++) {
+        var bx2 = 1 + rng.nextInt(G.maze.w - 2), bz2 = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(bx2, bz2)) continue;
+        var bcx = bx2 + 0.5, bcz = bz2 + 0.5, bs2 = 0.18 + rng.nextDouble() * 0.2;
+        quad(glow, bcx - bs2, 0.04, bcz - 0.035, bcx + bs2, 0.04, bcz - 0.035,
+          bcx + bs2, 0.04, bcz + 0.035, bcx - bs2, 0.04, bcz + 0.035,
+          [0.72, 0.68, 0.56], 0.06, 1, 1, 0, 1, 0);
+        quad(glow, bcx - 0.035, 0.04, bcz - bs2, bcx + 0.035, 0.04, bcz - bs2,
+          bcx + 0.035, 0.04, bcz + bs2, bcx - 0.035, 0.04, bcz + bs2,
+          [0.68, 0.64, 0.52], 0.06, 1, 1, 0, 1, 0);
+      }
+      for (var ci2 = 0; ci2 < 12; ci2++) {
+        var ccx = 1 + rng.nextInt(G.maze.w - 2), ccz = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(ccx, ccz)) continue;
+        var cxx = ccx + 0.25 + rng.nextDouble() * 0.5, czz = ccz + 0.25 + rng.nextDouble() * 0.5;
+        quad(glow, cxx - 0.035, 0.08, czz, cxx + 0.035, 0.08, czz,
+          cxx + 0.035, 0.42, czz, cxx - 0.035, 0.42, czz, [0.48, 1.0, 0.55], 0.95, 1, 1, 0, 0, 1);
+        quad(glow, cxx, 0.08, czz - 0.035, cxx, 0.08, czz + 0.035,
+          cxx, 0.42, czz + 0.035, cxx, 0.42, czz - 0.035, [0.38, 0.9, 0.45], 0.95, 1, 1, 1, 0, 0);
+      }
+    }
+    if (cfg.theme === 'crystal') {
+      for (var ki2 = 0; ki2 < 14; ki2++) {
+        var kx2 = 1 + rng.nextInt(G.maze.w - 2), kz2 = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(kx2, kz2)) continue;
+        var kcx = kx2 + 0.2 + rng.nextDouble() * 0.6, kcz = kz2 + 0.2 + rng.nextDouble() * 0.6;
+        var ks2 = 0.1 + rng.nextDouble() * 0.18;
+        var kc2 = rng.nextDouble() < 0.5 ? [0.35, 0.9, 1.0] : [0.85, 0.45, 1.0];
+        quad(glow, kcx - ks2, 0.04, kcz - ks2, kcx + ks2, 0.04, kcz - ks2,
+          kcx + ks2, 0.04, kcz + ks2, kcx - ks2, 0.04, kcz + ks2, kc2, 0.58, 1, 1, 0, 1, 0);
+      }
+    }
+    if (cfg.theme === 'dirt') {
+      for (var ri2 = 0; ri2 < 16; ri2++) {
+        var rx2 = 1 + rng.nextInt(G.maze.w - 2), rz2 = 1 + rng.nextInt(G.maze.d - 2);
+        if (!walkable(rx2, rz2)) continue;
+        var rw = 0.03 + rng.nextDouble() * 0.03, rh = 0.3 + rng.nextDouble() * 0.7;
+        var rxx = rx2 + 0.2 + rng.nextDouble() * 0.6, rzz = rz2 + 0.2 + rng.nextDouble() * 0.6;
+        quad(glow, rxx - rw, WALL_H - rh, rzz, rxx + rw, WALL_H - rh, rzz,
+          rxx + rw * 1.4, WALL_H, rzz, rxx - rw * 1.4, WALL_H, rzz, [0.32, 0.22, 0.12], 0.05, 1, 1, 0, 0, 1);
+      }
+    }
     function freeze(G8, tex, nrm) {
       return { n: G8.P.length / 3, tex: tex, nrm: nrm,
         pos: buf(G8.P, 3, worldProg, 'aPos'), col: buf(G8.C, 3, worldProg, 'aCol'),
         uv: buf(G8.U, 2, worldProg, 'aUV'), nrmA: buf(G8.N, 3, worldProg, 'aNrm'),
         em: buf(G8.E, 1, worldProg, 'aEmis') };
     }
-    G.world = [freeze(wall, TEXWALLS[G.depth], NRMWALLS[G.depth]), freeze(floor, TEXFLOORS[G.depth], NRMFLAT),
+    G.world = [freeze(wall, TEXWALLS[G.depth % TEXWALLS.length], NRMWALLS[G.depth % NRMWALLS.length]), freeze(floor, TEXFLOORS[G.depth % TEXFLOORS.length], NRMFLAT),
       freeze(ceil, TEXCEIL, NRMFLAT), freeze(glow, TEXWHITE, NRMFLAT)];
   }
 
@@ -2761,7 +2903,7 @@
   function update(dt) {
     if (G.state !== 'play' || G.tab !== 0) return;
     G.time += dt;
-    var m = meta(), cfg = DEPTHS[G.depth], g = G.ghost;
+    var m = meta(), cfg = depthCfg(G.depth), g = G.ghost;
     // move
     var sp = moveSpeed() * dt, fw = 0, st = 0;
     if (keys.w || keys.arrowup) fw += 1;
@@ -2772,6 +2914,7 @@
     var sy = Math.sin(G.yaw), cy = Math.cos(G.yaw);
     var dx = (sy * fw + cy * st) * sp, dz = (-cy * fw + sy * st) * sp;
     moveWithCollision(dx, 0); moveWithCollision(0, dz);
+    updateBats(dt);
     // ghost A*
     g.think -= dt;
     if (g.think <= 0) {
@@ -2826,7 +2969,7 @@
     }
     if (near(G.px, G.pz, g.x, g.z, 0.8)) return die();
     if (!G.candies.length && !G.crystals.length) {
-      if (G.depth >= DEPTHS.length - 1) return win();
+      // No final floor: the descent keeps generating new layers forever.
       G.score += 250 * (G.depth + 1); m.gold += 30;
       ach('clear-1', 'Pathfinder — clear a depth');
       loadDepth(G.depth + 1);
@@ -2861,7 +3004,7 @@
   function renderHUD() {
     var m = meta();
     hud('score').textContent = S.compact(G.score);
-    hud('depth').textContent = DEPTHS[G.depth].layer;
+    hud('depth').textContent = 'D' + (G.depth + 1) + ' · ' + depthCfg(G.depth).layer;
     hud('candy').textContent = G.candies.length + G.crystals.length;
     hud('gold').textContent = S.compact(m.gold);
     hud('level').textContent = m.level;
@@ -2901,13 +3044,13 @@
   function hideOverlay() { overlay.classList.add('hidden'); }
   function die() {
     G.state = 'dead'; G.combo = 0; saveBest();
-    showOverlay('☠️ Caught in the ' + DEPTHS[G.depth].layer + '!',
+    showOverlay('☠️ Caught in the ' + depthCfg(G.depth).layer + '!',
       'Score ' + S.compact(G.score) + ' · Lv ' + meta().level + ' · ' + S.PICKS[meta().pickIdx].name +
       ' · Best ' + S.compact(meta().best) + achList(), 'Try again', null, null);
   }
   function win() {
     G.state = 'win'; G.score += 1000; saveBest();
-    showOverlay('🎃 Spooktacular! All 3 depths cleared!',
+    showOverlay('🎃 Spooktacular! All ' + DEPTHS.length + ' depths cleared!',
       'Score ' + S.compact(G.score) + ' · Lv ' + meta().level + ' · ' + meta().relics.length +
       '/12 relics · Best ' + S.compact(meta().best) + achList(), 'Play again', null, null);
     renderHUD();
@@ -2915,7 +3058,7 @@
   function openShop() {
     G.state = 'shop';
     var m = meta(), next = S.PICKS[m.pickIdx + 1];
-    var txt = 'Depth cleared! Now entering the ' + DEPTHS[G.depth].layer +
+    var txt = 'Depth cleared! Now entering the ' + depthCfg(G.depth).layer +
       '. Gold: ' + m.gold + '. Wielding: ' + S.PICKS[m.pickIdx].name + '.';
     if (next) {
       txt += ' Next: ' + next.name + ' (' + next.cost + ' gold).';
@@ -2932,6 +3075,31 @@
     renderHUD();
   }
 
+  function updateBats(dt) {
+    if (!G.bats) return;
+    for (var i = 0; i < G.bats.length; i++) {
+      var b = G.bats[i];
+      b.phase += dt;
+      if (b.hang) {
+        b.y = b.baseY + Math.sin(b.phase * 2.2) * 0.02;
+        if (Math.hypot(G.px - b.x, G.pz - b.z) < 2.2) {
+          b.hang = false; b.baseY = 1.4 + Math.random() * 0.65; b.phase = 0;
+        }
+        continue;
+      }
+      b.a += dt * b.speed;
+      var nx = b.cx + Math.cos(b.a) * b.r;
+      var nz = b.cz + Math.sin(b.a) * b.r;
+      if (walkable(Math.floor(nx), Math.floor(nz))) { b.x = nx; b.z = nz; }
+      else { b.a += 1.2; b.r = Math.max(0.3, b.r - 0.08); }
+      b.y = b.baseY + Math.sin(b.phase * 4.2) * 0.16;
+      if (Math.hypot(G.px - b.cx, G.pz - b.cz) > 9) {
+        b.cx = G.px; b.cz = G.pz; b.r = 0.45 + Math.random() * 0.9;
+        b.baseY = 1.3 + Math.random() * 0.7; b.a = Math.random() * 6.28;
+      }
+    }
+  }
+
   // ---------- render ----------
   function resize() {
     var dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -2943,7 +3111,7 @@
   }
   function render() {
     resize();
-    var cfg = DEPTHS[G.depth];
+    var cfg = depthCfg(G.depth);
     gl.clearColor(cfg.fog[0] * 0.6, cfg.fog[1] * 0.6, cfg.fog[2] * 0.6, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
@@ -2989,6 +3157,10 @@
     if (G.relicSpot) list.push({ tex: 'relic', x: G.relicSpot.x, y: 0.8, z: G.relicSpot.z, size: 0.9, bob: false });
     if (G.pond) list.push({ tex: 'pond', x: G.pond.x, y: 0.7, z: G.pond.z, size: 0.9, bob: false });
     G.torches.forEach(function (t) { list.push({ tex: 'torch', x: t.x, y: 1.7, z: t.z, size: 0.5, bob: false }); });
+    G.bats.forEach(function (b) {
+      var frame = b.hang ? 0 : Math.floor((G.time * 11 + b.phase * 3) % 3);
+      list.push({ tex: 'bat' + frame, x: b.x, y: b.y, z: b.z, size: b.hang ? 0.38 : 0.58, bob: false });
+    });
     var gb = 1 + 0.08 * Math.sin(G.time * 5);
     list.push({ tex: 'ghost', x: gX(), y: 1.2, z: gZ(), size: 1.1 * gb, bob: true });
     drawSprites(list, G.time);
@@ -3098,6 +3270,7 @@
     requestAnimationFrame(loop);
   }
 
+  window.__mine3d = { state: function () { return G; }, newGame: newGame, loadDepth: loadDepth, depthCfg: depthCfg };
   initSprites();
   newGame(20261031);
   G.state = 'title';
@@ -3106,7 +3279,7 @@
     tabsId: 'tabs', panelsId: 'tabpanels',
     snapshot: function () {
       var m = meta();
-      return { score: G.score, layer: DEPTHS[G.depth].layer, left: G.candies.length + G.crystals.length,
+      return { score: G.score, layer: 'D' + (G.depth + 1) + ' · ' + depthCfg(G.depth).layer, left: G.candies.length + G.crystals.length,
         gold: m.gold, level: m.level, pick: S.PICKS[m.pickIdx].name, seed: G.seed,
         relics: m.relics.length, ach: m.ach, collected: G.picked };
     },

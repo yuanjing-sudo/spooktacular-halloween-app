@@ -22,6 +22,17 @@ demos are dependency-free and run straight from the `docs/` folder.
 A local server is **optional**, only for editing the code offline. The deployed
 pages are ordinary static files and need no server-side code.
 
+## 3D worlds
+
+- **Endless 3D mine** (`mine3d.html`) — five hand-built strata, then unbounded
+  procedural depths with frost, crypt, crystal, magma and root themes, cave bats
+  and an endlessly scaling A* ghost.
+- **3D ghosts** (`ghost3d.html`) — larger mazes with carved rooms, loops,
+  palette shifts, roaming bats, fog-of-war and a true X/Y/Z axis: Space jumps,
+  R/F (or ▲/▼) fly, and the HUD tracks coordinates.
+- **Voxel worlds** (`voxel.html`) — an endless streaming forest, a deep mine,
+  Frost Depths, and a 64×24×64 Crystal Caverns geode with full 3D flight.
+
 ## 🌌 Endless Spooky Forest
 
 The newest addition is a near-infinite procedural forest with:

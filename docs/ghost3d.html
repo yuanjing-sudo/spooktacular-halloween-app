@@ -10,23 +10,28 @@
   #minimap { position: absolute; top: 8px; right: 8px; border: 1px solid #6d28a8; border-radius: 6px; background: rgba(11,6,32,.8); }
   #stick { position: absolute; bottom: 14px; left: 14px; width: 110px; height: 110px; border-radius: 50%; background: rgba(109,40,168,.25); border: 1px solid #6d28a8; display: none; }
   #nub { position: absolute; width: 46px; height: 46px; border-radius: 50%; background: rgba(255,209,102,.5); left: 32px; top: 32px; }
+  #vctl { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 8px; }
+  #vctl button { width: 58px; height: 58px; border-radius: 50%; border: 1px solid #c77dff; background: rgba(109,40,168,.55); color: #fff; font-size: 1.2rem; font-weight: 800; touch-action: none; }
+  #vctl button.on { background: rgba(255,209,102,.75); color: #1a0b00; }
   #help { font-size: .8rem; opacity: .7; }
 </style>
 </head>
 <body>
 <h1>👻 Spooktacular Ghosts 3D</h1>
-<p class="sub">A walkable haunted maze — same seeded mazes, same A* ghost. WASD + drag to look · ←/→ turn.</p>
+<p class="sub">A walkable haunted maze with real vertical space — rooms, loops, bats and a full XYZ axis. WASD + drag to look · Space jump · R/F rise/sink.</p>
 <div id="hud">
   <span>Score <b id="score">0</b></span>
   <span>Left <b id="candy">0</b></span>
   <span>Level <b id="level">1</b></span>
   <span>Seed <b id="seed">–</b></span>
+  <span>XYZ <b id="pos">–</b></span>
 </div>
 <div id="wrap">
   <canvas id="gameg" width="900" height="560"></canvas>
   <div id="tabpanels"></div>
   <canvas id="minimap" width="132" height="132"></canvas>
   <div id="stick"><div id="nub"></div></div>
+  <div id="vctl"><button id="vdn" title="Fly down">▼</button><button id="vjump" title="Jump">⤒</button><button id="vup" title="Fly up">▲</button></div>
   <div id="overlay" class="hidden">
     <h2 id="overlay-title"></h2>
     <p id="overlay-text"></p>
@@ -44,7 +49,7 @@
   <a href="voxel.html#mine" style="color:#ffd166">⛏️ Voxel deep-mine</a>
 </div>
 <div id="tabs"></div>
-<p id="help">WASD/arrows move · ←/→ turn · mouse/touch drag looks · walk into 🍬 · dodge 👻</p>
+<p id="help">WASD/arrows move · ←/→ turn · mouse/touch drag looks · Space/⤒ jumps · R/F or ▲/▼ fly · axes: X red · Y green · Z blue · walk into 🍬 · dodge 👻</p>
 <script>
 window.addEventListener('error', function (e) {
   try {
@@ -60,6 +65,6 @@ window.addEventListener('error', function (e) {
 <script src="spooky.js?v=9"></script>
 <script src="tabs.js?v=10"></script>
 <script src="games.js?v=9"></script>
-<script src="ghost3d.js?v=2"></script>
+<script src="ghost3d.js?v=4"></script>
 </body>
 </html>

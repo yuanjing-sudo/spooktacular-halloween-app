@@ -58,17 +58,50 @@
   function solidAt(x, z) { return !walkable(x, z); }
 
   function newGame(seed, level) {
-    var maze = S.carveDFS(15, 15, seed);
+    var lvl = level || 1;
+    var size = Math.min(41, 15 + (lvl - 1) * 4);
+    var maze = S.carveDFS(size, size, seed);
     var rng = new S.SeededRNG(seed ^ 0x9e37);
+    var roomRng = new S.SeededRNG(seed ^ 0x51ab);
+    // Carve a few 3 x 3 chambers and extra loops into the perfect maze.
+    // Adding open cells cannot disconnect it, but it gives the haunt rooms,
+    // shortcuts and ambush pockets instead of one long corridor.
+    var roomCount = 2 + Math.min(4, lvl);
+    for (var rm = 0; rm < roomCount; rm++) {
+      var span = Math.max(1, ((maze.w - 7) / 2) | 0);
+      var rx = 3 + 2 * roomRng.nextInt(span);
+      var rz = 3 + 2 * roomRng.nextInt(span);
+      for (var rdx = -1; rdx <= 1; rdx++) for (var rdz = -1; rdz <= 1; rdz++) {
+        if (rx + rdx > 0 && rx + rdx < maze.w - 1 && rz + rdz > 0 && rz + rdz < maze.d - 1)
+          maze.cells[S.key(rx + rdx, rz + rdz)] = true;
+      }
+    }
+    var loops = Math.floor(size / 3);
+    for (var lp = 0; lp < loops; lp++) {
+      var lx = 2 + roomRng.nextInt(maze.w - 4);
+      var lz = 2 + roomRng.nextInt(maze.d - 4);
+      maze.cells[S.key(lx, lz)] = true;
+    }
+    var palettes = [
+      { fog: [0.05, 0.02, 0.10], wall: [0.30, 0.16, 0.48], floor: [0.13, 0.08, 0.20] },
+      { fog: [0.03, 0.05, 0.12], wall: [0.18, 0.30, 0.48], floor: [0.09, 0.14, 0.22] },
+      { fog: [0.11, 0.03, 0.04], wall: [0.46, 0.18, 0.24], floor: [0.18, 0.09, 0.12] },
+      { fog: [0.02, 0.07, 0.07], wall: [0.16, 0.38, 0.34], floor: [0.08, 0.17, 0.15] },
+      { fog: [0.04, 0.03, 0.09], wall: [0.32, 0.25, 0.52], floor: [0.12, 0.10, 0.22] }
+    ];
+    var palette = palettes[(lvl - 1) % palettes.length];
+    FOG[0] = palette.fog[0]; FOG[1] = palette.fog[1]; FOG[2] = palette.fog[2];
+    FOGR[0] = 5; FOGR[1] = 24 + Math.min(14, lvl * 2);
     G = {
-      maze: maze, seed: seed, level: level || 1,
+      maze: maze, seed: seed, level: lvl,
       score: (G && G.score) || 0,
-      px: 1.5, pz: 1.5, yaw: Math.PI * 0.25, pitch: 0,
-      spooks: [], parts: [], wisps: [],
-      candies: [], state: 'title', time: 0
+      px: 1.5, py: 1.2, pz: 1.5, vy: 0, onGround: true, yaw: Math.PI * 0.25, pitch: 0,
+      spooks: [], parts: [], wisps: [], bats: [], explored: {},
+      candies: [], state: 'title', time: 0,
+      wallCol: palette.wall, floorCol: palette.floor
     };
-    var placed = 0, guard = 0;
-    while (placed < 10 && guard++ < 400) {
+    var placed = 0, guard = 0, target = Math.min(34, 10 + lvl * 2);
+    while (placed < target && guard++ < 500) {
       var cx = 1 + rng.nextInt(maze.w - 2), cz = 1 + rng.nextInt(maze.d - 2);
       if (!walkable(cx, cz)) continue;
       if (Math.abs(cx - 1) + Math.abs(cz - 1) < 4) continue;
@@ -84,13 +117,15 @@
     G.mesh = buildMazeMesh();
     G.decor = buildDecorMesh(rng, maze);
     spawnSpooks(rng, maze);
+    spawnBats(rng, maze);
     var wi = 0, wguard = 0;
-    while (wi < 6 && wguard++ < 200) {
+    while (wi < 6 + lvl && wguard++ < 300) {
       var wx = 1 + rng.nextInt(maze.w - 2), wz = 1 + rng.nextInt(maze.d - 2);
       if (!walkable(wx, wz)) continue;
       G.wisps.push({ x: wx + 0.5, y: 1 + Math.random() * 1.2, z: wz + 0.5, phase: Math.random() * 6.28 });
       wi++;
     }
+    exploreAround();
     renderHUD();
   }
 
@@ -117,11 +152,16 @@
     var x, z;
     for (x = 0; x < G.maze.w; x++) for (z = 0; z < G.maze.d; z++) {
       if (!walkable(x, z)) continue;
-      quad(P, C, x, 0, z, x + 1, 0, z, x + 1, 0, z + 1, x, 0, z + 1, 0.13, 0.08, 0.2, 1.0);
+      var fc = G.floorCol;
+      var tile = ((x + z) % 2) ? 1.0 : 0.82;
+      quad(P, C, x, 0, z, x + 1, 0, z, x + 1, 0, z + 1, x, 0, z + 1,
+        fc[0] * tile, fc[1] * tile, fc[2] * tile, 1.0);
     }
     for (x = -1; x <= G.maze.w; x++) for (z = -1; z <= G.maze.d; z++) {
       if (walkable(x, z)) continue;
-      box(P, C, x + 0.5, WALL_H / 2, z + 0.5, 0.5, WALL_H / 2, 0.5, 0.30, 0.16, 0.48);
+      var wc = G.wallCol;
+      var wv = 0.86 + 0.18 * Math.abs(Math.sin(x * 1.7 + z * 2.3));
+      box(P, C, x + 0.5, WALL_H / 2, z + 0.5, 0.5, WALL_H / 2, 0.5, wc[0] * wv, wc[1] * wv, wc[2] * wv);
     }
     return { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') };
   }
@@ -158,7 +198,7 @@
     gl.drawArrays(gl.TRIANGLES, 0, P.length / 3);
   }
 
-  function eyePos() { return [G.px, EYE, G.pz]; }
+  function eyePos() { return [G.px, G.py || EYE, G.pz]; }
   function lookDir() {
     var cp = Math.cos(G.pitch);
     return [Math.sin(G.yaw) * cp, Math.sin(G.pitch), -Math.cos(G.yaw) * cp];
@@ -202,6 +242,11 @@
       sphere(P, C, w.x + 0.4 * Math.sin(t * 0.7 + w.phase), w.y + 0.25 * Math.sin(t + w.phase * 2), w.z + 0.4 * Math.cos(t * 0.5 + w.phase),
         0.07, 0.07, 0.07, 4, 6, 0.5, 0.95, 1.0);
     }
+    for (i = 0; i < G.bats.length; i++) {
+      var bt = G.bats[i];
+      batModel(P, C, bt.x, bt.y, bt.z, bt.size, bt.face,
+        Math.sin(t * 13 + bt.phase), bt.hang);
+    }
     for (i = 0; i < G.parts.length; i++) {
       var pt = G.parts[i], ps = 0.06 * Math.max(0.2, pt.life / pt.max);
       octa(P, C, pt.x, pt.y, pt.z, ps, pt.col[0], pt.col[1], pt.col[2], 0);
@@ -212,16 +257,18 @@
   function drawMinimap() {
     var s = 132, n = G.maze.w, k = s / n, x, z;
     mm.fillStyle = '#0b0620'; mm.fillRect(0, 0, s, s);
-    mm.fillStyle = '#3b2b63';
     for (x = 0; x < n; x++) for (z = 0; z < G.maze.d; z++) {
-      if (!walkable(x, z)) mm.fillRect(x * k, z * k, k, k);
+      var ex = G.explored[x + ',' + z];
+      mm.fillStyle = ex ? (walkable(x, z) ? '#1d1438' : '#3b2b63') : '#0b0620';
+      mm.fillRect(x * k, z * k, k, k);
     }
     mm.fillStyle = '#ffd166';
     for (var i = 0; i < G.candies.length; i++) {
-      if (!G.candies[i].got) mm.fillRect(G.candies[i].x * k + 1, G.candies[i].z * k + 1, 2, 2);
+      if (!G.candies[i].got && G.explored[G.candies[i].x + ',' + G.candies[i].z]) mm.fillRect(G.candies[i].x * k + 1, G.candies[i].z * k + 1, 2, 2);
     }
     var dotCols = ['#ffffff', '#c77dff', '#80ffaa'];
     for (var gi = 0; gi < G.spooks.length; gi++) {
+      if (!G.explored[Math.floor(G.spooks[gi].x) + ',' + Math.floor(G.spooks[gi].z)]) continue;
       mm.fillStyle = dotCols[gi % dotCols.length];
       mm.beginPath(); mm.arc(G.spooks[gi].x / n * s, G.spooks[gi].z / G.maze.d * s, 3, 0, 7); mm.fill();
     }
@@ -240,6 +287,21 @@
     var mx = (sy * fw + cy * st) * sp, mz = (-cy * fw + sy * st) * sp;
     tryMove(G.px + mx, G.pz);
     tryMove(G.px, G.pz + mz);
+    // Vertical axis: Space hops, R rises, F sinks. Crystal/ghost geometry is
+    // still a single-story maze, but flight lets you inspect it in true 3D.
+    var GRAV = 18, JUMP = 5.4;
+    if (keys.r) { G.vy = 3.4; G.onGround = false; }
+    else if (keys.f) { G.vy = -3.4; G.onGround = false; }
+    else G.vy -= GRAV * dt;
+    if (keys[' '] && G.onGround) { G.vy = JUMP; G.onGround = false; }
+    G.py += G.vy * dt;
+    if (G.py <= 1.2) { G.py = 1.2; G.vy = 0; G.onGround = true; }
+    if (G.py > 4.4) { G.py = 4.4; if (G.vy > 0) G.vy = 0; }
+    // Keep the XYZ read-out live rather than only refreshing on pickups.
+    var posEl = hud('pos');
+    if (posEl) posEl.textContent = G.px.toFixed(1) + ' / ' + G.py.toFixed(1) + ' / ' + G.pz.toFixed(1);
+    exploreAround();
+    updateBats(dt);
     var i;
     for (i = 0; i < G.candies.length; i++) {
       var cd = G.candies[i];
@@ -296,6 +358,8 @@
     hud('candy').textContent = left;
     hud('level').textContent = G.level;
     hud('seed').textContent = G.seed;
+    var posEl = hud('pos');
+    if (posEl) posEl.textContent = G.px.toFixed(1) + ' / ' + G.py.toFixed(1) + ' / ' + G.pz.toFixed(1);
   }
   function showOverlay(t, txt, btn, btn2) {
     hud('overlay-title').textContent = t; hud('overlay-text').textContent = txt;
@@ -369,6 +433,22 @@
   document.getElementById('newmaze').addEventListener('click', function () {
     newGame((Math.random() * 1e9) | 0, 1); G.score = 0; G.state = 'play'; hideOverlay(); renderHUD();
   });
+  // Touch-friendly vertical controls so the XYZ axis is usable on phones.
+  (function bindVertical() {
+    var pairs = [['vup', 'r'], ['vdn', 'f'], ['vjump', ' ']];
+    pairs.forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (!el) return;
+      var down = function (e) { e.preventDefault(); keys[pair[1]] = true; el.classList.add('on'); };
+      var up = function (e) { if (e) e.preventDefault(); keys[pair[1]] = false; el.classList.remove('on'); };
+      el.addEventListener('touchstart', down, { passive: false });
+      el.addEventListener('touchend', up);
+      el.addEventListener('touchcancel', up);
+      el.addEventListener('mousedown', down);
+      el.addEventListener('mouseup', up);
+      el.addEventListener('mouseleave', up);
+    });
+  })();
 
   var last = 0;
   function loop(ts) {
@@ -494,19 +574,41 @@
       if (Math.abs(x - 1) + Math.abs(z - 1) < (margin || 4)) return null;
       return { x: x, z: z };
     }
-    while (placed < 4 && guard++ < 200) {
+    while (placed < 6 && guard++ < 240) {
       var c = freeCell(4);
       if (!c) continue;
       pumpkinModel(P, C, c.x + 0.5, 0.34, c.z + 0.5, 0.34, 0, placed * 1.3);
       placed++;
     }
     placed = 0; guard = 0;
-    while (placed < 5 && guard++ < 200) {
+    while (placed < 7 && guard++ < 240) {
       var t2 = freeCell(3);
       if (!t2) continue;
       tombModel(P, C, t2.x + 0.5, 0, t2.z + 0.5, 0.8, (placed % 2 ? 0.06 : -0.06));
       placed++;
     }
+    // Wall torches: one per few open cells, placed against a neighbouring wall.
+    var torchCount = 0, tguard = 0;
+    while (torchCount < 10 && tguard++ < 300) {
+      var tc = freeCell(2);
+      if (!tc) continue;
+      var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (var di = 0; di < 4; di++) {
+        var dx = dirs[di][0], dz = dirs[di][1];
+        if (walkable(tc.x + dx, tc.z + dz)) continue;
+        var tx = tc.x + 0.5 + dx * 0.43, tz = tc.z + 0.5 + dz * 0.43;
+        cylinder(P, C, tx, 1.05, tz, 0.025, 0.045, 0.55, 5, 0.30, 0.19, 0.10);
+        sphere(P, C, tx, 1.68, tz, 0.10, 0.16, 0.10, 4, 6, 1.4, 0.68, 0.18);
+        sphere(P, C, tx, 1.68, tz, 0.24, 0.30, 0.24, 3, 6, 0.55, 0.22, 0.08);
+        torchCount++;
+        break;
+      }
+    }
+    // A small RGB origin marker makes the three world axes legible.
+    var ax = 1.5, ay = 0.04, az = 1.5;
+    box(P, C, ax + 1.2, ay, az, 1.2, 0.02, 0.02, 0.95, 0.12, 0.12);
+    box(P, C, ax, ay + 1.0, az, 0.02, 1.0, 0.02, 0.15, 0.95, 0.25);
+    box(P, C, ax, ay, az + 1.2, 0.02, 0.02, 1.2, 0.15, 0.35, 1.0);
     if (!P.length) return { n: 0 };
     return { n: P.length / 3, pos: buf(P, 3, 'aPos'), col: buf(C, 3, 'aCol') };
   }
@@ -533,7 +635,10 @@
   var SPOOK_DEFS = [
     { name: '👻 Wraith', col: [0.85, 0.95, 1.0], size: 1.0, speed: 2.4, kind: 0 },
     { name: '💜 Specter', col: [0.75, 0.55, 1.0], size: 0.85, speed: 2.0, kind: 1 },
-    { name: '🌿 Phantom', col: [0.55, 1.0, 0.75], size: 1.15, speed: 2.2, kind: 2 }
+    { name: '🌿 Phantom', col: [0.55, 1.0, 0.75], size: 1.15, speed: 2.2, kind: 2 },
+    { name: '🕯️ Banshee', col: [1.0, 0.72, 0.35], size: 0.9, speed: 2.5, kind: 0 },
+    { name: '🩸 Revenant', col: [1.0, 0.28, 0.34], size: 1.2, speed: 2.15, kind: 1 },
+    { name: '❄️ Frostgeist', col: [0.55, 0.9, 1.0], size: 1.05, speed: 2.35, kind: 2 }
   ];
   function astarTo(fx, fz, tx, tz) {
     return S.astar(Math.floor(fx), Math.floor(fz), Math.floor(tx), Math.floor(tz), function (x, z) {
@@ -543,15 +648,104 @@
   function spawnSpooks(rng, maze) {
     var corners = [[maze.w - 1.5, maze.d - 1.5], [1.5, maze.d - 1.5], [maze.w - 1.5, 1.5]];
     G.spooks = [];
-    for (var i = 0; i < 3; i++) {
-      var d = SPOOK_DEFS[i];
-      var sx = corners[i][0], sz = corners[i][1];
+    var count = 3 + Math.min(5, G.level - 1);
+    for (var i = 0; i < count; i++) {
+      var d = SPOOK_DEFS[i % SPOOK_DEFS.length];
+      var sx, sz;
+      if (i < 3) { sx = corners[i][0]; sz = corners[i][1]; }
+      else {
+        var guard = 0;
+        do {
+          sx = 1.5 + rng.nextInt(maze.w - 3); sz = 1.5 + rng.nextInt(maze.d - 3);
+          guard++;
+        } while ((!walkable(sx, sz) || Math.hypot(sx - G.px, sz - G.pz) < 5) && guard < 80);
+      }
       if (!walkable(sx, sz)) { sx = maze.w - 1.5; sz = maze.d - 1.5; }
       G.spooks.push({ x: sx, z: sz, path: null, thinkT: Math.random() * 0.5,
-        speed: d.speed, col: d.col, size: d.size, kind: d.kind, name: d.name,
-        phase: Math.random() * 6.28, trail: [], trailT: 0 });
+        speed: d.speed + Math.min(1.2, (G.level - 1) * 0.08), col: d.col, size: d.size,
+        kind: d.kind, name: d.name, phase: Math.random() * 6.28, trail: [], trailT: 0 });
     }
   }
+  function spawnBats(rng, maze) {
+    G.bats = [];
+    var count = 4 + Math.min(6, G.level);
+    for (var i = 0; i < count; i++) {
+      var bx = 1 + rng.nextInt(maze.w - 2), bz = 1 + rng.nextInt(maze.d - 2);
+      if (!walkable(bx, bz)) { bx = 1; bz = 1; }
+      var hang = rng.nextDouble() < 0.36;
+      G.bats.push({
+        cx: bx + 0.5, cz: bz + 0.5, x: bx + 0.5, z: bz + 0.5,
+        y: hang ? WALL_H - 0.28 : 1.35 + rng.nextDouble() * 0.55,
+        baseY: 1.35 + rng.nextDouble() * 0.55,
+        a: rng.nextDouble() * 6.28, r: 0.28 + rng.nextDouble() * 0.9,
+        speed: 0.8 + rng.nextDouble() * 0.85, phase: rng.nextDouble() * 6.28,
+        size: 0.75 + rng.nextDouble() * 0.35, hang: hang, face: 0
+      });
+    }
+  }
+  function updateBats(dt) {
+    if (!G.bats) return;
+    for (var i = 0; i < G.bats.length; i++) {
+      var b = G.bats[i];
+      b.phase += dt;
+      if (b.hang) {
+        b.y = WALL_H - 0.28 + Math.sin(b.phase * 2.1) * 0.02;
+        if (Math.hypot(G.px - b.x, G.pz - b.z) < 2.1) {
+          b.hang = false; b.baseY = G.py + 0.5 + Math.random() * 0.5; b.phase = 0;
+        }
+        continue;
+      }
+      b.a += dt * b.speed;
+      var nx = b.cx + Math.cos(b.a) * b.r;
+      var nz = b.cz + Math.sin(b.a) * b.r;
+      if (walkable(nx, nz)) { b.x = nx; b.z = nz; }
+      else { b.a += 1.25; b.r = Math.max(0.25, b.r - 0.06); }
+      b.y = b.baseY + Math.sin(b.phase * 4.1) * 0.12;
+      b.face = b.a + Math.PI * 0.5;
+      if (Math.hypot(G.px - b.cx, G.pz - b.cz) > 10) {
+        b.cx = G.px; b.cz = G.pz; b.x = G.px; b.z = G.pz;
+        b.r = 0.3 + Math.random() * 0.8; b.baseY = G.py + 0.3 + Math.random() * 0.5;
+      }
+    }
+  }
+  function batModel(P, C, x, y, z, s, face, flap, hang) {
+    var fx = Math.sin(face), fz = -Math.cos(face);
+    var rx = Math.cos(face), rz = Math.sin(face);
+    var body = [0.24, 0.18, 0.15], wing = [0.18, 0.13, 0.11], bone = [0.42, 0.30, 0.22];
+    sphere(P, C, x, y, z, 0.09 * s, 0.16 * s, 0.10 * s, 4, 7, body[0], body[1], body[2]);
+    sphere(P, C, x + fx * 0.11 * s, y + 0.11 * s, z + fz * 0.11 * s, 0.075 * s, 0.075 * s, 0.07 * s, 4, 7, 0.29, 0.22, 0.18);
+    // leathery ears
+    tri(P, C, x + fx * 0.10 * s, y + 0.17 * s, z + fz * 0.10 * s,
+      x + fx * 0.10 * s + rx * 0.06 * s, y + 0.27 * s, z + fz * 0.10 * s + rz * 0.06 * s,
+      x + fx * 0.10 * s, y + 0.16 * s, z + fz * 0.10 * s, 0.25, 0.17, 0.14);
+    tri(P, C, x + fx * 0.10 * s, y + 0.17 * s, z + fz * 0.10 * s,
+      x + fx * 0.10 * s - rx * 0.06 * s, y + 0.27 * s, z + fz * 0.10 * s - rz * 0.06 * s,
+      x + fx * 0.10 * s, y + 0.16 * s, z + fz * 0.10 * s, 0.25, 0.17, 0.14);
+    // eyeshine
+    sphere(P, C, x + fx * 0.15 * s + rx * 0.035 * s, y + 0.12 * s, z + fz * 0.15 * s + rz * 0.035 * s, 0.018 * s, 0.018 * s, 0.018 * s, 3, 4, 1.4, 0.15, 0.08);
+    sphere(P, C, x + fx * 0.15 * s - rx * 0.035 * s, y + 0.12 * s, z + fz * 0.15 * s - rz * 0.035 * s, 0.018 * s, 0.018 * s, 0.018 * s, 3, 4, 1.4, 0.15, 0.08);
+    if (hang) {
+      tri(P, C, x, y - 0.1 * s, z, x + rx * 0.28 * s, y - 0.22 * s, z + rz * 0.28 * s, x - rx * 0.28 * s, y - 0.22 * s, z - rz * 0.28 * s, wing[0], wing[1], wing[2]);
+      return;
+    }
+    for (var side = -1; side <= 1; side += 2) {
+      var wy = flap * 0.24 * s;
+      var tipX = x + rx * side * 0.58 * s, tipY = y + wy, tipZ = z + rz * side * 0.58 * s;
+      var backX = x + rx * side * 0.34 * s, backY = y - 0.18 * s, backZ = z + rz * side * 0.34 * s;
+      tri(P, C, x, y, z, tipX, tipY, tipZ, backX, backY, backZ, wing[0], wing[1], wing[2]);
+      tri(P, C, x, y, z, backX, backY, backZ, x + rx * side * 0.12 * s, y - 0.26 * s, z + rz * side * 0.12 * s, wing[0] * 0.85, wing[1] * 0.85, wing[2] * 0.85);
+      tri(P, C, x, y, z, tipX, tipY + 0.015 * s, tipZ, backX, backY, backZ, bone[0], bone[1], bone[2]);
+    }
+  }
+  function exploreAround() {
+    if (!G.explored) G.explored = {};
+    var px = Math.floor(G.px), pz = Math.floor(G.pz);
+    for (var dx = -4; dx <= 4; dx++) for (var dz = -4; dz <= 4; dz++) {
+      var x = px + dx, z = pz + dz;
+      if (walkable(x, z)) G.explored[x + ',' + z] = true;
+    }
+  }
+
   function updateSpook(sp, dt) {
     sp.thinkT -= dt; sp.phase += dt;
     if (sp.thinkT <= 0) {
@@ -586,6 +780,7 @@
   }
 
   // ---------- boot ----------
+  window.__ghost3d = { state: function () { return G; }, newGame: newGame };
   newGame((Math.random() * 1e9) | 0, 1);
   showOverlay('👻 Haunted Maze 3D', 'WASD/arrows + drag to walk the halls. Grab all 🍬, dodge the 👻. Arrow ←/→ also turns.', 'Enter the haunt', null);
   requestAnimationFrame(loop);
