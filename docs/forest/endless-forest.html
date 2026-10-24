@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#08060f">
+  <meta name="description" content="An endless, streamed 3D spooky forest: wild rabbits, ridged carrots, living campfires and a world that never runs out of X, Y or Z.">
+  <title>Endless Spooky Forest — a world without edges</title>
+  <link rel="stylesheet" href="forest.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%F0%9F%8C%B2%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <canvas id="forest-canvas" aria-label="Endless spooky forest" tabindex="0"></canvas>
+
+  <!-- Full-screen colour washes. Never intercept touches. -->
+  <div id="vignette" class="overlay-wash" aria-hidden="true"></div>
+  <div id="frost" class="overlay-wash" aria-hidden="true"></div>
+  <div id="blood" class="overlay-wash" aria-hidden="true"></div>
+  <div id="flash" class="overlay-wash" aria-hidden="true"></div>
+  <div id="crosshair" class="hidden" aria-hidden="true"><span></span></div>
+
+  <!-- ============================================================== -->
+  <!--  Start screen                                                  -->
+  <!-- ============================================================== -->
+  <section id="start-screen" class="screen">
+    <div class="start-inner">
+      <p class="eyebrow">A procedural Halloween wander</p>
+      <h1 class="game-title">
+        <span class="title-line">ENDLESS</span>
+        <span class="title-line accent">SPOOKY</span>
+        <span class="title-line">FOREST</span>
+      </h1>
+      <p class="start-tag">The trees do not stop. Neither do the rabbits.</p>
+      <p class="start-copy">
+        A 3D forest streamed in every direction — X, Z and all the sky between.
+        Pull carrots, warm your hands at living campfires and wait, very still,
+        until a rabbit decides you are safe.
+      </p>
+
+      <div class="seed-row">
+        <label for="seed-input">World seed</label>
+        <input id="seed-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" value="20261031" maxlength="18" aria-label="World seed">
+        <button id="btn-new-world" class="btn ghost small" type="button">🎲 Surprise me</button>
+      </div>
+
+      <div class="start-actions">
+        <button id="btn-start" class="btn primary big" type="button">
+          <span class="btn-icon">🌲</span>
+          <span class="btn-label">Enter the Forest</span>
+          <span class="btn-sub">grow a new world</span>
+        </button>
+        <button id="btn-continue" class="btn secondary big" type="button">
+          <span class="btn-icon">🕯️</span>
+          <span class="btn-label">Continue</span>
+          <span class="btn-sub">return to your last fire</span>
+        </button>
+      </div>
+
+      <div class="start-controls">
+        <div><b>WASD</b> walk <span>·</span> <b>Shift</b> run <span>·</span> <b>Space</b> jump</div>
+        <div><b>E</b> interact <span>·</span> <b>F</b> fly <span>·</span> <b>Q</b> call rabbits</div>
+        <div><b>J</b> journal <span>·</span> <b>P</b> photo mode <span>·</span> <b>Esc</b> pause</div>
+      </div>
+      <p class="start-foot">
+        <span>🌲 5 biomes</span>
+        <span>🐇 deep rabbit AI</span>
+        <span>🥕 ridged 3D carrots</span>
+        <span>🔥 living campfires</span>
+      </p>
+      <p class="build-stamp">v2.0 endless · streamed chunks · no assets, all procedural</p>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!--  HUD                                                           -->
+  <!-- ============================================================== -->
+  <section id="hud" class="hidden" aria-label="Heads-up display">
+    <div class="hud-top">
+      <div class="hud-panel hud-left">
+        <div class="hud-brand">🌲 ENDLESS FOREST</div>
+        <div class="hud-line mono" id="hud-coords">X 0.0&nbsp;&nbsp;Y 0.0&nbsp;&nbsp;Z 0.0</div>
+        <div class="hud-line" id="hud-biome">🌲 Whispering Pines</div>
+        <div class="hud-sub mono"><span id="fps">60 fps</span> · <span id="chunks">0 chunks</span></div>
+      </div>
+
+      <div class="hud-panel hud-center">
+        <div class="hud-compass" id="hud-compass">N 0°</div>
+        <div class="compass-rule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+
+      <div class="hud-panel hud-right">
+        <div class="hud-line"><span id="hud-clock">17:24</span> · <span id="hud-day">Day 1</span></div>
+        <div class="hud-line" id="hud-weather">🌫️ Mist</div>
+        <div class="hud-actions">
+          <button id="btn-journal2" class="icon-btn" type="button" title="Journal (J)" aria-label="Journal">📖</button>
+          <button id="btn-map" class="icon-btn" type="button" title="Map & stats (M)" aria-label="Map">🧭</button>
+          <button id="btn-photo" class="icon-btn" type="button" title="Photo mode (P)" aria-label="Photo mode">📷</button>
+          <button id="btn-sound" class="icon-btn" type="button" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+          <button id="btn-help" class="icon-btn" type="button" title="Help (H)" aria-label="Help">❔</button>
+          <button id="btn-pause2" class="icon-btn" type="button" title="Pause (Esc)" aria-label="Pause">⏸</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-stats" aria-label="Inventory">
+      <div class="stat-pill" title="Carrots in your pack"><span>🥕</span><b id="stat-carrots">0</b></div>
+      <div class="stat-pill" title="Fallen wood"><span>🪵</span><b id="stat-wood">7</b></div>
+      <div class="stat-pill" title="Marshmallows"><span>🍡</span><b id="stat-marshmallows">3</b></div>
+      <div class="stat-pill" title="Rabbits met / bonded"><span>🐇</span><b id="stat-rabbits">0/0</b></div>
+      <div class="stat-pill" title="Campfires lit"><span>🔥</span><b id="stat-fires">0</b></div>
+      <button id="btn-journal" class="stat-pill action" type="button" title="Open journal">📖 <b>Journal</b></button>
+      <button id="btn-pause" class="stat-pill action" type="button" title="Pause">⏸ <b>Pause</b></button>
+    </div>
+
+    <div id="prompt" class="prompt" role="status">
+      <span class="key" id="prompt-key">E</span>
+      <span class="prompt-copy">
+        <b id="prompt-label">Interact</b>
+        <i id="prompt-sub"></i>
+      </span>
+    </div>
+
+    <div id="cooking-hud" class="cooking">
+      <div class="cooking-label" id="cooking-label">Cooking carrot…</div>
+      <div class="cooking-track"><div id="cooking-bar" class="cooking-fill"></div></div>
+    </div>
+
+    <div class="hud-bottom">
+      <div id="hotbar" class="hotbar" aria-label="Quick slots">
+        <button class="slot" type="button" data-slot="1" title="Eat a carrot (1)">
+          <span class="slot-key">1</span><span class="slot-icon">🥕</span><span class="slot-count">0</span><span class="slot-label">eat</span>
+        </button>
+        <button class="slot" type="button" data-slot="2" title="Plant a carrot seed (2)">
+          <span class="slot-key">2</span><span class="slot-icon">🌱</span><span class="slot-count">6</span><span class="slot-label">plant</span>
+        </button>
+        <button class="slot" type="button" data-slot="3" title="Fallen wood">
+          <span class="slot-key">3</span><span class="slot-icon">🪵</span><span class="slot-count">7</span><span class="slot-label">wood</span>
+        </button>
+        <button class="slot" type="button" data-slot="4" title="Marshmallows">
+          <span class="slot-key">4</span><span class="slot-icon">🍡</span><span class="slot-count">3</span><span class="slot-label">mallow</span>
+        </button>
+        <button class="slot" type="button" data-slot="5" title="Journal">
+          <span class="slot-key">5</span><span class="slot-icon">📖</span><span class="slot-count">·</span><span class="slot-label">journal</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="minimap-wrap">
+      <canvas id="minimap" width="176" height="176" aria-label="Minimap"></canvas>
+      <span class="map-label">64 m</span>
+    </div>
+
+    <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+    <div id="debug" class="debug mono"></div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!--  Campfire menu                                                 -->
+  <!-- ============================================================== -->
+  <div id="fire-menu" class="modal fire-modal" role="dialog" aria-modal="true" aria-labelledby="fire-title">
+    <div class="modal-card fire-card">
+      <div class="fire-head">
+        <div>
+          <p class="eyebrow">The circle of stones</p>
+          <h2 id="fire-title">The First Hearth</h2>
+          <p id="fire-sub" class="muted">Cold ashes</p>
+        </div>
+        <button id="fire-close" class="icon-btn close" type="button" aria-label="Close campfire menu">✕</button>
+      </div>
+      <div id="fire-actions" class="fire-actions"></div>
+      <p class="fire-foot">Every fire remembers everyone who warmed their hands here.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Pause                                                         -->
+  <!-- ============================================================== -->
+  <div id="pause" class="modal" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div class="modal-card narrow">
+      <p class="eyebrow">The forest waits</p>
+      <h2 id="pause-title">Paused</h2>
+      <p class="muted">Nothing moves until you do.</p>
+      <div class="menu-list">
+        <button id="btn-resume" class="btn primary" type="button">▶ Resume</button>
+        <button id="btn-resume2" class="btn ghost" type="button">🌲 Back to the trees</button>
+        <button id="btn-save" class="btn secondary" type="button">💾 Save now</button>
+        <button id="btn-settings" class="btn ghost" type="button">⚙️ Settings</button>
+        <button id="btn-new2" class="btn danger" type="button">🌱 New world…</button>
+      </div>
+      <p class="muted small">Autosave runs every 42 seconds. Closing the tab also saves when the browser allows it.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Journal                                                       -->
+  <!-- ============================================================== -->
+  <div id="journal" class="modal wide" role="dialog" aria-modal="true" aria-labelledby="journal-title">
+    <div class="modal-card journal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Field notes</p>
+          <h2 id="journal-title">The Keeper's Journal</h2>
+        </div>
+        <button id="journal-close" class="icon-btn close" type="button" aria-label="Close journal">✕</button>
+      </div>
+      <div id="journal-tabs" class="journal-tabs" role="tablist"></div>
+      <div id="journal-body" class="journal-body"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Settings                                                      -->
+  <!-- ============================================================== -->
+  <div id="settings" class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card narrow settings-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Make it yours</p>
+          <h2 id="settings-title">Settings</h2>
+        </div>
+        <button id="settings-close" class="icon-btn close" type="button" aria-label="Close settings">✕</button>
+      </div>
+
+      <label class="setting">
+        <span>View distance <b class="mono">chunks</b></span>
+        <input id="settings-distance" type="range" min="3" max="12" step="1" value="7">
+        <small>More chunks means more forest and more GPU. 5–7 is a good walk.</small>
+      </label>
+
+      <label class="setting">
+        <span>Quality</span>
+        <select id="settings-quality">
+          <option value="0">Low — phone-friendly</option>
+          <option value="1">Medium — balanced</option>
+          <option value="2">High — dense &amp; detailed</option>
+        </select>
+        <small>Controls resolution, rabbit detail and particle counts.</small>
+      </label>
+
+      <label class="setting">
+        <span>Look sensitivity</span>
+        <input id="settings-sensitivity" type="range" min="0.4" max="2.5" step="0.05" value="1">
+      </label>
+
+      <label class="setting toggle">
+        <input id="settings-invert" type="checkbox">
+        <span>Invert vertical look</span>
+      </label>
+
+      <label class="setting toggle">
+        <input id="settings-motion" type="checkbox">
+        <span>Reduce motion &amp; leaf sway</span>
+      </label>
+
+      <label class="setting toggle">
+        <input id="settings-audio" type="checkbox" checked>
+        <span>Procedural sound</span>
+      </label>
+
+      <label class="setting toggle">
+        <input id="settings-fps" type="checkbox">
+        <span>Show FPS / debug panel (F3)</span>
+      </label>
+
+      <div class="settings-actions">
+        <button id="settings-apply" class="btn primary" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Help                                                          -->
+  <!-- ============================================================== -->
+  <div id="help" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-heading">
+    <div class="modal-card help-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Before you go in</p>
+          <h2 id="help-heading">How to Wander</h2>
+        </div>
+        <button id="help-close" class="icon-btn close" type="button" aria-label="Close help">✕</button>
+      </div>
+      <div id="help-body" class="help-body">
+        <div class="help-grid">
+          <div class="help-block">
+            <h3>Move</h3>
+            <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · <kbd>Ctrl</kbd> crouch</p>
+            <p><kbd>F</kbd> toggle flight · <kbd>Space</kbd>/<kbd>C</kbd> rise &amp; descend · <kbd>V</kbd> third person</p>
+            <p><b>Touch:</b> left stick to walk, drag the right side to look.</p>
+          </div>
+          <div class="help-block">
+            <h3>Forage</h3>
+            <p><kbd>E</kbd> interact with carrots, rabbits, campfires and fallen wood.</p>
+            <p><kbd>1</kbd> eat a carrot · <kbd>2</kbd> plant a seed · <kbd>Q</kbd> call bonded rabbits.</p>
+            <p>Ripe carrots have a full leaf fan. Water a sprout to double its growth.</p>
+          </div>
+          <div class="help-block">
+            <h3>Campfires</h3>
+            <p>Stand close and press <kbd>E</kbd> for the fire menu: light it, add wood, cook carrots, roast marshmallows, warm up or sit for a story.</p>
+            <p>Rain can douse a fire. Fuel burns down. Cold drains warmth; warmth drains health.</p>
+          </div>
+          <div class="help-block">
+            <h3>Rabbits</h3>
+            <p>Feed carrots or pet gently to earn trust. At 72% a rabbit bonds and follows you.</p>
+            <p>At night, bonded rabbits and wild ones gather near lit fires. Kits stay close to the warren.</p>
+          </div>
+          <div class="help-block">
+            <h3>The world</h3>
+            <p>Chunks stream in 16-metre squares around you. X and Z never end. Floating spirit isles hide crystals above the canopy.</p>
+            <p>Five biomes: Whispering Pines, Pumpkin Hollow, Misty Meadow, Ashen Grove and Frostveil.</p>
+          </div>
+          <div class="help-block">
+            <h3>Keep a record</h3>
+            <p><kbd>J</kbd> journal · <kbd>M</kbd> map &amp; stats · <kbd>P</kbd> photo mode · <kbd>F3</kbd> debug.</p>
+            <p>Photos download as PNG. The forest autosaves; you can also save from the pause menu.</p>
+          </div>
+        </div>
+        <p class="help-quote">“If you hear a second set of footsteps, do not stop. The forest is only walking you home.”</p>
+      </div>
+      <div class="help-actions">
+        <button id="help-close2" class="btn primary" type="button">🌲 Into the trees</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Story popup                                                   -->
+  <!-- ============================================================== -->
+  <div id="story-popup" class="story-popup" role="dialog" aria-live="polite">
+    <div class="story-card">
+      <span class="story-mark">📖</span>
+      <p id="story-text"></p>
+      <button id="story-close" class="btn ghost small" type="button">Let it settle</button>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Photo mode                                                    -->
+  <!-- ============================================================== -->
+  <div id="photo-bar" class="photo-bar">
+    <span class="photo-hint">📷 WASD drift · Shift fast · Space/C up-down · P/Esc exit</span>
+    <button id="photo-capture" class="btn primary" type="button">📸 Capture</button>
+    <button id="photo-exit" class="btn ghost" type="button">✕ Exit</button>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Mobile controls                                               -->
+  <!-- ============================================================== -->
+  <div id="mobile-controls" class="mobile-controls">
+    <div id="joystick-base" class="joystick">
+      <div id="joystick-knob" class="joystick-knob"></div>
+      <span class="joystick-label">walk</span>
+    </div>
+    <div class="touch-actions">
+      <button id="btn-e" class="touch-btn interact" type="button"><span>E</span><small>use</small></button>
+      <button id="btn-jump" class="touch-btn" type="button"><span>⤒</span><small>jump</small></button>
+      <button id="btn-run" class="touch-btn" type="button"><span>»</span><small>run</small></button>
+      <button id="btn-fly" class="touch-btn" type="button"><span>🕊</span><small>fly</small></button>
+      <button id="btn-cam" class="touch-btn" type="button"><span>🎥</span><small>view</small></button>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!--  Loading / error                                               -->
+  <!-- ============================================================== -->
+  <div id="loading" class="loading-screen">
+    <div class="loading-orb" aria-hidden="true"><i></i><i></i><i></i></div>
+    <p id="loading-text">Growing the forest…</p>
+    <span class="loading-sub">seeding chunks · waking rabbits · lighting the first fire</span>
+  </div>
+
+  <div id="error" class="error-screen" role="alertdialog" aria-modal="true">
+    <div class="error-card">
+      <span class="error-mark">🕯️</span>
+      <h2>The forest couldn't grow</h2>
+      <p id="error-text">WebGL is unavailable in this browser.</p>
+      <p class="muted">Try enabling hardware acceleration, closing other heavy tabs, or opening this page in Chrome, Firefox or Safari.</p>
+      <a class="btn primary" href="endless-forest.html">↻ Try again</a>
+      <a class="btn ghost" href="../index.html">← Back to the hub</a>
+    </div>
+  </div>
+
+  <script src="util.js"></script>
+  <script src="mesh.js"></script>
+  <script src="world.js"></script>
+  <script src="renderer.js"></script>
+  <script src="carrots.js"></script>
+  <script src="campfires.js"></script>
+  <script src="rabbits.js"></script>
+  <script src="player.js"></script>
+  <script src="atmosphere.js"></script>
+  <script src="ui.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
