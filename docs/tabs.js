@@ -9,7 +9,7 @@
   'use strict';
   var tabsSrc = (document.currentScript && document.currentScript.src) || '';
   var tabsDir = tabsSrc ? tabsSrc.slice(0, tabsSrc.lastIndexOf('/') + 1) : '';
-  var GHOST_SCRIPT_URL = tabsDir + 'ghost-shooter.js?v=5';
+  var GHOST_SCRIPT_URL = tabsDir + 'ghost-shooter.js?v=10';
   var TABS = [
     { icon: '⛏️', name: 'Maze' },
     { icon: '🍬', name: 'Candy' },
@@ -222,10 +222,15 @@
       bar.appendChild(b);
     });
 
-    function select(i) {
+    function select(i, force) {
+      if (!force && i === current) {
+        if (i === 5 && window.SpookyArcade && window.SpookyArcade.isOpen()) return;
+        if (i !== 5 && panels.classList.contains('show')) return;
+      }
       if (window.SpookyArcade && window.SpookyArcade.isOpen() && i !== 5) {
         window.SpookyArcade.close(true);
       }
+      if (current === 3 && window.SpookyGhostShooter) window.SpookyGhostShooter.stop();
       current = i;
       if (window.SpookyGames) window.SpookyGames.stopAll();
       var btns = bar.children;
@@ -361,7 +366,7 @@
           box.appendChild(ghostLoadMsg);
           loadGhostShooter(function (ok) {
             if (ok) {
-              if (current === 3 && box.parentNode) select(3);
+              if (current === 3 && box.parentNode) select(3, true);
             } else {
               ghostLoadMsg.textContent = 'Could not load the ghost shooter. Tap the Ghost tab to retry.';
             }

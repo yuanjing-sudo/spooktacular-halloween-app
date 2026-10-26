@@ -15,12 +15,33 @@ demos are dependency-free and run straight from the `docs/` folder.
 | --- | --- |
 | ⛏️ Maze 2D — the original candy hunt | `index.html` |
 | 🧱 3D mine — first-person voxel mine | `mine3d.html` |
-| 👻 3D ghosts — spectral shooter | `ghost3d.html` |
+| 👻 3D maze — standalone spectral maze | `ghost3d.html` |
+| 🔫 **Spectral Hunt** — first-person 3D ghost shooter (Ghost tab) | `index.html` → 👻 |
 | 🌲 Voxel forest & deep-mine | `voxel.html` |
 | 🌌 **Endless Spooky Forest 3D** — streaming X/Y/Z forest | `forest/endless-forest.html` |
 
 A local server is **optional**, only for editing the code offline. The deployed
 pages are ordinary static files and need no server-side code.
+
+## 🔫 Spectral Hunt — the Ghost tab
+
+The **Ghost tab** is now a genuine WebGL first-person shooter, not a 2D DOM
+minigame. It runs in a Three.js `r128` scene with procedural graveyard terrain,
+moonlight, shadows, ground mist, ritual light, glowing pumpkins, floating embers
+and a first-person spectral blaster. 18 ghost breeds (plus **The Hollow King**
+boss) use animated shaders, different silhouettes and chase, strafe, orbit,
+teleport, dive and ambush behaviours. The loop includes:
+
+- endless waves and a boss every fifth wave;
+- soul combos, forgiving aim assist, triple/rapid pickups and health;
+- boss health bar, damage numbers, hit markers, camera recoil and screen shake;
+- a persistent best score and a bestiary that fills in as you dispel breeds;
+- synthesized graveyard ambience and sound effects, plus a mute toggle;
+- desktop keyboard/mouse and mobile joystick/fire controls.
+
+`docs/vendor/three.min.js` is vendored locally, so GitHub Pages and the Google
+Sites embed do not need a CDN. The original standalone 3D maze remains at
+`ghost3d.html`.
 
 ## 🕹️ Midnight Arcade
 
@@ -35,11 +56,14 @@ games — every one playable in its own dedicated room:
 - **Reflex:** Ritual Rhythm, Candy Catcher, Bat Swarm, Spider Siege, Pumpkin
   Archery, Vampire Reflex, Candle Keep.
 
-Each card shows its category, difficulty and your best score. Entering a game
-opens a full-screen room with an intro card, pause sheet (Esc), restart, mute
-and a result screen, so nothing gets clipped inside the 390 px game canvas.
-Best scores and the mute setting persist in `localStorage`, and the Arcade is
-reachable from `index.html`, `mine3d.html`, `ghost3d.html` and `voxel.html`.
+Each card now carries a hand-built miniature scene rather than an emoji, and
+every game room shares a themed ambient stage, a 3-2-1 countdown and a larger
+play surface. Cards show category, difficulty and your best score. Entering a
+game opens a full-screen room with an intro card, pause sheet (Esc), restart,
+mute and a result screen, so nothing gets clipped inside the 390 px game
+canvas. Best scores and the mute setting persist in `localStorage`, and the
+Arcade is reachable from `index.html`, `mine3d.html`, `ghost3d.html` and
+`voxel.html`.
 
 ## 3D worlds
 
@@ -95,6 +119,8 @@ See [`docs/forest/GOOGLE-SITES.md`](docs/forest/GOOGLE-SITES.md) for a longer gu
 
 ## Controls (web)
 
-Use **WASD** or the arrow keys to move, **Shift** to run, **Space** to jump,
-**E** to interact, and **Esc** to pause. Each page lists its own extras in the
-in-game help and footer.
+In the 3D worlds, use **WASD** or the arrow keys to move, **Shift** to run,
+**Space** to jump, **E** to interact, and **Esc** to pause. In **Spectral Hunt**,
+move with **WASD**, drag to look, click or press **Space** to fire, and use
+**Esc** to pause. Touch devices get a movement stick and a fire button. Each
+page lists its own extras in the in-game help and footer.

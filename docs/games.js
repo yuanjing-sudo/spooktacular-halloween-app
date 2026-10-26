@@ -403,7 +403,6 @@
         return;
       }
       smashed++;
-      shots++;
       comboCount++;
       comboT = 2.6;
       var pts = powerUp ? 50 : 25;
