@@ -1,18 +1,28 @@
-/* Spooky Ghost Shooter — 3D Halloween Forest
- * XYZ interface, autumn trees, walking avatar, blue orb capture mechanic
+/* Spooky Ghost Shooter — 2D Halloween Forest
+ * Painted 2D haunted-forest arena, glowing ghost varieties, orb capture.
  */
 (function () {
   'use strict';
 
   var GHOST_TYPES = [
-    { name: 'Blinky', bodyColor: '#ff6b9d', glowColor: '#ff6b9d', eyeColor: '#fff', speed: 1.2, size: 1.0 },
-    { name: 'Casper', bodyColor: '#c44dff', glowColor: '#c44dff', eyeColor: '#fff', speed: 0.9, size: 1.15 },
-    { name: 'Spooky', bodyColor: '#00ffcc', glowColor: '#00ffcc', eyeColor: '#0b0620', speed: 1.5, size: 0.9 },
-    { name: 'Phantom', bodyColor: '#ffd166', glowColor: '#ffd166', eyeColor: '#1a0b00', speed: 1.0, size: 1.05 },
-    { name: 'Wraith', bodyColor: '#ff4500', glowColor: '#ff4500', eyeColor: '#fff', speed: 1.3, size: 0.95 },
-    { name: 'Specter', bodyColor: '#59e6ff', glowColor: '#59e6ff', eyeColor: '#0b0620', speed: 0.8, size: 1.2 },
-    { name: 'Shade', bodyColor: '#7dff6a', glowColor: '#7dff6a', eyeColor: '#1a0b00', speed: 1.1, size: 1.0 },
-    { name: 'Banshee', bodyColor: '#ff9f1c', glowColor: '#ff9f1c', eyeColor: '#fff', speed: 1.4, size: 0.92 }
+    { name: 'Blinky',   bodyColor: '#ff6b9d', glowColor: '#ff6b9d', eyeColor: '#fff',    speed: 1.2, size: 1.00, variant: 'classic' },
+    { name: 'Casper',   bodyColor: '#c44dff', glowColor: '#c44dff', eyeColor: '#fff',    speed: 0.9, size: 1.15, variant: 'classic' },
+    { name: 'Spooky',   bodyColor: '#00ffcc', glowColor: '#00ffcc', eyeColor: '#0b0620', speed: 1.5, size: 0.90, variant: 'classic' },
+    { name: 'Phantom',  bodyColor: '#ffd166', glowColor: '#ffd166', eyeColor: '#1a0b00', speed: 1.0, size: 1.05, variant: 'classic' },
+    { name: 'Wraith',   bodyColor: '#ff4500', glowColor: '#ff4500', eyeColor: '#fff',    speed: 1.3, size: 0.95, variant: 'classic' },
+    { name: 'Specter',  bodyColor: '#59e6ff', glowColor: '#59e6ff', eyeColor: '#0b0620', speed: 0.8, size: 1.20, variant: 'classic' },
+    { name: 'Shade',    bodyColor: '#7dff6a', glowColor: '#7dff6a', eyeColor: '#1a0b00', speed: 1.1, size: 1.00, variant: 'classic' },
+    { name: 'Banshee',  bodyColor: '#ff9f1c', glowColor: '#ff9f1c', eyeColor: '#fff',    speed: 1.4, size: 0.92, variant: 'classic' },
+    { name: 'Pumpkin',  bodyColor: '#ff8c1a', glowColor: '#ff8c1a', eyeColor: '#3a1400', speed: 0.95, size: 1.08, variant: 'pumpkin', points: 40 },
+    { name: 'Imp',      bodyColor: '#d45bff', glowColor: '#d45bff', eyeColor: '#fff',    speed: 1.45, size: 0.95, variant: 'horns',   points: 35 },
+    { name: 'Monarch',  bodyColor: '#ffd166', glowColor: '#ffe08a', eyeColor: '#2a1505', speed: 0.85, size: 1.10, variant: 'crown',   points: 45 },
+    { name: 'Witch',    bodyColor: '#9d4edd', glowColor: '#c77dff', eyeColor: '#fff',    speed: 1.05, size: 1.05, variant: 'witch',   points: 40 },
+    { name: 'Cyclops',  bodyColor: '#3ddc97', glowColor: '#3ddc97', eyeColor: '#0b0620', speed: 1.15, size: 1.02, variant: 'cyclops', points: 35 },
+    { name: 'Count',    bodyColor: '#ff3355', glowColor: '#ff3355', eyeColor: '#fff',    speed: 1.25, size: 1.00, variant: 'vampire', points: 45, brows: true },
+    { name: 'Reaper',   bodyColor: '#b8b8d0', glowColor: '#8f8fff', eyeColor: '#1a0b00', speed: 0.9, size: 1.12, variant: 'reaper',  points: 50, mouth: false },
+    { name: 'Dapper',   bodyColor: '#6ee7ff', glowColor: '#6ee7ff', eyeColor: '#1a0b00', speed: 1.0, size: 1.00, variant: 'tophat',  points: 35 },
+    { name: 'Mummy',    bodyColor: '#e8d8a8', glowColor: '#ffe9b0', eyeColor: '#3a2a10', speed: 0.75, size: 1.10, variant: 'mummy',   points: 40 },
+    { name: 'Twinkle',  bodyColor: '#b388ff', glowColor: '#d4b8ff', eyeColor: '#2a1505', speed: 1.35, size: 0.92, variant: 'star',    points: 50 }
   ];
 
   var projectiles = [];
@@ -23,8 +33,9 @@
   var animFrameId = null;
   var lastTime = 0;
   var avatarX = 50;
-  var avatarZ = 80;
+  var avatarY = 18;
   var keys = {};
+  var uid = 0;
 
   function el(tag, cls, html) {
     var e = document.createElement(tag);
@@ -33,161 +44,229 @@
     return e;
   }
 
+  function svgNode(tag, attrs) {
+    var n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    }
+    return n;
+  }
+
   function createGhostSVG(type) {
-    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 100 120');
-    svg.setAttribute('width', '100');
-    svg.setAttribute('height', '120');
+    var variant = type.variant || 'classic';
+    var base = 'gsv' + (++uid);
+    var svg = svgNode('svg', { viewBox: '0 0 100 120', width: '100', height: '120', 'aria-hidden': 'true' });
     svg.style.overflow = 'visible';
 
-    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    var defs = svgNode('defs');
 
-    var bodyGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    bodyGrad.setAttribute('id', 'ghostBody-' + type.name + '-' + Date.now());
-    bodyGrad.setAttribute('cx', '50%');
-    bodyGrad.setAttribute('cy', '35%');
-    bodyGrad.setAttribute('r', '60%');
-    var stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%');
-    stop1.setAttribute('stop-color', '#ffffff');
-    stop1.setAttribute('stop-opacity', '0.95');
-    var stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '40%');
-    stop2.setAttribute('stop-color', type.bodyColor);
-    stop2.setAttribute('stop-opacity', '0.85');
-    var stop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop3.setAttribute('offset', '100%');
-    stop3.setAttribute('stop-color', type.bodyColor);
-    stop3.setAttribute('stop-opacity', '0.3');
-    bodyGrad.appendChild(stop1);
-    bodyGrad.appendChild(stop2);
-    bodyGrad.appendChild(stop3);
+    var bodyGrad = svgNode('radialGradient', { id: base + 'Body', cx: '50%', cy: '32%', r: '68%' });
+    [
+      ['0%', '#ffffff', '0.92'],
+      ['38%', type.bodyColor, '0.82'],
+      ['100%', type.bodyColor, '0.22']
+    ].forEach(function (stop) {
+      bodyGrad.appendChild(svgNode('stop', { offset: stop[0], 'stop-color': stop[1], 'stop-opacity': stop[2] }));
+    });
     defs.appendChild(bodyGrad);
 
-    var glowGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    glowGrad.setAttribute('id', 'ghostGlow-' + type.name + '-' + Date.now());
-    var gStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    gStop1.setAttribute('offset', '0%');
-    gStop1.setAttribute('stop-color', type.glowColor);
-    gStop1.setAttribute('stop-opacity', '0.6');
-    var gStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    gStop2.setAttribute('offset', '100%');
-    gStop2.setAttribute('stop-color', type.glowColor);
-    gStop2.setAttribute('stop-opacity', '0');
-    glowGrad.appendChild(gStop1);
-    glowGrad.appendChild(gStop2);
+    var glowGrad = svgNode('radialGradient', { id: base + 'Glow', cx: '50%', cy: '50%', r: '50%' });
+    glowGrad.appendChild(svgNode('stop', { offset: '0%', 'stop-color': type.glowColor, 'stop-opacity': '0.6' }));
+    glowGrad.appendChild(svgNode('stop', { offset: '65%', 'stop-color': type.glowColor, 'stop-opacity': '0.14' }));
+    glowGrad.appendChild(svgNode('stop', { offset: '100%', 'stop-color': type.glowColor, 'stop-opacity': '0' }));
     defs.appendChild(glowGrad);
 
-    var filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
-    filter.setAttribute('id', 'ghostBlur-' + type.name + '-' + Date.now());
-    filter.setAttribute('x', '-50%');
-    filter.setAttribute('y', '-50%');
-    filter.setAttribute('width', '200%');
-    filter.setAttribute('height', '200%');
-    var feGaussian = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
-    feGaussian.setAttribute('stdDeviation', '3');
-    filter.appendChild(feGaussian);
-    defs.appendChild(filter);
+    var blur = svgNode('filter', { id: base + 'Blur', x: '-60%', y: '-60%', width: '220%', height: '220%' });
+    blur.appendChild(svgNode('feGaussianBlur', { stdDeviation: '4' }));
+    defs.appendChild(blur);
+
+    var eyeGrad = svgNode('radialGradient', { id: base + 'Eye', cx: '50%', cy: '38%', r: '70%' });
+    eyeGrad.appendChild(svgNode('stop', { offset: '0%', 'stop-color': '#ffffff', 'stop-opacity': '1' }));
+    eyeGrad.appendChild(svgNode('stop', { offset: '100%', 'stop-color': type.eyeColor, 'stop-opacity': '1' }));
+    defs.appendChild(eyeGrad);
+
+    var cheekGrad = svgNode('radialGradient', { id: base + 'Cheek', cx: '50%', cy: '50%', r: '50%' });
+    cheekGrad.appendChild(svgNode('stop', { offset: '0%', 'stop-color': '#ffffff', 'stop-opacity': '0.42' }));
+    cheekGrad.appendChild(svgNode('stop', { offset: '100%', 'stop-color': '#ffffff', 'stop-opacity': '0' }));
+    defs.appendChild(cheekGrad);
 
     svg.appendChild(defs);
 
-    var glow = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    glow.setAttribute('cx', '50');
-    glow.setAttribute('cy', '55');
-    glow.setAttribute('rx', '45');
-    glow.setAttribute('ry', '55');
-    glow.setAttribute('fill', 'url(#ghostGlow-' + type.name + '-' + Date.now() + ')');
-    glow.setAttribute('filter', 'url(#ghostBlur-' + type.name + '-' + Date.now() + ')');
-    svg.appendChild(glow);
+    svg.appendChild(svgNode('ellipse', {
+      cx: '50', cy: '55', rx: '47', ry: '57',
+      fill: 'url(#' + base + 'Glow)', filter: 'url(#' + base + 'Blur)'
+    }));
 
-    var body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    body.setAttribute('d', 'M50 10 C75 10 90 30 90 55 L90 90 C90 95 85 100 80 95 C75 90 70 95 65 100 C60 105 55 100 50 105 C45 100 40 105 35 100 C30 95 25 90 20 95 C15 100 10 95 10 90 L10 55 C10 30 25 10 50 10 Z');
-    body.setAttribute('fill', 'url(#ghostBody-' + type.name + '-' + Date.now() + ')');
-    body.setAttribute('stroke', type.bodyColor);
-    body.setAttribute('stroke-width', '1.5');
-    body.setAttribute('stroke-opacity', '0.5');
+    var body = svgNode('path', {
+      d: 'M50 10 C75 10 90 30 90 55 L90 90 C90 95 85 100 80 95 C75 90 70 95 65 100 C60 105 55 100 50 105 C45 100 40 105 35 100 C30 95 25 90 20 95 C15 100 10 95 10 90 L10 55 C10 30 25 10 50 10 Z',
+      fill: 'url(#' + base + 'Body)',
+      stroke: type.bodyColor,
+      'stroke-width': '1.5',
+      'stroke-opacity': '0.55'
+    });
     svg.appendChild(body);
 
-    var eyeGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    eyeGrad.setAttribute('id', 'eyeGrad-' + type.name + '-' + Date.now());
-    var eStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    eStop1.setAttribute('offset', '0%');
-    eStop1.setAttribute('stop-color', '#ffffff');
-    eStop1.setAttribute('stop-opacity', '1');
-    var eStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    eStop2.setAttribute('offset', '100%');
-    eStop2.setAttribute('stop-color', type.eyeColor);
-    eStop2.setAttribute('stop-opacity', '1');
-    eyeGrad.appendChild(eStop1);
-    eyeGrad.appendChild(eStop2);
-    defs.appendChild(eyeGrad);
+    if (variant === 'mummy') {
+      ['M18 55 Q50 62 82 54', 'M18 68 Q50 75 82 67', 'M20 82 Q50 89 80 81', 'M24 94 Q50 100 76 93'].forEach(function (d) {
+        svg.appendChild(svgNode('path', {
+          d: d, fill: 'none', stroke: '#fff8dc', 'stroke-width': '5',
+          'stroke-linecap': 'round', opacity: '0.34'
+        }));
+      });
+    }
 
-    var leftEye = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    leftEye.setAttribute('cx', '35');
-    leftEye.setAttribute('cy', '45');
-    leftEye.setAttribute('rx', '8');
-    leftEye.setAttribute('ry', '10');
-    leftEye.setAttribute('fill', 'url(#eyeGrad-' + type.name + '-' + Date.now() + ')');
-    svg.appendChild(leftEye);
+    if (variant === 'pumpkin') {
+      // Raised pumpkin ridges make the orange ghost read as a jack-o'-lantern.
+      ['M30 24 Q24 58 30 96', 'M70 24 Q76 58 70 96'].forEach(function (d) {
+        svg.appendChild(svgNode('path', {
+          d: d, fill: 'none', stroke: '#c45f00', 'stroke-width': '1.5', opacity: '0.38'
+        }));
+      });
+    }
 
-    var rightEye = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    rightEye.setAttribute('cx', '65');
-    rightEye.setAttribute('cy', '45');
-    rightEye.setAttribute('rx', '8');
-    rightEye.setAttribute('ry', '10');
-    rightEye.setAttribute('fill', 'url(#eyeGrad-' + type.name + '-' + Date.now() + ')');
-    svg.appendChild(rightEye);
+    if (variant === 'vampire') {
+      svg.appendChild(svgNode('path', {
+        d: 'M20 23 Q27 5 50 5 Q73 5 80 23 Q65 15 50 18 Q35 15 20 23 Z',
+        fill: '#1a0b00', opacity: '0.82'
+      }));
+    }
 
-    var leftPupil = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    leftPupil.setAttribute('cx', '35');
-    leftPupil.setAttribute('cy', '47');
-    leftPupil.setAttribute('r', '4');
-    leftPupil.setAttribute('fill', type.eyeColor);
-    svg.appendChild(leftPupil);
+    if (variant === 'reaper') {
+      svg.appendChild(svgNode('path', {
+        d: 'M14 46 Q14 4 50 4 Q86 4 86 46 Q72 25 50 25 Q28 25 14 46 Z',
+        fill: '#2a2038', opacity: '0.88'
+      }));
+    }
 
-    var rightPupil = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    rightPupil.setAttribute('cx', '65');
-    rightPupil.setAttribute('cy', '47');
-    rightPupil.setAttribute('r', '4');
-    rightPupil.setAttribute('fill', type.eyeColor);
-    svg.appendChild(rightPupil);
+    if (variant === 'pumpkin') {
+      svg.appendChild(svgNode('path', { d: 'M28 38 L42 50 L27 50 Z', fill: type.eyeColor, opacity: '0.92' }));
+      svg.appendChild(svgNode('path', { d: 'M72 38 L58 50 L73 50 Z', fill: type.eyeColor, opacity: '0.92' }));
+      svg.appendChild(svgNode('path', {
+        d: 'M33 69 L41 61 L49 71 L57 61 L65 69 L58 81 L50 75 L42 81 Z',
+        fill: type.eyeColor, opacity: '0.9'
+      }));
+    } else if (variant === 'cyclops') {
+      svg.appendChild(svgNode('ellipse', {
+        cx: '50', cy: '45', rx: '15', ry: '13', fill: 'url(#' + base + 'Eye)',
+        stroke: type.eyeColor, 'stroke-width': '1', 'stroke-opacity': '0.25'
+      }));
+      svg.appendChild(svgNode('circle', { cx: '50', cy: '47', r: '5.5', fill: type.eyeColor }));
+      svg.appendChild(svgNode('path', {
+        d: 'M35 37 Q50 29 65 37', fill: 'none', stroke: type.bodyColor,
+        'stroke-width': '2', 'stroke-linecap': 'round', opacity: '0.55'
+      }));
+      svg.appendChild(svgNode('ellipse', {
+        cx: '50', cy: '72', rx: '5', ry: '6', fill: type.eyeColor, opacity: '0.72'
+      }));
+    } else {
+      [35, 65].forEach(function (cx) {
+        svg.appendChild(svgNode('ellipse', {
+          cx: String(cx), cy: '45', rx: '8', ry: '10',
+          fill: 'url(#' + base + 'Eye)'
+        }));
+        svg.appendChild(svgNode('circle', {
+          cx: String(cx), cy: '47', r: '4', fill: type.eyeColor
+        }));
+      });
+      if (type.brows) {
+        svg.appendChild(svgNode('path', {
+          d: 'M27 32 L42 37', fill: 'none', stroke: '#2a1505',
+          'stroke-width': '2.4', 'stroke-linecap': 'round'
+        }));
+        svg.appendChild(svgNode('path', {
+          d: 'M73 32 L58 37', fill: 'none', stroke: '#2a1505',
+          'stroke-width': '2.4', 'stroke-linecap': 'round'
+        }));
+      }
+      if (type.mouth !== false) {
+        svg.appendChild(svgNode('ellipse', {
+          cx: '50', cy: '70', rx: '6', ry: '8', fill: type.eyeColor, opacity: '0.78'
+        }));
+      }
+    }
 
-    var mouth = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    mouth.setAttribute('cx', '50');
-    mouth.setAttribute('cy', '70');
-    mouth.setAttribute('rx', '6');
-    mouth.setAttribute('ry', '8');
-    mouth.setAttribute('fill', type.eyeColor);
-    mouth.setAttribute('opacity', '0.8');
-    svg.appendChild(mouth);
+    if (variant !== 'pumpkin') {
+      [25, 75].forEach(function (cx) {
+        svg.appendChild(svgNode('circle', {
+          cx: String(cx), cy: '58', r: '6', fill: 'url(#' + base + 'Cheek)'
+        }));
+      });
+    }
 
-    var cheekGrad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    cheekGrad.setAttribute('id', 'cheekGrad-' + type.name + '-' + Date.now());
-    var cStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    cStop1.setAttribute('offset', '0%');
-    cStop1.setAttribute('stop-color', '#ffffff');
-    cStop1.setAttribute('stop-opacity', '0.4');
-    var cStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    cStop2.setAttribute('offset', '100%');
-    cStop2.setAttribute('stop-color', '#ffffff');
-    cStop2.setAttribute('stop-opacity', '0');
-    cheekGrad.appendChild(cStop1);
-    cheekGrad.appendChild(cStop2);
-    defs.appendChild(cheekGrad);
+    if (variant === 'vampire') {
+      svg.appendChild(svgNode('path', { d: 'M43 77 L47 87 L50 78 Z', fill: '#fff' }));
+      svg.appendChild(svgNode('path', { d: 'M57 77 L53 87 L50 78 Z', fill: '#fff' }));
+      svg.appendChild(svgNode('path', { d: 'M44 87 L50 84 L56 87 L50 92 Z', fill: '#1a0b00' }));
+      svg.appendChild(svgNode('circle', { cx: '50', cy: '87', r: '2.2', fill: '#ff3355' }));
+    }
 
-    var leftCheek = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    leftCheek.setAttribute('cx', '25');
-    leftCheek.setAttribute('cy', '58');
-    leftCheek.setAttribute('r', '6');
-    leftCheek.setAttribute('fill', 'url(#cheekGrad-' + type.name + '-' + Date.now() + ')');
-    svg.appendChild(leftCheek);
+    if (variant === 'horns') {
+      svg.appendChild(svgNode('path', {
+        d: 'M29 15 Q20 3 17 -8 Q30 -2 37 12 Z',
+        fill: '#6b1a1a', stroke: '#2a0606', 'stroke-width': '1'
+      }));
+      svg.appendChild(svgNode('path', {
+        d: 'M71 15 Q80 3 83 -8 Q70 -2 63 12 Z',
+        fill: '#6b1a1a', stroke: '#2a0606', 'stroke-width': '1'
+      }));
+    }
 
-    var rightCheek = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    rightCheek.setAttribute('cx', '75');
-    rightCheek.setAttribute('cy', '58');
-    rightCheek.setAttribute('r', '6');
-    rightCheek.setAttribute('fill', 'url(#cheekGrad-' + type.name + '-' + Date.now() + ')');
-    svg.appendChild(rightCheek);
+    if (variant === 'crown') {
+      svg.appendChild(svgNode('path', {
+        d: 'M35 13 L39 1 L45 9 L50 -2 L55 9 L61 1 L65 13 Z',
+        fill: '#ffd166', stroke: '#b8860b', 'stroke-width': '1.2', 'stroke-linejoin': 'round'
+      }));
+      [[39, 6, '#ff3355'], [50, 3, '#59e6ff'], [61, 6, '#7dff6a']].forEach(function (j) {
+        svg.appendChild(svgNode('circle', { cx: String(j[0]), cy: String(j[1]), r: '1.8', fill: j[2] }));
+      });
+    }
+
+    if (variant === 'witch') {
+      svg.appendChild(svgNode('ellipse', {
+        cx: '50', cy: '13', rx: '36', ry: '7', fill: '#24103f',
+        stroke: '#6d28a8', 'stroke-width': '1'
+      }));
+      svg.appendChild(svgNode('path', {
+        d: 'M28 13 L50 -25 L72 13 Z', fill: '#3c1a66',
+        stroke: '#6d28a8', 'stroke-width': '1.2', 'stroke-linejoin': 'round'
+      }));
+      svg.appendChild(svgNode('rect', { x: '37', y: '3', width: '26', height: '7', rx: '2', fill: '#ffd166' }));
+      svg.appendChild(svgNode('path', {
+        d: 'M52 -6 L54 -10 L56 -6 L60 -5 L57 -2 L57 2 L53 0 L49 2 L50 -2 L47 -5 Z',
+        fill: '#ffd166', opacity: '0.9'
+      }));
+    }
+
+    if (variant === 'tophat') {
+      svg.appendChild(svgNode('rect', { x: '27', y: '8', width: '46', height: '6', rx: '3', fill: '#111018' }));
+      svg.appendChild(svgNode('rect', { x: '34', y: '-24', width: '32', height: '31', rx: '2', fill: '#1a1a22' }));
+      svg.appendChild(svgNode('rect', { x: '34', y: '-1', width: '32', height: '6', fill: '#6d28a8' }));
+      svg.appendChild(svgNode('rect', { x: '38', y: '-21', width: '4', height: '22', rx: '2', fill: '#3a3a4a', opacity: '0.55' }));
+    }
+
+    if (variant === 'pumpkin') {
+      svg.appendChild(svgNode('path', {
+        d: 'M47 13 Q47 4 55 2 Q52 8 53 13 Z', fill: '#3c7a2d', stroke: '#24501a', 'stroke-width': '1'
+      }));
+      svg.appendChild(svgNode('path', {
+        d: 'M55 5 Q62 2 65 7 Q59 9 55 5 Z', fill: '#4f9a3a', opacity: '0.9'
+      }));
+    }
+
+    if (variant === 'star') {
+      svg.appendChild(svgNode('line', {
+        x1: '50', y1: '9', x2: '50', y2: '-10', stroke: '#d4b8ff', 'stroke-width': '2'
+      }));
+      svg.appendChild(svgNode('path', {
+        d: 'M50 -23 L53 -15 L62 -14 L55 -8 L57 1 L50 -4 L43 1 L45 -8 L38 -14 L47 -15 Z',
+        fill: '#ffe08a', opacity: '0.95'
+      }));
+      [[20, 28, 2], [82, 22, 1.5], [78, 78, 1.8]].forEach(function (sp) {
+        svg.appendChild(svgNode('circle', {
+          cx: String(sp[0]), cy: String(sp[1]), r: String(sp[2]), fill: '#f5e9ff', opacity: '0.8'
+        }));
+      });
+    }
 
     return svg;
   }
@@ -705,117 +784,21 @@
     return avatar;
   }
 
-  function createXYZOverlay() {
-    var overlay = el('div', 'gs-xyz-overlay');
-
-    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 200 200');
-    svg.setAttribute('width', '200');
-    svg.setAttribute('height', '200');
-
-    var grid = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    grid.setAttribute('class', 'gs-grid');
-
-    for (var i = 0; i <= 10; i++) {
-      var x = i * 20;
-      var lineX = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      lineX.setAttribute('x1', x);
-      lineX.setAttribute('y1', '0');
-      lineX.setAttribute('x2', x);
-      lineX.setAttribute('y2', '200');
-      lineX.setAttribute('stroke', '#6d28a8');
-      lineX.setAttribute('stroke-width', '0.5');
-      lineX.setAttribute('opacity', '0.3');
-      grid.appendChild(lineX);
-
-      var lineY = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      lineY.setAttribute('x1', '0');
-      lineY.setAttribute('y1', x);
-      lineY.setAttribute('x2', '200');
-      lineY.setAttribute('y2', x);
-      lineY.setAttribute('stroke', '#6d28a8');
-      lineY.setAttribute('stroke-width', '0.5');
-      lineY.setAttribute('opacity', '0.3');
-      grid.appendChild(lineY);
-    }
-    svg.appendChild(grid);
-
-    var xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    xAxis.setAttribute('x1', '10');
-    xAxis.setAttribute('y1', '100');
-    xAxis.setAttribute('x2', '190');
-    xAxis.setAttribute('y2', '100');
-    xAxis.setAttribute('stroke', '#ff4444');
-    xAxis.setAttribute('stroke-width', '2');
-    svg.appendChild(xAxis);
-
-    var xLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    xLabel.setAttribute('x', '185');
-    xLabel.setAttribute('y', '95');
-    xLabel.setAttribute('fill', '#ff4444');
-    xLabel.setAttribute('font-size', '14');
-    xLabel.setAttribute('font-weight', 'bold');
-    xLabel.textContent = 'X';
-    svg.appendChild(xLabel);
-
-    var yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    yAxis.setAttribute('x1', '100');
-    yAxis.setAttribute('y1', '190');
-    yAxis.setAttribute('x2', '100');
-    yAxis.setAttribute('y2', '10');
-    yAxis.setAttribute('stroke', '#44ff44');
-    yAxis.setAttribute('stroke-width', '2');
-    svg.appendChild(yAxis);
-
-    var yLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    yLabel.setAttribute('x', '105');
-    yLabel.setAttribute('y', '20');
-    yLabel.setAttribute('fill', '#44ff44');
-    yLabel.setAttribute('font-size', '14');
-    yLabel.setAttribute('font-weight', 'bold');
-    yLabel.textContent = 'Y';
-    svg.appendChild(yLabel);
-
-    var zAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    zAxis.setAttribute('x1', '100');
-    zAxis.setAttribute('y1', '100');
-    zAxis.setAttribute('x2', '160');
-    zAxis.setAttribute('y2', '160');
-    zAxis.setAttribute('stroke', '#4444ff');
-    zAxis.setAttribute('stroke-width', '2');
-    svg.appendChild(zAxis);
-
-    var zLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    zLabel.setAttribute('x', '155');
-    zLabel.setAttribute('y', '175');
-    zLabel.setAttribute('fill', '#4444ff');
-    zLabel.setAttribute('font-size', '14');
-    zLabel.setAttribute('font-weight', 'bold');
-    zLabel.textContent = 'Z';
-    svg.appendChild(zLabel);
-
-    var origin = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    origin.setAttribute('cx', '100');
-    origin.setAttribute('cy', '100');
-    origin.setAttribute('r', '4');
-    origin.setAttribute('fill', '#ffd166');
-    svg.appendChild(origin);
-
-    overlay.appendChild(svg);
-    return overlay;
-  }
-
   function spawnGhost() {
     var type = GHOST_TYPES[(Math.random() * GHOST_TYPES.length) | 0];
     var ghost = el('div', 'gs-ghost');
     var svg = createGhostSVG(type);
     ghost.appendChild(svg);
-    ghost.style.left = (10 + Math.random() * 60) + '%';
-    ghost.style.top = (10 + Math.random() * 40) + '%';
+    ghost.style.left = (8 + Math.random() * 64) + '%';
+    ghost.style.top = (6 + Math.random() * 42) + '%';
     ghost.style.setProperty('--ghost-speed', type.speed);
     ghost.style.setProperty('--ghost-scale', type.size);
-    ghost.dataset.hp = 3;
+    ghost.style.setProperty('--ghost-glow', type.glowColor);
+    ghost.dataset.hp = type.hp || 3;
+    ghost.dataset.points = type.points || 25;
     ghost.dataset.name = type.name;
+    ghost.title = type.name + ' · ' + (type.points || 25) + ' pts';
+    ghost.setAttribute('aria-label', type.name + ' ghost');
     ghost.style.transform = 'scale(' + type.size + ')';
     return ghost;
   }
@@ -838,6 +821,18 @@
     setTimeout(function () {
       if (proj.parentNode) proj.parentNode.removeChild(proj);
     }, 2000);
+  }
+
+  function showScorePop(x, y, pts) {
+    var arena = document.getElementById('gs-arena');
+    if (!arena) return;
+    var pop = el('div', 'gs-score-pop', '+' + pts);
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+    arena.appendChild(pop);
+    setTimeout(function () {
+      if (pop.parentNode) pop.parentNode.removeChild(pop);
+    }, 750);
   }
 
   function explodeOrb(x, y) {
@@ -903,8 +898,10 @@
           explodeOrb(p.x, p.y);
 
           if (hp <= 0) {
-            score += 25;
+            var pts = parseInt(g.dataset.points || '25', 10);
+            score += pts;
             captured++;
+            showScorePop(p.x, p.y, pts);
             var scoreEl = document.getElementById('gs-score');
             if (scoreEl) scoreEl.textContent = score;
             var capEl = document.getElementById('gs-captured');
@@ -973,21 +970,21 @@
       moved = true;
     }
     if (keys['ArrowUp'] || keys['w'] || keys['W']) {
-      avatarZ -= moveSpeed;
+      avatarY += moveSpeed;
       moved = true;
     }
     if (keys['ArrowDown'] || keys['s'] || keys['S']) {
-      avatarZ += moveSpeed;
+      avatarY -= moveSpeed;
       moved = true;
     }
 
     if (avatarX < 5) avatarX = 5;
     if (avatarX > 85) avatarX = 85;
-    if (avatarZ < 40) avatarZ = 40;
-    if (avatarZ > 90) avatarZ = 90;
+    if (avatarY < 8) avatarY = 8;
+    if (avatarY > 42) avatarY = 42;
 
     avatar.style.left = avatarX + '%';
-    avatar.style.bottom = (100 - avatarZ) + '%';
+    avatar.style.bottom = avatarY + '%';
 
     if (moved) {
       avatar.classList.add('gs-avatar-walking');
@@ -1018,15 +1015,12 @@
     score = 0;
     captured = 0;
     avatarX = 50;
-    avatarZ = 80;
+    avatarY = 18;
     gameActive = true;
     lastTime = 0;
 
     var scoreEl = el('div', 'gs-score-board', 'Score: <span id="gs-score">0</span> · Captured: <span id="gs-captured">0</span>');
     arena.appendChild(scoreEl);
-
-    var xyzOverlay = createXYZOverlay();
-    arena.appendChild(xyzOverlay);
 
     var ground = el('div', 'gs-ground');
     arena.appendChild(ground);
@@ -1086,7 +1080,7 @@
       scene.appendChild(createTombstoneSVG(t.x, t.z, t.s));
     });
 
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; i < 8; i++) {
       scene.appendChild(spawnGhost());
     }
 
@@ -1099,37 +1093,27 @@
 
     var spawnBtn = el('button', 'gs-spawn-btn', '👻 +Ghost');
     spawnBtn.onclick = function () {
-      if (scene.querySelectorAll('.gs-ghost').length < 15) {
+      if (scene.querySelectorAll('.gs-ghost').length < 18) {
         scene.appendChild(spawnGhost());
       }
     };
     arena.appendChild(spawnBtn);
 
-    var help = el('div', 'gs-help', 'WASD / Arrows to walk · SPACE to shoot orb');
+    var help = el('div', 'gs-help', 'WASD / Arrows to move · SPACE to shoot orbs');
     arena.appendChild(help);
-
-    document.addEventListener('keydown', function (e) {
-      keys[e.key] = true;
-      if (e.code === 'Space' && gameActive) {
-        e.preventDefault();
-        shoot();
-      }
-    });
-    document.addEventListener('keyup', function (e) {
-      keys[e.key] = false;
-    });
 
     animFrameId = requestAnimationFrame(gameLoop);
   }
 
   function stopGame() {
     gameActive = false;
+    keys = {};
     if (animFrameId) cancelAnimationFrame(animFrameId);
     animFrameId = null;
   }
 
   function build(box) {
-    var head = el('div', 'phead', '<h2>👻 Spooky Ghost Shooter 3D</h2><div class="psub">Walk through the autumn forest, shoot blue orbs to capture ghosts!</div>');
+    var head = el('div', 'phead', '<h2>👻 Spooky Ghost Shooter</h2><div class="psub">A 2D haunted forest full of glowing ghost varieties. Move, aim, and fire blue orbs!</div>');
     box.appendChild(head);
 
     var arena = el('div', 'gs-arena');
@@ -1146,6 +1130,17 @@
 
     return box;
   }
+
+  document.addEventListener('keydown', function (e) {
+    keys[e.key] = true;
+    if (e.code === 'Space' && gameActive) {
+      e.preventDefault();
+      shoot();
+    }
+  });
+  document.addEventListener('keyup', function (e) {
+    keys[e.key] = false;
+  });
 
   // The host Tabs component supplies the Back to Maze button. Stop the
   // animation whenever the user leaves the panel so it cannot keep running

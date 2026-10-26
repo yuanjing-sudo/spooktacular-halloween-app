@@ -7,6 +7,9 @@
  */
 (function () {
   'use strict';
+  var tabsSrc = (document.currentScript && document.currentScript.src) || '';
+  var tabsDir = tabsSrc ? tabsSrc.slice(0, tabsSrc.lastIndexOf('/') + 1) : '';
+  var GHOST_SCRIPT_URL = tabsDir + 'ghost-shooter.js?v=5';
   var TABS = [
     { icon: '⛏️', name: 'Maze' },
     { icon: '🍬', name: 'Candy' },
@@ -278,7 +281,29 @@
       return b;
     }
 
-    function build(i) {
+    var ghostLoadState = 0, ghostWaiters = [];
+  function loadGhostShooter(cb) {
+    if (window.SpookyGhostShooter) { cb(true); return; }
+    ghostWaiters.push(cb);
+    if (ghostLoadState) return;
+    ghostLoadState = 1;
+    var s = document.createElement('script');
+    s.src = GHOST_SCRIPT_URL;
+    s.async = true;
+    s.onload = function () { finishGhostLoad(true); };
+    s.onerror = function () { finishGhostLoad(false); };
+    document.head.appendChild(s);
+
+    function finishGhostLoad(ok) {
+      var good = ok && !!window.SpookyGhostShooter;
+      ghostLoadState = good ? 2 : 0;
+      var waiters = ghostWaiters.slice();
+      ghostWaiters.length = 0;
+      waiters.forEach(function (fn) { try { fn(good); } catch (e) {} });
+    }
+  }
+
+  function build(i) {
       var snap = opts.snapshot();
       var box = el('div', 'panel');
       var closeBtn = el('button', 'panel-close', '✕');
@@ -332,7 +357,15 @@
           window.SpookyGhostShooter.build(box);
         } else {
           box.appendChild(head('👻 Spooky Ghost Shooter', snap));
-          box.appendChild(el('div', 'psub', 'Loading ghost shooter...'));
+          var ghostLoadMsg = el('div', 'psub', 'Loading ghost shooter...');
+          box.appendChild(ghostLoadMsg);
+          loadGhostShooter(function (ok) {
+            if (ok) {
+              if (current === 3 && box.parentNode) select(3);
+            } else {
+              ghostLoadMsg.textContent = 'Could not load the ghost shooter. Tap the Ghost tab to retry.';
+            }
+          });
         }
       } else if (i === 4) {
         box.appendChild(head('🗺️ Explore', snap));
