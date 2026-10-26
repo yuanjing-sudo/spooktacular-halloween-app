@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>👻 Spooktacular Ghosts 3D</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="arcade.css?v=1">
 <style>
   #gameg { width: 94vw; max-width: 900px; height: 62vh; display: block; }
   #minimap { position: absolute; top: 8px; right: 8px; border: 1px solid #6d28a8; border-radius: 6px; background: rgba(11,6,32,.8); }
@@ -28,7 +29,6 @@
 </div>
 <div id="wrap">
   <canvas id="gameg" width="900" height="560"></canvas>
-  <div id="tabpanels"></div>
   <canvas id="minimap" width="132" height="132"></canvas>
   <div id="stick"><div id="nub"></div></div>
   <div id="vctl"><button id="vdn" title="Fly down">▼</button><button id="vjump" title="Jump">⤒</button><button id="vup" title="Fly up">▲</button></div>
@@ -48,6 +48,7 @@
   <a href="voxel.html#forest" style="color:#ffd166">🌲 Voxel forest</a>
   <a href="voxel.html#mine" style="color:#ffd166">⛏️ Voxel deep-mine</a>
 </div>
+<div id="tabpanels"></div>
 <div id="tabs"></div>
 <p id="help">WASD/arrows move · ←/→ turn · mouse/touch drag looks · Space/⤒ jumps · R/F or ▲/▼ fly · axes: X red · Y green · Z blue · walk into 🍬 · dodge 👻</p>
 <script>
@@ -63,8 +64,61 @@ window.addEventListener('error', function (e) {
 });
 </script>
 <script src="spooky.js?v=9"></script>
-<script src="tabs.js?v=10"></script>
-<script src="games.js?v=9"></script>
+<script src="tabs.js?v=12"></script>
+<script src="games.js?v=11"></script>
+<script src="arcade.js?v=1"></script>
 <script src="ghost3d.js?v=4"></script>
+<script>
+(function () {
+  if (!window.SpookyTabs) return;
+  var KEY = 'spooky_ghost_profile';
+  var prof = {};
+  try { prof = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { prof = {}; }
+  prof.gold = +prof.gold || 0;
+  prof.level = +prof.level || 1;
+  prof.ach = prof.ach || {};
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(prof)); } catch (e) {} }
+  function state() { return (window.__ghost3d && window.__ghost3d.state()) || {}; }
+  window.SpookyTabs.init({
+    tabsId: 'tabs', panelsId: 'tabpanels',
+    snapshot: function () {
+      var G = state();
+      var left = (G.candies || []).filter(function (c) { return !c.got; }).length;
+      return {
+        score: G.score || 0,
+        layer: 'Level ' + (G.level || 1),
+        left: left,
+        gold: prof.gold,
+        level: prof.level,
+        pick: 'Wooden Pick',
+        seed: G.seed || 0,
+        relics: 0,
+        ach: prof.ach,
+        collected: Math.max(0, 34 - left)
+      };
+    },
+    onSelect: function () {},
+    actions: {},
+    host: { onUnlock: function (id, name) { prof.ach[id] = name; save(); } },
+    profile: {
+      gold: function () { return prof.gold; },
+      addGold: function (n) { prof.gold += n; save(); },
+      spendGold: function (n) { if (prof.gold < n) return false; prof.gold -= n; save(); return true; },
+      coal: function () { return 0; },
+      addCoal: function () {},
+      spendCoal: function () { return false; },
+      level: function () { return prof.level; },
+      pickIdx: function () { return 0; },
+      setPick: function () {},
+      pickDamage: function () { return 1; },
+      goldMult: function () { return 1; },
+      gainXP: function (n) { prof.level += Math.max(0, Math.floor((n || 0) / 50)); save(); },
+      addScore: function (n) { var G = state(); if (G) G.score = (G.score || 0) + n; },
+      unlock: function (id, name) { prof.ach[id] = name; save(); },
+      flash: function () {}
+    }
+  });
+})();
+</script>
 </body>
 </html>

@@ -10,11 +10,11 @@
   var TABS = [
     { icon: '⛏️', name: 'Maze' },
     { icon: '🍬', name: 'Candy' },
-    { icon: '🛒', name: 'Mine' },
+    { icon: '💎', name: 'Mine' },
     { icon: '👻', name: 'Ghosts' },
     { icon: '🗺️', name: 'Explore' },
-    { icon: '🎮', name: 'Games' },
-    { icon: '🏆', name: 'Achieve' }
+    { icon: '🎮', name: 'Arcade' },
+    { icon: '🏆', name: 'Trophies' }
   ];
   var ACH_ROSTER = [
     ['first-candy', 'First Bite — grab candy'],
@@ -35,7 +35,16 @@
     ['rhythm-8', 'Drummer — 8 rhythm hits'],
     ['run-30', 'Marathoner — survive Voxel Run'],
     ['catch-10', 'Candy Keeper — catch 10 falling candy'],
-    ['simon-5', 'Echo Mind — reach Simon round 5']
+    ['simon-5', 'Echo Mind — reach Simon round 5'],
+    ['bats-20', 'Bat Warden — banish 20 bats'],
+    ['brew-5', 'Master Brewer — finish all 5 recipes'],
+    ['spider-10', 'Spider Squasher — squash 10 spiders'],
+    ['flight-300', 'Night Rider — fly 300 m'],
+    ['hangman-1', 'Word Whisperer — solve Haunted Hangman'],
+    ['count-5', 'Keen Eye — 4+ Crypt Count rounds'],
+    ['archery-3', 'Dead Eye — land 3 archery hits'],
+    ['reflex-5', 'Night Reflexes — average under 520 ms'],
+    ['candles-30', 'Keeper of the Flame — keep candles 30s']
   ];
 
   /* ---- Playable mining sim (MNBlockType values; coal banks picks) ---- */
@@ -196,21 +205,61 @@
     var panels = document.getElementById(opts.panelsId);
     var current = 0, built = {};
 
+    bar.setAttribute('role', 'tablist');
+    bar.setAttribute('aria-label', 'Spooktacular sections');
+    panels.setAttribute('role', 'dialog');
+
     TABS.forEach(function (t, i) {
-      var b = el('button', 'tabbtn' + (i === 0 ? ' active' : ''), t.icon + '<br>' + t.name);
+      var b = el('button', 'tabbtn' + (i === 0 ? ' active' : ''));
+      b.type = 'button';
+      b.innerHTML = '<span class="tbi" aria-hidden="true">' + t.icon + '</span><span class="tbl">' + t.name + '</span>';
+      b.setAttribute('aria-label', t.name);
+      b.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
       b.onclick = function () { select(i); };
       bar.appendChild(b);
     });
 
     function select(i) {
+      if (window.SpookyArcade && window.SpookyArcade.isOpen() && i !== 5) {
+        window.SpookyArcade.close(true);
+      }
       current = i;
       if (window.SpookyGames) window.SpookyGames.stopAll();
       var btns = bar.children;
-      for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('active', k === i);
+      for (var k = 0; k < btns.length; k++) {
+        btns[k].classList.toggle('active', k === i);
+        btns[k].setAttribute('aria-selected', k === i ? 'true' : 'false');
+      }
       panels.innerHTML = '';
-      if (i !== 0) panels.appendChild(build(i));
-      panels.style.display = i === 0 ? 'none' : 'flex';
-      opts.onSelect(i);
+      panels.classList.remove('show');
+
+      if (i === 0) {
+        panels.style.display = 'none';
+        document.body.classList.remove('tab-open');
+        opts.onSelect(0);
+        return;
+      }
+
+      if (i === 5 && window.SpookyArcade) {
+        panels.style.display = 'none';
+        document.body.classList.remove('tab-open');
+        if (opts.onSelect) opts.onSelect(5);
+        window.SpookyArcade.open({
+          snapshot: opts.snapshot,
+          profile: opts.profile,
+          actions: opts.actions,
+          host: opts.host,
+          onSelect: opts.onSelect,
+          onClose: function () { select(0); }
+        });
+        return;
+      }
+
+      panels.appendChild(build(i));
+      panels.style.display = 'flex';
+      document.body.classList.add('tab-open');
+      requestAnimationFrame(function () { panels.classList.add('show'); });
+      if (opts.onSelect) opts.onSelect(i);
     }
 
     function head(title, snap) {
@@ -232,6 +281,11 @@
     function build(i) {
       var snap = opts.snapshot();
       var box = el('div', 'panel');
+      var closeBtn = el('button', 'panel-close', '✕');
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', 'Close ' + TABS[i].name);
+      closeBtn.onclick = function () { select(0); };
+      box.appendChild(closeBtn);
       var back = el('button', '', '⛏️ Back to Maze');
       back.onclick = function () { select(0); };
       if (i === 1) {
@@ -334,14 +388,27 @@
         box.appendChild(stage);
         showList();
       } else if (i === 6) {
-        box.appendChild(head('🏆 Achievements', snap));
+        box.appendChild(head('🏆 Trophy Room', snap));
         var extra = hasMatch() ? { 'match-8': 'Memory Master' } : {};
         var all = {};
         Object.keys(snap.ach || {}).forEach(function (k) { all[k] = 1; });
         Object.keys(extra).forEach(function (k) { all[k] = 1; });
-        box.appendChild(list(ACH_ROSTER.map(function (a) {
-          return (all[a[0]] ? '✅ ' : '🔒 ') + a[1];
-        })));
+        var earned = ACH_ROSTER.filter(function (a) { return all[a[0]]; }).length;
+        var summary = el('div', 'ach-summary');
+        summary.innerHTML =
+          '<div class="ach-count"><b>' + earned + '</b><span>of ' + ACH_ROSTER.length + ' unlocked</span></div>' +
+          '<div class="ach-meter"><i style="width:' + Math.round((earned / ACH_ROSTER.length) * 100) + '%"></i></div>';
+        box.appendChild(summary);
+        var grid = el('div', 'ach-grid');
+        ACH_ROSTER.forEach(function (a) {
+          var got = !!all[a[0]];
+          var parts = a[1].split(' — ');
+          grid.appendChild(el('div', 'ach-card' + (got ? ' got' : ''),
+            '<span class="ach-ico">' + (got ? '🏆' : '🔒') + '</span>' +
+            '<span class="ach-txt"><b>' + parts[0] + '</b><small>' + (parts[1] || '') + '</small></span>'));
+        });
+        box.appendChild(grid);
+        if (!earned) box.appendChild(el('div', 'psub', 'Play the Arcade, mine, and explore the forest to start filling this room.'));
       }
       box.appendChild(back);
       return box;

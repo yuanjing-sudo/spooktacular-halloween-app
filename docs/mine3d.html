@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>🎃 Spooktacular Mine 3D</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="arcade.css?v=1">
 <style>
   #game3d { width: 94vw; max-width: 900px; height: 62vh; display: block; }
   #minimap { position: absolute; top: 8px; right: 8px; border: 1px solid #6d28a8; border-radius: 6px; background: rgba(11,6,32,.8); }
@@ -26,7 +27,6 @@
 </div>
 <div id="wrap">
   <canvas id="game3d" width="900" height="560"></canvas>
-  <div id="tabpanels"></div>
   <canvas id="minimap" width="132" height="132"></canvas>
   <div id="stick"><div id="nub"></div></div>
   <div id="overlay" class="hidden">
@@ -46,11 +46,13 @@
   <a href="voxel.html#forest" style="color:#ffd166">🌲 Voxel forest</a>
   <a href="voxel.html#mine" style="color:#ffd166">⛏️ Voxel deep-mine</a>
 </div>
+<div id="tabpanels"></div>
 <div id="tabs"></div>
 <p id="help">WASD/arrows move · mouse/touch drag looks · walk into 🍬💎🗿🎣 · dodge 👻 and 🦇 · every cleared floor descends one layer deeper, forever</p>
 <script src="spooky.js?v=9"></script>
-<script src="tabs.js?v=10"></script>
-<script src="games.js?v=9"></script>
+<script src="tabs.js?v=12"></script>
+<script src="games.js?v=11"></script>
+<script src="arcade.js?v=1"></script>
 <script src="ghost-shooter.js?v=4"></script>
 <script src="mine3d.js?v=10"></script>
 </body>

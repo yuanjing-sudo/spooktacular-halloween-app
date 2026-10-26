@@ -22,6 +22,25 @@ demos are dependency-free and run straight from the `docs/` folder.
 A local server is **optional**, only for editing the code offline. The deployed
 pages are ordinary static files and need no server-side code.
 
+## 🕹️ Midnight Arcade
+
+The seven-tab web shell now opens a full-screen **Midnight Arcade** with 20
+games — every one playable in its own dedicated room:
+
+- **Arcade:** Pumpkin Smash, Spell Duel, Voxel Run, Witch Flight.
+- **Puzzle:** Candy Sort, Maze Escape.
+- **Spooky:** Ghost Race.
+- **Brain:** Crypt Trivia, Echo Simon, Memory Match, Witch’s Brew, Haunted
+  Hangman, Crypt Count.
+- **Reflex:** Ritual Rhythm, Candy Catcher, Bat Swarm, Spider Siege, Pumpkin
+  Archery, Vampire Reflex, Candle Keep.
+
+Each card shows its category, difficulty and your best score. Entering a game
+opens a full-screen room with an intro card, pause sheet (Esc), restart, mute
+and a result screen, so nothing gets clipped inside the 390 px game canvas.
+Best scores and the mute setting persist in `localStorage`, and the Arcade is
+reachable from `index.html`, `mine3d.html`, `ghost3d.html` and `voxel.html`.
+
 ## 3D worlds
 
 - **Endless 3D mine** (`mine3d.html`) — five hand-built strata, then unbounded

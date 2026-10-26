@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>⛏️ Spooktacular Voxel Worlds</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="arcade.css?v=1">
 <style>
   #gamev { width: 94vw; max-width: 900px; height: 62vh; display: block; cursor: crosshair; }
   #cross { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: #fff; font-size: 20px; pointer-events: none; text-shadow: 0 0 4px #000; }
@@ -147,7 +148,6 @@
 </div>
 <div id="wrap">
   <canvas id="gamev" width="900" height="560"></canvas>
-    <div id="tabpanels"></div>
     <div id="objpanel"></div>
     <div id="questpanel"></div>
     <div id="awardpanel"></div>
@@ -191,7 +191,8 @@
   <a href="voxel.html#frost" style="color:#ffd166">❄️ Frost</a>
   <a href="voxel.html#crystal" style="color:#ffd166">🔮 Crystal</a>
 </div>
-<div id="tabs" style="margin:8px 0; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div>
+<div id="tabpanels"></div>
+<div id="tabs"></div>
 <p id="help">WASD move · ←/→ turn · Space jump · R/X or ▲/▼ fly (Crystal Caverns: Space/Shift glide in full 3D) · hold-mouse drag to look · click/F swing · right-click/T place torch · E eat apple · V/F5 camera · J goals · M help (build 19)</p>
   <script>
   window.__voxelErrors = [];
@@ -221,8 +222,9 @@
   }, 4000);
   </script>
   <script src="spooky.js?v=9"></script>
-  <script src="tabs.js?v=10"></script>
-  <script src="games.js?v=9"></script>
+  <script src="tabs.js?v=12"></script>
+  <script src="games.js?v=11"></script>
+<script src="arcade.js?v=1"></script>
   <script src="ghost-shooter.js?v=4"></script>
   <script src="voxel.js?v=19"></script>
   <script>
