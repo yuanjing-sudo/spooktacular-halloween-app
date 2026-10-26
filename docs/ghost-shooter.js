@@ -1,8 +1,9 @@
 /* Spectral Hunt — a first-person 3D ghost shooter for the Spooktacular Ghost tab.
  *
  * This is deliberately not a 2D DOM game. The graveyard is a real WebGL scene:
- * PBR ground, shadows, volumetric mist, ritual light, 18 ghost breeds built from
- * animated spectral shaders, a floating boss, particles, pickups, a first-person
+ * PBR ground, shadows, volumetric mist, ritual light, 22 ghost breeds built from
+ * animated spectral shaders, three rotating Veil Sovereigns, relic builds,
+ * weapon archetypes, active abilities, omens, particles, pickups, a first-person
  * weapon, sound and a full arcade loop. Three.js is vendored locally in
  * vendor/three.min.js so the GitHub Pages / Google Sites build stays offline-safe.
  */
@@ -36,14 +37,91 @@
     { key: 'reaper', name: 'Reaper', color: 0xb8b8d0, glow: 0xd7d7ff, eye: 0x16162a, speed: 1.50, size: 1.26, hp: 5, points: 65, behavior: 'homing', variant: 'reaper', trait: 'A patient hunter with a very long memory.' },
     { key: 'dapper', name: 'Dapper', color: 0x6ee7ff, glow: 0xc1f7ff, eye: 0x06262e, speed: 1.65, size: 1.02, hp: 3, points: 42, behavior: 'orbit', variant: 'tophat', trait: 'Impeccably dressed. Impossibly rude.' },
     { key: 'mummy', name: 'Mummy', color: 0xe8d8a8, glow: 0xfff3c9, eye: 0x2a1d08, speed: 1.10, size: 1.18, hp: 6, points: 58, behavior: 'drift', variant: 'mummy', trait: 'Wrapped tight. Hits like a tombstone.' },
-    { key: 'twinkle', name: 'Twinkle', color: 0xb388ff, glow: 0xe5d4ff, eye: 0x1a0830, speed: 2.55, size: 0.94, hp: 2, points: 52, behavior: 'zigzag', variant: 'star', trait: 'A starry little terror with a bright tail.' }
+    { key: 'twinkle', name: 'Twinkle', color: 0xb388ff, glow: 0xe5d4ff, eye: 0x1a0830, speed: 2.55, size: 0.94, hp: 2, points: 52, behavior: 'zigzag', variant: 'star', trait: 'A starry little terror with a bright tail.' },
+    { key: 'wisp', name: 'Wisp', color: 0x6ee7ff, glow: 0xc1f7ff, eye: 0x06262e, speed: 1.35, size: 1.02, hp: 2, points: 38, behavior: 'caster', variant: 'star', trait: 'Hangs back and spits cold soulfire from the dark.' },
+    { key: 'bellwether', name: 'Bellwether', color: 0xff6a2a, glow: 0xffb07a, eye: 0x2a0800, speed: 1.20, size: 1.16, hp: 4, points: 58, behavior: 'summoner', variant: 'hood', trait: 'Rings a bell only the dead can hear. They always answer.' },
+    { key: 'mender', name: 'Mender', color: 0x7dff6a, glow: 0xc9ffbd, eye: 0x082600, speed: 1.25, size: 1.06, hp: 3, points: 50, behavior: 'healer', variant: 'mummy', trait: 'Sews its kin back together with little green stitches.' },
+    { key: 'ashling', name: 'Ashling', color: 0xff8c1a, glow: 0xffd18a, eye: 0x3a1400, speed: 1.90, size: 1.00, hp: 2, points: 44, behavior: 'bomber', variant: 'pumpkin', trait: 'Runs hot, gets close, and takes the graveyard with it.' }
   ];
 
-  var BOSS = {
-    key: 'hollowking', name: 'The Hollow King', color: 0x9b5cff, glow: 0xe3c7ff,
-    eye: 0x10001f, speed: 0.95, size: 1.65, hp: 30, points: 500,
-    behavior: 'homing', variant: 'crown'
+  var BOSSES = [
+    {
+      key: 'hollowking', name: 'The Hollow King', color: 0x9b5cff, glow: 0xe3c7ff,
+      eye: 0x10001f, speed: 0.95, size: 1.65, hp: 30, points: 500,
+      behavior: 'homing', variant: 'crown', title: 'CROWN OF THE EMPTY THRONE'
+    },
+    {
+      key: 'weepingwidow', name: 'The Weeping Widow', color: 0x59e6ff, glow: 0xc1f7ff,
+      eye: 0x06262e, speed: 1.12, size: 1.62, hp: 38, points: 650,
+      behavior: 'caster', variant: 'witch', title: 'HER TEARS FALL UPWARD'
+    },
+    {
+      key: 'lanterneater', name: 'The Lantern Eater', color: 0xff8c1a, glow: 0xffd18a,
+      eye: 0x2a1000, speed: 1.08, size: 1.72, hp: 46, points: 800,
+      behavior: 'dive', variant: 'pumpkin', title: 'IT HUNGERS FOR THE LITTLE LIGHT'
+    }
+  ];
+  var BOSS = BOSSES[0];
+
+  /* Four relic arms with genuinely different shot patterns. */
+  var WEAPONS = [
+    {
+      key: 'blaster', name: 'Soulfire Blaster', short: 'SOULFIRE', icon: '✦',
+      color: 0x59e6ff, glow: 0xc9f7ff, cooldown: 175, shots: 1, damage: 1,
+      speed: 48, spread: 0, life: 2.1, size: 1, pierce: 0, chain: 0,
+      desc: 'Balanced spectral bolts. A clean, dependable rhythm.'
+    },
+    {
+      key: 'scatter', name: 'Grave Scatter', short: 'SCATTER', icon: '⋔',
+      color: 0xff9a3d, glow: 0xffd6a0, cooldown: 520, shots: 6, damage: 0.52,
+      speed: 36, spread: 0.085, life: 1.05, size: 0.78, pierce: 0, chain: 0,
+      desc: 'A close-range fan of burning grave dust. Delete whatever is in front of you.'
+    },
+    {
+      key: 'arc', name: 'Storm Arc', short: 'STORM ARC', icon: '⌁',
+      color: 0xb388ff, glow: 0xe5d4ff, cooldown: 300, shots: 1, damage: 0.95,
+      speed: 46, spread: 0, life: 1.8, size: 0.92, pierce: 0, chain: 1,
+      desc: 'Volatile soul lightning that leaps to a second ghost.'
+    },
+    {
+      key: 'rail', name: 'Moon Rail', short: 'MOON RAIL', icon: '➶',
+      color: 0xffd166, glow: 0xfff0b8, cooldown: 950, shots: 1, damage: 3.2,
+      speed: 88, spread: 0, life: 1.6, size: 1.55, pierce: 4, chain: 0,
+      desc: 'A slow, surgical lance of moonlight. Lines of ghosts disappear.'
+    }
+  ];
+
+  /* Relics are drafted after every wave and stack for the whole run. */
+  var BOONS = [
+    { id: 'power', name: 'Grave Fury', icon: '✦', max: 5, tone: '#ff9a3d', desc: '+18% weapon damage.' },
+    { id: 'haste', name: 'Dead Quick', icon: '↯', max: 5, tone: '#59e6ff', desc: '-8% fire interval.' },
+    { id: 'split', name: 'Twin Wraiths', icon: '❖', max: 2, tone: '#b388ff', desc: '+1 bolt per shot.' },
+    { id: 'pierce', name: 'Grave Piercer', icon: '➶', max: 3, tone: '#ffd166', desc: 'Bolts pierce +1 ghost.' },
+    { id: 'crit', name: 'Cold Reading', icon: '◈', max: 5, tone: '#ff3355', desc: '+7% critical chance.' },
+    { id: 'vitality', name: 'Borrowed Time', icon: '♥', max: 4, tone: '#ff6a8a', desc: '+15 max soul shield.' },
+    { id: 'swift', name: 'Night Stride', icon: '⌁', max: 4, tone: '#33ffc7', desc: '+6% movement speed.' },
+    { id: 'dash', name: 'Phase Step', icon: '➤', max: 4, tone: '#6ee7ff', desc: '-15% dash cooldown.' },
+    { id: 'nova', name: 'Soul Bloom', icon: '✺', max: 4, tone: '#d45bff', desc: '-14% nova cooldown, +nova damage.' },
+    { id: 'frost', name: 'Hollow Chill', icon: '❄', max: 2, tone: '#9be7ff', desc: 'Hits slow ghosts.' },
+    { id: 'burn', name: 'Witchfire', icon: '🔥', max: 3, tone: '#ff8c1a', desc: 'Hits set ghosts burning.' },
+    { id: 'leech', name: 'Siphon', icon: '☾', max: 3, tone: '#b8b8d0', desc: 'Heal when a ghost is dispelled.' },
+    { id: 'greed', name: 'Grave Robber', icon: '$', max: 3, tone: '#ffd166', desc: '+15% souls from every kill.' },
+    { id: 'magnet', name: 'Soul Tether', icon: '◎', max: 3, tone: '#59ffa8', desc: 'Soul pickups drift toward you from farther away.' }
+  ];
+
+  var OMENS = [
+    { key: 'bloodmoon', name: 'BLOOD MOON', desc: 'Ghosts move faster. Souls burn brighter.', tone: '#ff4f6d', fog: 0x21060f, density: 0.032, speed: 1.16, score: 1.15 },
+    { key: 'eclipse', name: 'ECLIPSE', desc: 'Critical strikes surge under the black sun.', tone: '#b388ff', fog: 0x07040f, density: 0.026, speed: 1, score: 1.1, crit: 0.15 },
+    { key: 'soulrain', name: 'SOUL RAIN', desc: 'Soul harvests fall more often.', tone: '#59e6ff', fog: 0x07141a, density: 0.021, speed: 1, score: 1, pickup: 5 },
+    { key: 'haunting', name: 'THE HAUNTING', desc: 'The mist thickens; the dead slow.', tone: '#9be7ff', fog: 0x0d1020, density: 0.045, speed: 0.9, score: 1.2 }
+  ];
+
+  var DEFAULT_SETTINGS = {
+    sens: 1, invert: false, aimAssist: true, damageNumbers: true,
+    shake: true, reducedMotion: false, quality: 'high'
   };
+  var SETTINGS_KEY = 'spooky_spectral_settings';
+  var ARMORY_KEY = 'spooky_spectral_weapon';
 
   var state = {
     box: null,
@@ -72,6 +150,8 @@
     shake: 0,
     ghosts: [],
     projectiles: [],
+    enemyShots: [],
+    beams: [],
     bursts: [],
     pickups: [],
     env: null,
@@ -82,6 +162,10 @@
     discovered: {},
     best: 0,
     hud: {},
+    settings: null,
+    armoryKey: 'blaster',
+    radarCtx: null,
+    radarAccum: 0,
     resizeObserver: null,
     toastTimer: 0,
     hintTimer: 0
@@ -110,6 +194,92 @@
   }
   function saveToStorage(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+
+  /* --------------------------------------------------------- run helpers */
+  function normalizeSettings(raw) {
+    var out = {};
+    for (var key in DEFAULT_SETTINGS) {
+      if (Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) out[key] = DEFAULT_SETTINGS[key];
+    }
+    if (raw && typeof raw === 'object') {
+      if (typeof raw.sens === 'number' && isFinite(raw.sens)) out.sens = clamp(raw.sens, 0.5, 2);
+      if (typeof raw.invert === 'boolean') out.invert = raw.invert;
+      if (typeof raw.aimAssist === 'boolean') out.aimAssist = raw.aimAssist;
+      if (typeof raw.damageNumbers === 'boolean') out.damageNumbers = raw.damageNumbers;
+      if (typeof raw.shake === 'boolean') out.shake = raw.shake;
+      if (typeof raw.reducedMotion === 'boolean') out.reducedMotion = raw.reducedMotion;
+      if (raw.quality === 'low' || raw.quality === 'medium' || raw.quality === 'high') out.quality = raw.quality;
+    }
+    return out;
+  }
+  function setting(key) {
+    return state.settings ? state.settings[key] : DEFAULT_SETTINGS[key];
+  }
+  function saveSettings() {
+    saveToStorage(SETTINGS_KEY, state.settings);
+    applySettings();
+  }
+  function applySettings() {
+    if (!state.settings) return;
+    if (state.ui && state.ui.stage) {
+      state.ui.stage.classList.toggle('reduce-motion', !!state.settings.reducedMotion);
+    }
+    if (state.renderer && state.ui && state.ui.stage) {
+      var coarse = state.ui.stage.classList.contains('touch');
+      var q = state.settings.quality;
+      var ratio = q === 'low' ? 1 : (q === 'medium' ? 1.25 : (coarse ? 1.45 : 1.65));
+      state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ratio));
+      resize();
+    }
+  }
+  function weaponByKey(key) {
+    for (var i = 0; i < WEAPONS.length; i++) if (WEAPONS[i].key === key) return WEAPONS[i];
+    return WEAPONS[0];
+  }
+  function activeWeapon() {
+    var key = (state.game && state.game.weaponKey) || state.armoryKey || 'blaster';
+    return weaponByKey(key);
+  }
+  function boonRank(id) {
+    return state.game && state.game.boons ? (state.game.boons[id] || 0) : 0;
+  }
+  function boonCount() {
+    if (!state.game || !state.game.boons) return 0;
+    var n = 0;
+    for (var key in state.game.boons) if (state.game.boons[key] > 0) n += state.game.boons[key];
+    return n;
+  }
+  function boonDamage() { return 1 + 0.18 * boonRank('power'); }
+  function boonFireScale() { return Math.pow(0.92, boonRank('haste')); }
+  function boonCrit() {
+    var c = 0.04 + 0.07 * boonRank('crit');
+    if (state.game && state.game.omen && state.game.omen.crit) c += state.game.omen.crit;
+    return clamp(c, 0, 0.75);
+  }
+  function boonMoveScale() { return 1 + 0.06 * boonRank('swift'); }
+  function boonDashScale() { return Math.pow(0.85, boonRank('dash')); }
+  function boonNovaScale() { return Math.pow(0.86, boonRank('nova')); }
+  function boonScoreScale() { return 1 + 0.15 * boonRank('greed'); }
+  function boonPickupRadius() { return 4 + boonRank('magnet') * 1.7; }
+  function formatClock(ms) {
+    var total = Math.max(0, Math.floor(ms / 1000));
+    var m = Math.floor(total / 60), s = total % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function relicMarkup() {
+    var bits = [];
+    BOONS.forEach(function (b) {
+      var n = boonRank(b.id);
+      if (n > 0) bits.push('<span style="--relic:' + b.tone + '">' + b.icon + ' ' + b.name + ' <b>' + n + '</b></span>');
+    });
+    return bits.length ? bits.join('') : '<span class="empty">NO RELICS CLAIMED</span>';
+  }
+  function runLineMarkup() {
+    var g = state.game;
+    if (!g) return '';
+    var w = weaponByKey(g.weaponKey);
+    return '<span>' + w.short + '</span><span>' + boonCount() + ' RELICS</span><span>' + (g.bosses || 0) + ' SOVEREIGNS</span><span>' + formatClock(nowMs() - g.startTime) + '</span>';
   }
 
   /* -------------------------------------------------------- three.js loader */
@@ -218,8 +388,12 @@
     state.nextFire = 0;
     state.recoil = 0;
     state.shake = 0;
+    state.radarAccum = 0;
     state.projectiles.forEach(removeProjectile);
     state.projectiles.length = 0;
+    state.enemyShots.forEach(removeEnemyShot);
+    state.enemyShots.length = 0;
+    clearBeams();
     state.pickups.forEach(removePickup);
     state.pickups.length = 0;
     clearGhosts();
@@ -242,13 +416,26 @@
       boss: null,
       bossPending: false,
       goldDrop: 0,
+      bosses: 0,
+      weaponKey: state.armoryKey || 'blaster',
+      boons: {},
+      omen: null,
+      draftNext: 0,
+      dashCd: 0,
+      novaCd: 0,
+      dashTime: 0,
+      dashDir: { x: 0, z: -1 },
+      invuln: 0,
       power: { rapid: 0, triple: 0, shield: 0 },
       startTime: nowMs()
     };
     ui.start.classList.remove('show');
     ui.over.classList.remove('show');
     ui.pauseOverlay.classList.remove('show');
+    if (ui.draft) ui.draft.classList.remove('show');
+    if (ui.settings) ui.settings.classList.remove('show');
     ui.hud.classList.add('playing');
+    applyWeaponVisual();
     if (state.hintTimer) clearTimeout(state.hintTimer);
     ui.hint.style.opacity = '1';
     state.hintTimer = setTimeout(function () { if (state.ui) state.ui.hint.style.opacity = '0'; }, 6000);
@@ -274,6 +461,9 @@
     clearBursts();
     state.projectiles.forEach(removeProjectile);
     state.projectiles.length = 0;
+    state.enemyShots.forEach(removeEnemyShot);
+    state.enemyShots.length = 0;
+    clearBeams();
     state.pickups.forEach(removePickup);
     state.pickups.length = 0;
     state.mode = 'idle';
@@ -289,6 +479,8 @@
       ui.pauseOverlay.classList.remove('show');
       ui.over.classList.remove('show');
       if (ui.bestiary) ui.bestiary.classList.remove('show');
+      if (ui.draft) ui.draft.classList.remove('show');
+      if (ui.settings) ui.settings.classList.remove('show');
     }
     spawnIdleGhosts();
   }
@@ -316,6 +508,7 @@
               '<div class="gs3d-chip score-chip"><small>SOULS</small><b id="gs3dScore">0</b></div>' +
               '<div class="gs3d-chip"><small>WAVE</small><b id="gs3dWave">1</b></div>' +
               '<div class="gs3d-chip combo-chip" id="gs3dComboChip"><small>COMBO</small><b id="gs3dCombo">x1</b></div>' +
+              '<div class="gs3d-chip omen-chip" id="gs3dOmenChip"><small>OMEN</small><b id="gs3dOmen">—</b></div>' +
               '<div class="gs3d-chip"><small>KILLS</small><b id="gs3dBreed">0</b></div>' +
               '<button class="gs3d-icon-btn" id="gs3dSound" aria-label="Toggle sound">' +
                 '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16 8c1.2 1.1 1.8 2.5 1.8 4s-.6 2.9-1.8 4M18.8 5.2c2 1.8 3.2 4.3 3.2 6.8s-1.2 5-3.2 6.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>' +
@@ -325,7 +518,9 @@
               '</button>' +
             '</div>' +
           '</div>' +
-          '<div class="gs3d-boss" id="gs3dBoss"><span>THE HOLLOW KING</span><i><b id="gs3dBossFill"></b></i></div>' +
+          '<button class="gs3d-weapon" id="gs3dWeapon" aria-label="Cycle spectral weapon"><small>RELIC ARM</small><b id="gs3dWeaponName">SOULFIRE</b></button>' +
+          '<div class="gs3d-boss" id="gs3dBoss"><span id="gs3dBossName">THE HOLLOW KING</span><i><b id="gs3dBossFill"></b></i></div>' +
+          '<div class="gs3d-radar-wrap" id="gs3dRadarWrap"><canvas class="gs3d-radar" id="gs3dRadar" width="200" height="200"></canvas><small>VEIL RADAR</small></div>' +
           '<div class="gs3d-reticle" id="gs3dReticle"><i></i><b></b><span></span></div>' +
           '<div class="gs3d-float-layer" id="gs3dFloatLayer"></div>' +
           '<div class="gs3d-toast" id="gs3dToast"></div>' +
@@ -334,7 +529,11 @@
             '<div class="gs3d-shield"><span>SOUL SHIELD <b id="gs3dShieldNum">100</b></span><i><b id="gs3dShieldFill"></b></i></div>' +
             '<div class="gs3d-power" id="gs3dPower"></div>' +
           '</div>' +
-          '<div class="gs3d-hint" id="gs3dHint">WASD / arrows move &nbsp;·&nbsp; drag to look &nbsp;·&nbsp; click or SPACE to fire</div>' +
+          '<div class="gs3d-abilities" id="gs3dAbilities">' +
+            '<button class="gs3d-ability" id="gs3dDash" type="button" aria-label="Dash"><span>Q</span><small>DASH</small><b id="gs3dDashCd">READY</b></button>' +
+            '<button class="gs3d-ability nova" id="gs3dNova" type="button" aria-label="Soul nova"><span>E</span><small>NOVA</small><b id="gs3dNovaCd">READY</b></button>' +
+          '</div>' +
+          '<div class="gs3d-hint" id="gs3dHint">WASD move &nbsp;·&nbsp; drag look &nbsp;·&nbsp; click / SPACE fire &nbsp;·&nbsp; Q dash &nbsp;·&nbsp; E nova &nbsp;·&nbsp; 1-4 arm</div>' +
           '<div class="gs3d-damage" id="gs3dDamage"></div>' +
           '<div class="gs3d-stick" id="gs3dStick"><i id="gs3dKnob"></i><small>MOVE</small></div>' +
           '<button class="gs3d-fire" id="gs3dFire" aria-label="Fire">' +
@@ -357,13 +556,18 @@
             '</div>' +
             '<p class="gs3d-kicker">THE VEIL IS THIN</p>' +
             '<h2>SPECTRAL HUNT</h2>' +
-            '<p class="gs3d-lede">Step into the graveyard with a spectral blaster. Dispel <b>18 ghost breeds</b>, chain soul combos and survive the Hollow King under a blood moon.</p>' +
-            '<div class="gs3d-feature-row"><span>18 BREEDS</span><span>ENDLESS WAVES</span><span>BOSS EVERY 5</span></div>' +
+            '<p class="gs3d-lede">Step into the graveyard with a relic arm, draft forbidden relics between waves, and dispel <b>22 ghost breeds</b> and three Veil Sovereigns. Every run is a different build.</p>' +
+            '<div class="gs3d-feature-row"><span>22 BREEDS</span><span>14 RELICS</span><span>4 RELIC ARMS</span><span>OMENS</span></div>' +
+            '<div class="gs3d-armory" id="gs3dArmory">' +
+              '<div class="gs3d-armory-head"><span>CHOOSE YOUR RELIC ARM</span><b id="gs3dArmoryPick">SOULFIRE</b></div>' +
+              '<div class="gs3d-armory-grid" id="gs3dArmoryGrid"></div>' +
+            '</div>' +
             '<div class="gs3d-start-actions">' +
               '<button class="gs3d-primary" id="gs3dStartBtn"><span>ENTER THE GRAVEYARD</span><i>›</i></button>' +
-              '<button class="gs3d-secondary" id="gs3dBestiaryBtn">BESTIARY <b id="gs3dBestiaryCount">0/18</b></button>' +
+              '<button class="gs3d-secondary" id="gs3dBestiaryBtn">BESTIARY <b id="gs3dBestiaryCount">0/22</b></button>' +
+              '<button class="gs3d-secondary" id="gs3dSettingsBtn">SETTINGS</button>' +
             '</div>' +
-            '<div class="gs3d-keyrow"><span><kbd>WASD</kbd> move</span><span><kbd>DRAG</kbd> look</span><span><kbd>CLICK</kbd> / <kbd>SPACE</kbd> fire</span><span><kbd>ESC</kbd> pause</span></div>' +
+            '<div class="gs3d-keyrow"><span><kbd>WASD</kbd> move</span><span><kbd>DRAG</kbd> look</span><span><kbd>CLICK</kbd> / <kbd>SPACE</kbd> fire</span><span><kbd>Q</kbd> dash</span><span><kbd>E</kbd> nova</span><span><kbd>1-4</kbd> relic arm</span><span><kbd>ESC</kbd> pause</span></div>' +
             '<p class="gs3d-best">BEST <b id="gs3dBest">0</b></p>' +
           '</div>' +
         '</div>' +
@@ -372,8 +576,9 @@
             '<p class="gs3d-kicker">THE HUNT HOLDS ITS BREATH</p>' +
             '<h2>PAUSED</h2>' +
             '<div class="gs3d-over-stats"><div><small>SOULS</small><b id="gs3dPauseScore">0</b></div><div><small>WAVE</small><b id="gs3dPauseWave">1</b></div><div><small>BREED</small><b id="gs3dPauseBreed">0</b></div></div>' +
-            '<div class="gs3d-over-actions"><button class="gs3d-primary" id="gs3dResumeBtn">RESUME THE HUNT</button><button class="gs3d-secondary" id="gs3dQuitBtn">LEAVE GRAVEYARD</button></div>' +
-            '<p class="gs3d-fineprint">Tip: a charged soul combo multiplies every kill. Do not let the chain cool.</p>' +
+            '<div class="gs3d-runline" id="gs3dPauseRun"></div>' +
+            '<div class="gs3d-over-actions"><button class="gs3d-primary" id="gs3dResumeBtn">RESUME THE HUNT</button><button class="gs3d-secondary" id="gs3dPauseSettingsBtn">SETTINGS</button><button class="gs3d-secondary" id="gs3dQuitBtn">LEAVE GRAVEYARD</button></div>' +
+            '<p class="gs3d-fineprint">Tip: relic drafts appear between waves. Stack a build, then spend it on a Sovereign.</p>' +
           '</div>' +
         '</div>' +
         '<div class="gs3d-over" id="gs3dOver">' +
@@ -381,6 +586,7 @@
             '<p class="gs3d-kicker">THE VEIL CLAIMS YOU</p>' +
             '<h2>DISPERSED</h2>' +
             '<div class="gs3d-over-stats"><div><small>SOULS</small><b id="gs3dOverScore">0</b></div><div><small>WAVE</small><b id="gs3dOverWave">1</b></div><div><small>ACCURACY</small><b id="gs3dOverAcc">0%</b></div></div>' +
+            '<div class="gs3d-runline" id="gs3dOverRun"></div>' +
             '<p class="gs3d-over-best">BEST <b id="gs3dOverBest">0</b></p>' +
             '<div class="gs3d-over-actions"><button class="gs3d-primary" id="gs3dAgainBtn">HAUNT AGAIN</button><button class="gs3d-secondary" id="gs3dOverQuitBtn">LEAVE GRAVEYARD</button></div>' +
           '</div>' +
@@ -389,14 +595,49 @@
           '<div class="gs3d-module-card">' +
             '<div class="gs3d-module-head"><div><p class="gs3d-kicker">FIELD NOTES</p><h2>THE BESTIARY</h2></div><button class="gs3d-icon-btn" id="gs3dBestiaryClose" aria-label="Close bestiary">✕</button></div>' +
             '<div class="gs3d-bestiary-grid" id="gs3dBestiaryGrid"></div>' +
-            '<p class="gs3d-fineprint">Dispel a breed to record it. The Hollow King is not in the book.</p>' +
+            '<p class="gs3d-fineprint">Dispel a breed to record it. The three Veil Sovereigns keep their own book.</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gs3d-module gs3d-draft" id="gs3dDraft">' +
+          '<div class="gs3d-module-card gs3d-draft-panel">' +
+            '<p class="gs3d-kicker">WAVE CLEARED</p>' +
+            '<h2>CLAIM A RELIC</h2>' +
+            '<p class="gs3d-draft-sub">The veil offers three fragments. Choose one — it stacks for the rest of this run.</p>' +
+            '<div class="gs3d-draft-grid" id="gs3dDraftCards"></div>' +
+            '<div class="gs3d-draft-foot"><button class="gs3d-secondary" id="gs3dDraftSkip" type="button">TAKE NOTHING</button><span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to choose</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gs3d-module" id="gs3dSettings">' +
+          '<div class="gs3d-module-card gs3d-settings-card">' +
+            '<div class="gs3d-module-head"><div><p class="gs3d-kicker">TUNING THE VEIL</p><h2>SETTINGS</h2></div><button class="gs3d-icon-btn" id="gs3dSettingsClose" aria-label="Close settings">✕</button></div>' +
+            '<div class="gs3d-settings-grid">' +
+              '<label class="gs3d-setting range-row"><span><b>LOOK SENSITIVITY</b><small>Mouse and touch camera speed</small></span><em id="gs3dSensVal">1.00×</em><input id="gs3dSens" type="range" min="0.5" max="2" step="0.05" value="1"></label>' +
+              '<label class="gs3d-setting"><span><b>INVERT LOOK</b><small>Pull up to look down</small></span><input id="gs3dInvert" type="checkbox" class="gs3d-toggle"></label>' +
+              '<label class="gs3d-setting"><span><b>AIM ASSIST</b><small>Gentle bolt magnetism</small></span><input id="gs3dAimAssist" type="checkbox" class="gs3d-toggle"></label>' +
+              '<label class="gs3d-setting"><span><b>DAMAGE NUMBERS</b><small>Show hits and criticals</small></span><input id="gs3dDamageNumbers" type="checkbox" class="gs3d-toggle"></label>' +
+              '<label class="gs3d-setting"><span><b>SCREEN SHAKE</b><small>Camera impact feedback</small></span><input id="gs3dShake" type="checkbox" class="gs3d-toggle"></label>' +
+              '<label class="gs3d-setting"><span><b>REDUCED MOTION</b><small>Calmer overlays and ambience</small></span><input id="gs3dReducedMotion" type="checkbox" class="gs3d-toggle"></label>' +
+              '<label class="gs3d-setting"><span><b>RENDER QUALITY</b><small>Lower this on older phones</small></span><select id="gs3dQuality" class="gs3d-select"><option value="low">LOW</option><option value="medium">MEDIUM</option><option value="high">HIGH</option></select></label>' +
+            '</div>' +
+            '<p class="gs3d-fineprint">Settings save automatically in this browser. Quality changes apply live.</p>' +
           '</div>' +
         '</div>' +
         '<div class="gs3d-loading" id="gs3dLoading"><div class="gs3d-load-ring"></div><span>Summoning the veil...</span></div>' +
         '<div class="gs3d-fatal" id="gs3dFatal"><div><h3>THE VEIL IS BLOCKED</h3><p id="gs3dFatalText"></p><button class="gs3d-primary" id="gs3dFatalReload">RELOAD THE GRAVEYARD</button></div></div>' +
       '</div>';
     state.root = root;
+    state.settings = normalizeSettings(loadFromStorage(SETTINGS_KEY, DEFAULT_SETTINGS));
+    var savedArm = loadFromStorage(ARMORY_KEY, 'blaster');
+    state.armoryKey = weaponByKey(savedArm).key;
     cacheUI();
+    try {
+      state.radarCtx = state.ui.radar ? state.ui.radar.getContext('2d') : null;
+    } catch (radarErr) {
+      state.radarCtx = null;
+    }
+    renderArmory();
+    fillSettingsUI();
+    applySettings();
     bindUI();
     if (window.ResizeObserver) {
       state.resizeObserver = new ResizeObserver(function () { resize(); });
@@ -421,14 +662,146 @@
 
   function cacheUI() {
     var ids = ['Stage', 'Canvas', 'Hud', 'Score', 'Wave', 'Combo', 'ComboChip', 'Breed', 'Sound', 'Pause',
-      'Boss', 'BossFill', 'Reticle', 'FloatLayer', 'Toast', 'WaveBanner', 'ShieldNum', 'ShieldFill', 'PauseOverlay',
+      'Boss', 'BossFill', 'BossName', 'Reticle', 'FloatLayer', 'Toast', 'WaveBanner', 'ShieldNum', 'ShieldFill', 'PauseOverlay',
       'Power', 'Hint', 'Damage', 'Stick', 'Knob', 'Fire', 'Start', 'StartBtn', 'BestiaryBtn',
-      'BestiaryCount', 'Best', 'PauseScore', 'PauseWave', 'PauseBreed', 'ResumeBtn', 'QuitBtn',
-      'Over', 'OverScore', 'OverWave', 'OverAcc', 'OverBest', 'AgainBtn', 'OverQuitBtn',
-      'Bestiary', 'BestiaryClose', 'BestiaryGrid', 'Loading', 'Fatal', 'FatalText', 'FatalReload'];
+      'BestiaryCount', 'Best', 'PauseScore', 'PauseWave', 'PauseBreed', 'ResumeBtn', 'QuitBtn', 'PauseRun',
+      'Over', 'OverScore', 'OverWave', 'OverAcc', 'OverBest', 'AgainBtn', 'OverQuitBtn', 'OverRun',
+      'Bestiary', 'BestiaryClose', 'BestiaryGrid', 'Loading', 'Fatal', 'FatalText', 'FatalReload',
+      'Weapon', 'WeaponName', 'Omen', 'OmenChip', 'Radar', 'RadarWrap', 'Dash', 'DashCd', 'Nova', 'NovaCd',
+      'Abilities', 'ArmoryGrid', 'ArmoryPick', 'SettingsBtn', 'PauseSettingsBtn', 'Settings', 'SettingsClose',
+      'Sens', 'SensVal', 'Invert', 'AimAssist', 'DamageNumbers', 'Shake', 'ReducedMotion', 'Quality',
+      'Draft', 'DraftCards', 'DraftSkip'];
     var ui = {};
     ids.forEach(function (id) { ui[id.charAt(0).toLowerCase() + id.slice(1)] = $('gs3d' + id); });
     state.ui = ui;
+  }
+
+  function hexColor(n) { return '#' + ('000000' + (n || 0).toString(16)).slice(-6); }
+
+  function renderArmory() {
+    var grid = state.ui && state.ui.armoryGrid;
+    if (!grid) return;
+    grid.innerHTML = WEAPONS.map(function (w) {
+      return '<button class="gs3d-armory-card" type="button" data-weapon="' + w.key + '">' +
+        '<i style="--arm:' + hexColor(w.color) + '">' + w.icon + '</i>' +
+        '<span><b>' + w.name + '</b><small>' + w.desc + '</small></span>' +
+        '</button>';
+    }).join('');
+    updateArmorySelection();
+  }
+
+  function updateArmorySelection() {
+    var w = weaponByKey(state.armoryKey);
+    if (state.ui && state.ui.armoryPick) state.ui.armoryPick.textContent = w.short;
+    if (state.ui && state.ui.armoryGrid) {
+      var cards = state.ui.armoryGrid.querySelectorAll('[data-weapon]');
+      for (var i = 0; i < cards.length; i++) {
+        cards[i].classList.toggle('selected', cards[i].getAttribute('data-weapon') === w.key);
+      }
+    }
+    if (state.ui && state.ui.weaponName) state.ui.weaponName.textContent = w.short;
+  }
+
+  function selectArmory(key) {
+    state.armoryKey = weaponByKey(key).key;
+    saveToStorage(ARMORY_KEY, state.armoryKey);
+    updateArmorySelection();
+    applyWeaponVisual();
+    playSound('pickup');
+  }
+
+  function cycleWeapon() {
+    var current = state.game && state.game.active ? state.game.weaponKey : state.armoryKey;
+    var idx = 0;
+    for (var i = 0; i < WEAPONS.length; i++) if (WEAPONS[i].key === current) idx = i;
+    var next = WEAPONS[(idx + 1) % WEAPONS.length];
+    if (state.game && state.game.active) switchWeapon(next.key);
+    else selectArmory(next.key);
+  }
+
+  function switchWeapon(key) {
+    if (!state.game || !state.game.active) { selectArmory(key); return; }
+    var w = weaponByKey(key);
+    state.game.weaponKey = w.key;
+    state.armoryKey = w.key;
+    saveToStorage(ARMORY_KEY, w.key);
+    state.nextFire = 0;
+    applyWeaponVisual();
+    updateArmorySelection();
+    updateHUD(true);
+    showToast('RELIC ARM — ' + w.name.toUpperCase(), 1300);
+    playSound('pickup');
+  }
+
+  function applyWeaponVisual() {
+    if (!state.weapon) return;
+    var w = activeWeapon();
+    state.weapon.crystal.material.color.setHex(w.glow);
+    state.weapon.crystal.material.emissive.setHex(w.color);
+    state.weapon.muzzle.material.color.setHex(w.glow);
+    state.weapon.light.color.setHex(w.color);
+  }
+
+  function bindAbilityButton(btn, fn) {
+    if (!btn) return;
+    btn.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      fn();
+    });
+  }
+
+  function fillSettingsUI() {
+    var ui = state.ui, s = state.settings;
+    if (!ui || !s) return;
+    if (ui.sens) ui.sens.value = s.sens;
+    if (ui.sensVal) ui.sensVal.textContent = s.sens.toFixed(2) + '×';
+    if (ui.invert) ui.invert.checked = !!s.invert;
+    if (ui.aimAssist) ui.aimAssist.checked = !!s.aimAssist;
+    if (ui.damageNumbers) ui.damageNumbers.checked = !!s.damageNumbers;
+    if (ui.shake) ui.shake.checked = !!s.shake;
+    if (ui.reducedMotion) ui.reducedMotion.checked = !!s.reducedMotion;
+    if (ui.quality) ui.quality.value = s.quality;
+  }
+
+  function bindSettingControls() {
+    var ui = state.ui;
+    if (!ui) return;
+    if (ui.sens) {
+      ui.sens.addEventListener('input', function () {
+        state.settings.sens = clamp(parseFloat(ui.sens.value) || 1, 0.5, 2);
+        if (ui.sensVal) ui.sensVal.textContent = state.settings.sens.toFixed(2) + '×';
+        saveSettings();
+      });
+    }
+    [
+      ['invert', ui.invert], ['aimAssist', ui.aimAssist], ['damageNumbers', ui.damageNumbers],
+      ['shake', ui.shake], ['reducedMotion', ui.reducedMotion]
+    ].forEach(function (pair) {
+      var input = pair[1];
+      if (!input) return;
+      input.addEventListener('change', function () {
+        state.settings[pair[0]] = !!input.checked;
+        saveSettings();
+      });
+    });
+    if (ui.quality) {
+      ui.quality.addEventListener('change', function () {
+        state.settings.quality = ui.quality.value;
+        saveSettings();
+      });
+    }
+  }
+
+  function openSettings() {
+    if (!state.ui || !state.ui.settings) return;
+    if (state.mode === 'play') pauseGame(true);
+    fillSettingsUI();
+    state.ui.settings.classList.add('show');
+  }
+
+  function closeSettings() {
+    if (state.ui && state.ui.settings) state.ui.settings.classList.remove('show');
   }
 
   function bindUI() {
@@ -442,7 +815,27 @@
     ui.sound.onclick = toggleSound;
     ui.bestiaryBtn.onclick = openBestiary;
     ui.bestiaryClose.onclick = closeBestiary;
+    ui.settingsBtn.onclick = openSettings;
+    ui.pauseSettingsBtn.onclick = openSettings;
+    ui.settingsClose.onclick = closeSettings;
     ui.fatalReload.onclick = function () { location.reload(); };
+    if (ui.weapon) ui.weapon.onclick = cycleWeapon;
+    if (ui.armoryGrid) {
+      ui.armoryGrid.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-weapon]') : null;
+        if (btn) selectArmory(btn.getAttribute('data-weapon'));
+      });
+    }
+    if (ui.draft) {
+      ui.draft.addEventListener('click', function (e) {
+        var card = e.target && e.target.closest ? e.target.closest('[data-boon]') : null;
+        if (card) chooseRelic(card.getAttribute('data-boon'));
+      });
+    }
+    if (ui.draftSkip) ui.draftSkip.onclick = skipDraft;
+    bindAbilityButton(ui.dash, dashAbility);
+    bindAbilityButton(ui.nova, novaAbility);
+    bindSettingControls();
 
     ui.fire.addEventListener('pointerdown', function (e) {
       e.preventDefault();
@@ -500,8 +893,10 @@
       if (!state.look || state.look.id !== e.pointerId) return;
       e.preventDefault();
       var dx = e.clientX - state.look.x, dy = e.clientY - state.look.y;
-      state.player.yaw -= dx * 0.0034;
-      state.player.pitch = clamp(state.player.pitch - dy * 0.0030, -1.25, 1.25);
+      var sens = setting('sens') || 1;
+      var invert = setting('invert') ? 1 : -1;
+      state.player.yaw -= dx * 0.0034 * sens;
+      state.player.pitch = clamp(state.player.pitch + dy * 0.0030 * sens * invert, -1.25, 1.25);
       state.look.moved += Math.abs(dx) + Math.abs(dy);
       state.look.x = e.clientX;
       state.look.y = e.clientY;
@@ -531,8 +926,11 @@
       state.ui.start.classList.add('show');
       state.ui.over.classList.remove('show');
       state.ui.pauseOverlay.classList.remove('show');
+      if (state.ui.draft) state.ui.draft.classList.remove('show');
+      if (state.ui.settings) state.ui.settings.classList.remove('show');
       state.ui.hud.classList.remove('playing');
       if (state.ui.best) state.ui.best.textContent = fmt(state.best);
+      updateArmorySelection();
       updateBestiaryCount();
       if (state.renderer) {
         spawnIdleGhosts();
@@ -592,24 +990,41 @@
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     var k = e.key.toLowerCase();
     if (k === 'escape') {
+      if (state.ui && state.ui.settings && state.ui.settings.classList.contains('show')) { closeSettings(); e.preventDefault(); return; }
       if (state.ui && state.ui.bestiary && state.ui.bestiary.classList.contains('show')) { closeBestiary(); e.preventDefault(); return; }
       if (state.mode === 'play') { pauseGame(true); e.preventDefault(); }
       else if (state.mode === 'paused') { pauseGame(false); e.preventDefault(); }
       return;
     }
+    if (state.mode === 'draft') {
+      if (k === '1' || k === '2' || k === '3') {
+        var cards = state.ui.draftCards ? state.ui.draftCards.querySelectorAll('[data-boon]') : [];
+        var pick = cards[parseInt(k, 10) - 1];
+        if (pick) chooseRelic(pick.getAttribute('data-boon'));
+        e.preventDefault();
+      } else if (k === 'enter') {
+        var first = state.ui.draftCards ? state.ui.draftCards.querySelector('[data-boon]') : null;
+        if (first) chooseRelic(first.getAttribute('data-boon'));
+        e.preventDefault();
+      }
+      return;
+    }
     if (state.mode !== 'play') {
       if (k === 'enter') {
-        if (state.ui && state.ui.bestiary && state.ui.bestiary.classList.contains('show')) return;
+        if (state.ui && (state.ui.bestiary.classList.contains('show') || state.ui.settings.classList.contains('show'))) return;
         if (state.mode === 'paused') pauseGame(false);
         else if (state.mode === 'over' || state.mode === 'idle') startGame();
       }
       return;
     }
-    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].indexOf(k) >= 0) {
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift', 'q', 'e'].indexOf(k) >= 0) {
       e.preventDefault();
     }
     state.keys[k] = true;
     if (k === ' ') fire();
+    if (k === 'q') dashAbility();
+    if (k === 'e') novaAbility();
+    if (k === '1' || k === '2' || k === '3' || k === '4') switchWeapon(WEAPONS[parseInt(k, 10) - 1].key);
     if (k === 'r') { pauseGame(false); startGame(); }
   }
   function onKeyUp(e) {
@@ -637,6 +1052,10 @@
       state.ui.pauseScore.textContent = fmt(state.game.score);
       state.ui.pauseWave.textContent = state.game.wave;
       state.ui.pauseBreed.textContent = state.game.kills;
+      if (state.ui.pauseRun) {
+        state.ui.pauseRun.innerHTML = runLineMarkup() +
+          '<div class="gs3d-relics">' + relicMarkup() + '</div>';
+      }
       if (state.audio && state.audio.ctx && state.audio.ctx.state === 'running') {
         try { state.audio.ctx.suspend(); } catch (e) {}
       }
@@ -660,10 +1079,20 @@
     var best = commitBest();
     state.ui.overScore.textContent = fmt(g.score);
     state.ui.overWave.textContent = g.wave;
-    state.ui.overAcc.textContent = (g.shots ? Math.round(g.hits / g.shots * 100) : 0) + '%';
+    state.ui.overAcc.textContent = (g.shots ? Math.round(Math.min(100, g.hits / g.shots * 100)) : 0) + '%';
     state.ui.overBest.textContent = fmt(best);
+    if (state.ui.overRun) {
+      state.ui.overRun.innerHTML = runLineMarkup() +
+        '<div class="gs3d-relics">' + relicMarkup() + '</div>';
+    }
     state.ui.over.classList.add('show');
     state.ui.boss.classList.remove('show');
+    if (state.ui.draft) state.ui.draft.classList.remove('show');
+    if (state.ui.settings) state.ui.settings.classList.remove('show');
+    state.enemyShots.forEach(removeEnemyShot);
+    state.enemyShots.length = 0;
+    state.projectiles.forEach(removeProjectile);
+    state.projectiles.length = 0;
     updateBestiaryCount();
     playSound('over');
   }
@@ -677,14 +1106,26 @@
     state.toastTimer = setTimeout(function () { toast.classList.remove('show'); }, ms || 1700);
   }
 
-  function showWaveBanner(wave) {
+  function updateOmenChip(omen) {
+    if (!state.ui || !state.ui.omenChip) return;
+    state.ui.omenChip.classList.toggle('show', !!omen);
+    if (omen) {
+      state.ui.omen.textContent = omen.name;
+      state.ui.omenChip.style.setProperty('--omen', omen.tone);
+      state.ui.omenChip.title = omen.desc;
+    }
+  }
+
+  function showWaveBanner(wave, omen) {
     var b = state.ui.waveBanner;
     if (!b) return;
+    var bossDef = wave % 5 === 0 ? BOSSES[(Math.floor(wave / 5) - 1) % BOSSES.length] : null;
+    b.querySelector('small').textContent = bossDef ? 'VEIL SOVEREIGN' : (omen ? 'OMEN OF THE VEIL' : 'BLOOD MOON');
     b.querySelector('strong').textContent = 'WAVE ' + wave;
-    b.querySelector('span').textContent = wave % 5 === 0 ? 'THE HOLLOW KING APPROACHES' : choose([
+    b.querySelector('span').textContent = bossDef ? bossDef.title : (omen ? omen.desc : choose([
       'THE DEAD ARE RESTLESS', 'THE MIST IS THIRSTY', 'SOMETHING IS WATCHING',
       'THE VEIL IS TORN', 'THE MOON IS BLEEDING', 'KEEP YOUR LAMP LIT'
-    ]);
+    ]));
     b.classList.remove('show');
     void b.offsetWidth;
     b.classList.add('show');
@@ -782,6 +1223,14 @@
     } else if (kind === 'wave') {
       tone(196, 0.5, 'sine', 0.09, 392);
       setTimeout(function () { tone(294, 0.6, 'sine', 0.08, 588); }, 180);
+    } else if (kind === 'dash') {
+      tone(880, 0.14, 'sawtooth', 0.055, 190);
+      setTimeout(function () { tone(420, 0.1, 'sine', 0.045, 120); }, 45);
+    } else if (kind === 'nova') {
+      [196, 294, 392, 588].forEach(function (f, i) {
+        setTimeout(function () { tone(f, 0.42, 'sine', 0.075, f * 1.8); }, i * 42);
+      });
+      tone(72, 0.55, 'triangle', 0.11, 44);
     }
   }
 
@@ -968,6 +1417,7 @@
       pumpkins: [], candles: [], weaponsLight: null
     };
 
+    applySettings();
     buildEnvironment();
     buildWeapon();
     state.player.x = 0; state.player.z = 15;
@@ -1578,7 +2028,8 @@
       p.core.rotation.y += dt * 1.8;
       p.core.rotation.x += dt * 0.9;
       var dist = Math.hypot(p.group.position.x - state.player.x, p.group.position.z - state.player.z);
-      if (dist < 4) {
+      var magnetRadius = boonPickupRadius();
+      if (dist < magnetRadius) {
         var dx = state.player.x - p.group.position.x, dz = state.player.z - p.group.position.z;
         p.group.position.x += dx * dt * 2.2;
         p.group.position.z += dz * dt * 2.2;
@@ -1837,8 +2288,11 @@
 
     return {
       group: group, body: body, material: mat, aura: aura, line: line, trail: [],
-      type: type, size: size, hp: isBoss ? BOSS.hp : type.hp, maxHp: isBoss ? BOSS.hp : type.hp,
+      type: type, size: size, hp: type.hp, maxHp: type.hp,
       phase: rand(0, TAU), age: 0, attackCd: 0, phaseTimer: rand(1.5, 4), hitFlash: 0,
+      castCd: rand(1.4, 3.0), castTimer: 0, summonCd: rand(3.2, 6.0), healCd: rand(2.5, 4.5),
+      fuse: 0, frostTimer: 0, burnTimer: 0, burnTick: 0, burnDps: 0,
+      bossPhase: isBoss ? 1 : 0, speedBonus: 1,
       baseY: rand(1.2, 2.8) * (isBoss ? 1.22 : 1), x: 0, z: 0, alive: true,
       isBoss: !!isBoss, golden: false, ambient: false, visible: true
     };
@@ -1936,8 +2390,10 @@
       return;
     }
 
-    var speed = g.type.speed * (1 + (state.game ? state.game.wave : 1) * 0.025);
-    if (g.isBoss) speed = BOSS.speed * (1 + (state.game ? state.game.wave : 1) * 0.01);
+    var speed = g.type.speed * (1 + (state.game ? state.game.wave : 1) * 0.025) * (g.speedBonus || 1);
+    if (g.isBoss) speed = g.type.speed * (1 + (state.game ? state.game.wave : 1) * 0.01) * (g.speedBonus || 1);
+    if (state.game && state.game.omen && state.game.omen.speed) speed *= state.game.omen.speed;
+    if (g.frostTimer > 0) { g.frostTimer -= dt; speed *= 0.56; }
     var strafe = 0, pull = 0;
     if (g.type.behavior === 'zigzag') strafe = Math.sin(t * 3.3 + g.phase) * 0.68;
     else if (g.type.behavior === 'strafe') strafe = Math.sin(t * 1.25 + g.phase) * 0.75;
@@ -1947,6 +2403,27 @@
       nx += (dx / dist) * radial;
       nz += (dz / dist) * radial;
       strafe = 0.9;
+    } else if (g.type.behavior === 'caster') {
+      var castDist = 11;
+      var castRadial = clamp((dist - castDist) * 0.46, -1.35, 1.35);
+      nx += (dx / dist) * castRadial;
+      nz += (dz / dist) * castRadial;
+      strafe = 0.46;
+    } else if (g.type.behavior === 'summoner') {
+      var summonDist = 9.5;
+      var summonRadial = (dist - summonDist) * 0.35;
+      nx += (dx / dist) * summonRadial;
+      nz += (dz / dist) * summonRadial;
+      strafe = 0.4;
+    } else if (g.type.behavior === 'healer') {
+      var healDist = 10.5;
+      var healRadial = (dist - healDist) * 0.3;
+      nx += (dx / dist) * healRadial;
+      nz += (dz / dist) * healRadial;
+      strafe = 0.3;
+    } else if (g.type.behavior === 'bomber') {
+      speed *= 1.16;
+      if (dist < 3.2 && g.fuse <= 0) g.fuse = 0.72;
     } else if (g.type.behavior === 'ambush') {
       if (g.age < 2.4) { speed *= 0.22; strafe = Math.sin(t * 1.2 + g.phase) * 0.5; }
       else speed *= 1.45;
@@ -1982,6 +2459,78 @@
     g.aura.material.opacity = (g.isBoss ? 0.46 : 0.30) + Math.sin(t * 2.2 + g.phase) * 0.07;
     if (g.golden) g.aura.material.opacity = 0.58 + Math.sin(t * 5 + g.phase) * 0.12;
 
+    if (g.burnTimer > 0) {
+      g.burnTimer -= dt;
+      g.burnTick -= dt;
+      if (g.burnTick <= 0) {
+        g.burnTick = 0.48;
+        damageGhost(g, g.burnDps, new THREE.Vector3(g.x, g.group.position.y + 1, g.z), { dot: true });
+        if (!g.alive) return;
+      }
+    }
+
+    var waveNo = state.game ? state.game.wave : 1;
+    if (g.type.behavior === 'caster' || g.isBoss) {
+      if (g.castTimer > 0) {
+        g.castTimer -= dt;
+        g.aura.material.opacity = 0.62 + Math.sin(t * 18) * 0.18;
+        if (g.castTimer <= 0) {
+          var burstCount = g.isBoss ? (g.bossPhase >= 3 ? 3 : (g.bossPhase >= 2 ? 2 : 1)) : 1;
+          for (var cs = 0; cs < burstCount; cs++) {
+            spawnEnemyShot(g, g.isBoss ? 8.4 : 7.4, g.isBoss ? 11 + waveNo * 0.55 : 7 + waveNo * 0.36,
+              (cs - (burstCount - 1) / 2) * 0.06, g.isBoss && g.bossPhase >= 3);
+          }
+          spawnBurst(new THREE.Vector3(g.x, g.group.position.y + 1, g.z), g.type.color, 12, 2.2, 0.13);
+        }
+      } else {
+        g.castCd -= dt;
+        if (g.castCd <= 0) {
+          g.castTimer = 0.4;
+          g.castCd = g.isBoss ? Math.max(0.85, 2.35 - (g.bossPhase - 1) * 0.42) : rand(2.5, 3.9);
+        }
+      }
+    }
+
+    if (g.type.behavior === 'summoner') {
+      g.summonCd -= dt;
+      if (g.summonCd <= 0 && state.ghosts.length < 30) {
+        g.summonCd = rand(5.0, 7.4);
+        spawnAdds(g, 2);
+      }
+    }
+
+    if (g.type.behavior === 'healer') {
+      g.healCd -= dt;
+      if (g.healCd <= 0) {
+        g.healCd = rand(3.8, 5.4);
+        var mended = 0;
+        for (var hi = 0; hi < state.ghosts.length && mended < 3; hi++) {
+          var ally = state.ghosts[hi];
+          if (!ally || !ally.alive || ally === g) continue;
+          if (Math.hypot(ally.x - g.x, ally.z - g.z) > 7 || ally.hp >= ally.maxHp) continue;
+          ally.hp = Math.min(ally.maxHp, ally.hp + 1);
+          spawnBurst(new THREE.Vector3(ally.x, ally.group.position.y + 1, ally.z), 0x7dff6a, 8, 1.6, 0.09);
+          mended++;
+        }
+        if (mended) g.aura.material.opacity = 0.7;
+      }
+    }
+
+    if (g.fuse > 0) {
+      g.fuse -= dt;
+      var fuseScale = 1 + Math.sin(t * 34) * 0.035;
+      g.group.scale.setScalar(g.size * fuseScale);
+      g.aura.material.opacity = 0.72 + Math.sin(t * 28) * 0.2;
+      if (g.fuse <= 0 && g.alive) {
+        spawnBurst(new THREE.Vector3(g.x, g.group.position.y + 0.8, g.z), 0xff8c1a, 70, 7, 0.2);
+        spawnBurst(new THREE.Vector3(px, 1.1, pz), 0xff3355, 34, 5, 0.18);
+        damagePlayer(Math.min(32, 9 + waveNo * 0.75));
+        g.hp = 0;
+        killGhost(g);
+        return;
+      }
+    }
+
     if (g.attackCd > 0) g.attackCd -= dt;
     if (dist < 1.65 && g.attackCd <= 0) {
       g.attackCd = g.isBoss ? 0.8 : 1.35;
@@ -2008,14 +2557,27 @@
     g.line.material.opacity = g.ambient ? 0.18 : 0.30;
   }
 
-  function damageGhost(g, amount, at) {
-    if (!g.alive) return;
+  function damageGhost(g, amount, at, opts) {
+    if (!g || !g.alive || amount <= 0) return;
+    opts = opts || {};
+    var hitAt = at || new THREE.Vector3(g.x, g.group.position.y + 1, g.z);
     g.hp -= amount;
     g.material.uniforms.uOpacity.value = 1;
     g.hitFlash = 0.12;
-    spawnBurst(at || new THREE.Vector3(g.x, g.group.position.y + 1, g.z), g.type.glow, 10, 2.6, 0.10);
+    spawnBurst(hitAt, g.type.glow, opts.dot ? 4 : 10, opts.dot ? 1.3 : 2.6, opts.dot ? 0.08 : 0.10);
     playSound('hit');
-    state.shake = Math.max(state.shake, 0.06);
+    state.shake = Math.max(state.shake, opts.crit ? 0.12 : 0.06);
+    if (setting('damageNumbers') && !opts.dot) {
+      floatText((Math.round(amount * 10) / 10) + (opts.crit ? '!' : ''), hitAt, opts.crit ? 'gold' : 'dmg');
+    }
+    if (!opts.dot) {
+      if (boonRank('frost') > 0) g.frostTimer = 1.4 + boonRank('frost') * 0.35;
+      if (boonRank('burn') > 0 && g.burnTimer <= 0) {
+        g.burnTimer = 2.0 + boonRank('burn') * 0.28;
+        g.burnDps = 0.20 + boonRank('burn') * 0.15;
+        g.burnTick = 0.2;
+      }
+    }
     var reticle = state.ui.reticle;
     if (reticle) {
       reticle.classList.remove('hit');
@@ -2023,8 +2585,67 @@
       reticle.classList.add('hit');
       setTimeout(function () { reticle.classList.remove('hit'); }, 100);
     }
+    if (opts.chain && !opts.chained && g.alive) {
+      chainLightning(g, hitAt, opts.chain, amount * 0.46);
+    }
     if (g.hp <= 0) killGhost(g);
-    else updateHUD();
+    else if (g.isBoss && g.hp > 0) {
+      var ratio = g.hp / g.maxHp;
+      if (ratio <= 0.66 && g.bossPhase === 1) bossPhase(g, 2);
+      else if (ratio <= 0.33 && g.bossPhase === 2) bossPhase(g, 3);
+      updateHUD();
+    } else updateHUD();
+  }
+
+  function chainLightning(source, from, count, amount) {
+    var visited = [source];
+    var fromPos = from.clone();
+    for (var link = 0; link < count; link++) {
+      var best = null, bestDist = 9;
+      for (var i = 0; i < state.ghosts.length; i++) {
+        var other = state.ghosts[i];
+        if (!other || !other.alive || visited.indexOf(other) >= 0) continue;
+        var d = Math.hypot(other.x - fromPos.x, other.z - fromPos.z);
+        if (d < bestDist) { bestDist = d; best = other; }
+      }
+      if (!best) break;
+      var target = new THREE.Vector3(best.x, best.group.position.y + best.size * 0.95, best.z);
+      spawnBeam(fromPos, target, 0xb388ff);
+      damageGhost(best, amount, target, { chained: true });
+      visited.push(best);
+      fromPos = target;
+      amount *= 0.7;
+    }
+  }
+
+  function bossPhase(g, phase) {
+    if (!g || !g.alive || g.bossPhase >= phase) return;
+    g.bossPhase = phase;
+    g.speedBonus = phase === 2 ? 1.16 : 1.34;
+    g.castCd = 0.35;
+    g.castTimer = 0;
+    g.aura.material.color.setHex(phase === 3 ? 0xff3355 : g.type.glow);
+    spawnBurst(new THREE.Vector3(g.x, g.group.position.y + 1.2, g.z), phase === 3 ? 0xff3355 : 0xffd166, 46, 5.5, 0.2);
+    state.shake = 0.34;
+    showToast(g.type.name.toUpperCase() + (phase === 2 ? ' BREAKS THE CROWN' : ' UNMAKES THE VEIL'), 2000);
+    playSound('wave');
+    spawnAdds(g, phase === 2 ? 1 : 3);
+  }
+
+  function spawnAdds(g, count) {
+    if (!g || !state.game) return;
+    for (var i = 0; i < count; i++) {
+      if (state.ghosts.length >= 30) break;
+      var type = choose([TYPES[0], TYPES[2], TYPES[9]]);
+      var add = spawnGhost(type, false, false);
+      add.x = clamp(g.x + rand(-3.2, 3.2), -24, 24);
+      add.z = clamp(g.z + rand(-3.2, 3.2), -24, 24);
+      add.baseY = rand(1.4, 2.7);
+      add.group.position.set(add.x, add.baseY, add.z);
+      add.hp = Math.max(1, Math.round(type.hp * 0.8));
+      add.maxHp = add.hp;
+      spawnBurst(new THREE.Vector3(add.x, add.baseY + 1, add.z), type.glow, 10, 2.0, 0.1);
+    }
   }
 
   function killGhost(g) {
@@ -2038,21 +2659,29 @@
     game.combo++;
     game.comboTimer = 2.6;
     var mult = 1 + Math.min(2.0, (game.combo - 1) * 0.08);
-    var points = Math.round(g.type.points * mult * (g.golden ? 5 : 1) * (g.isBoss ? 1 : 1));
+    var omenScore = game.omen && game.omen.score ? game.omen.score : 1;
+    var points = Math.round(g.type.points * mult * (g.golden ? 5 : 1) * boonScoreScale() * omenScore);
     game.score += points;
     game.goldDrop++;
+    if (boonRank('leech') > 0) {
+      game.health = Math.min(game.maxHealth, game.health + 0.9 * boonRank('leech'));
+      floatText('+HEAL', new THREE.Vector3(g.x, g.group.position.y + 1.2, g.z), 'heal');
+    }
     if (g.golden) showToast('GOLDEN BREED DISPELED  ×5', 1600);
     if (g.isBoss) {
-      game.score += 250;
+      game.score += 450;
+      game.bosses = (game.bosses || 0) + 1;
       game.boss = null;
       game.health = Math.min(game.maxHealth, game.health + 24);
-      showToast('THE HOLLOW KING FALLS', 2400);
+      showToast(g.type.name.toUpperCase() + ' FALLS', 2400);
       state.ui.boss.classList.remove('show');
       spawnPickup(new THREE.Vector3(g.x, 1, g.z));
       spawnPickup(new THREE.Vector3(g.x + 2, 1, g.z - 1));
+      spawnPickup(new THREE.Vector3(g.x - 2, 1, g.z + 1));
       state.shake = 0.35;
     }
-    if (!g.isBoss && game.goldDrop % 9 === 0) spawnPickup(new THREE.Vector3(g.x, 1, g.z));
+    var dropEvery = game.omen && game.omen.pickup ? game.omen.pickup : 9;
+    if (!g.isBoss && game.goldDrop % dropEvery === 0) spawnPickup(new THREE.Vector3(g.x, 1, g.z));
     var c = new THREE.Vector3(g.x, g.group.position.y + 1.0, g.z);
     spawnBurst(c, g.type.glow, g.isBoss ? 95 : 34, g.isBoss ? 7 : 4.6, g.isBoss ? 0.28 : 0.18);
     floatText('+' + fmt(points), c, g.golden ? 'gold' : (g.isBoss ? 'boss' : ''));
@@ -2069,6 +2698,7 @@
     if (!game || !game.active) return;
     game.waveClearTimer = 3.7;
     game.health = Math.min(game.maxHealth, game.health + 12);
+    game.combo = Math.max(game.combo, 0);
     showToast('WAVE CLEAR — THE VEIL STIRS', 2200);
     playSound('wave');
     updateHUD(true);
@@ -2083,21 +2713,29 @@
     game.spawnTimer = 0.6;
     game.boss = null;
     game.bossPending = n % 5 === 0;
+    game.bosses = game.bosses || 0;
+    var omen = n > 1 && n % 3 === 0 ? choose(OMENS) : null;
+    game.omen = omen;
+    applyOmen(omen);
+    updateOmenChip(omen);
     state.ui.boss.classList.remove('show');
-    showWaveBanner(n);
+    showWaveBanner(n, omen);
     playSound('wave');
+    if (omen) setTimeout(function () { if (state.game === game && state.game.active) showToast(omen.name + ' — ' + omen.desc, 2600); }, 700);
     if (n % 5 === 0) {
       var token = game;
+      var bossDef = BOSSES[(Math.floor(n / 5) - 1) % BOSSES.length];
       setTimeout(function () {
         if (!state.game || state.game !== token || !state.game.active || state.game.wave !== n) return;
         state.game.bossPending = false;
-        var boss = spawnGhost(BOSS, true, false);
-        boss.hp = BOSS.hp + n * 2;
+        var boss = spawnGhost(bossDef, true, false);
+        boss.hp = bossDef.hp + n * 2.6;
         boss.maxHp = boss.hp;
         state.game.boss = boss;
         state.ui.boss.classList.add('show');
+        state.ui.bossName.textContent = bossDef.name.toUpperCase();
         state.ui.bossFill.style.width = '100%';
-        showToast('THE HOLLOW KING HAS ENTERED THE GRAVEYARD', 2800);
+        showToast(bossDef.name.toUpperCase() + ' HAS ENTERED THE GRAVEYARD', 2800);
         updateHUD(true);
       }, 900);
     }
@@ -2118,12 +2756,92 @@
     }
     if (game.waveClearTimer > 0) {
       game.waveClearTimer -= dt;
-      if (game.waveClearTimer <= 0) startWave(game.wave + 1);
+      if (game.waveClearTimer <= 0) {
+        game.waveClearTimer = 0;
+        openDraft(game.wave + 1);
+      }
     }
+  }
+
+  function openDraft(nextWave) {
+    var game = state.game;
+    if (!game || !game.active) return;
+    var pool = BOONS.filter(function (b) { return boonRank(b.id) < b.max; });
+    if (!pool.length) { startWave(nextWave); return; }
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = (Math.random() * (i + 1)) | 0;
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    var picks = pool.slice(0, Math.min(3, pool.length));
+    game.draftNext = nextWave;
+    state.mode = 'draft';
+    state.firing = false;
+    state.keys = {};
+    resetStick();
+    if (state.ui.draftCards) {
+      state.ui.draftCards.innerHTML = picks.map(function (b, idx) {
+        var rank = boonRank(b.id);
+        return '<button class="gs3d-draft-card" type="button" data-boon="' + b.id + '" style="--relic:' + b.tone + '">' +
+          '<span class="gs3d-draft-key">' + (idx + 1) + '</span>' +
+          '<i>' + b.icon + '</i>' +
+          '<b>' + b.name + '</b>' +
+          '<small>' + b.desc + '</small>' +
+          '<em>RANK ' + rank + ' / ' + b.max + '</em>' +
+          '</button>';
+      }).join('');
+    }
+    if (state.ui.draft) state.ui.draft.classList.add('show');
+    playSound('pickup');
+  }
+
+  function chooseRelic(id) {
+    if (state.mode !== 'draft' || !state.game) return;
+    var boon = null;
+    for (var i = 0; i < BOONS.length; i++) if (BOONS[i].id === id) boon = BOONS[i];
+    if (!boon) return;
+    var game = state.game;
+    game.boons[id] = (game.boons[id] || 0) + 1;
+    if (id === 'vitality') {
+      game.maxHealth += 15;
+      game.health = Math.min(game.maxHealth, game.health + 15);
+    }
+    var next = game.draftNext || game.wave + 1;
+    game.draftNext = 0;
+    if (state.ui.draft) state.ui.draft.classList.remove('show');
+    state.mode = 'play';
+    showToast('RELIC CLAIMED — ' + boon.name.toUpperCase(), 1400);
+    playSound('pickup');
+    updateHUD(true);
+    startWave(next);
+  }
+
+  function skipDraft() {
+    if (state.mode !== 'draft' || !state.game) return;
+    var next = state.game.draftNext || state.game.wave + 1;
+    state.game.draftNext = 0;
+    if (state.ui.draft) state.ui.draft.classList.remove('show');
+    state.mode = 'play';
+    startWave(next);
+  }
+
+  function applyOmen(omen) {
+    if (!state.scene || !state.renderer) return;
+    if (!omen) {
+      state.scene.fog.color.setHex(0x0b0618);
+      state.scene.fog.density = 0.022;
+      state.renderer.setClearColor(0x07030f, 1);
+      state.scene.background.setHex(0x07030f);
+      return;
+    }
+    state.scene.fog.color.setHex(omen.fog);
+    state.scene.fog.density = omen.density;
+    state.renderer.setClearColor(omen.fog, 1);
+    state.scene.background.setHex(omen.fog);
   }
 
   /* ----------------------------------------------------------- projectiles */
   function makeAimAssist(origin, dir) {
+    if (!setting('aimAssist')) return dir;
     var best = null, bestDot = Math.cos(state.ui && state.ui.stage.classList.contains('touch') ? 0.20 : 0.135);
     var v = new THREE.Vector3();
     for (var i = 0; i < state.ghosts.length; i++) {
@@ -2145,23 +2863,33 @@
     if (state.mode !== 'play' || !state.game || !state.game.active) return;
     var now = nowMs();
     if (now < state.nextFire) return;
-    var rapid = state.game.power.rapid > 0;
-    state.nextFire = now + (rapid ? 90 : 175);
+    var game = state.game;
+    var weapon = activeWeapon();
+    var rapid = game.power.rapid > 0;
+    state.nextFire = now + weapon.cooldown * (rapid ? 0.55 : 1) * boonFireScale();
     var origin = state.camera.position.clone();
     var dir = new THREE.Vector3(0, 0, -1).applyQuaternion(state.camera.quaternion).normalize();
     dir = makeAimAssist(origin, dir);
-    var shots = state.game.power.triple > 0 ? 3 : 1;
+    var shots = weapon.shots + boonRank('split');
     for (var i = 0; i < shots; i++) {
       var d = dir.clone();
-      if (shots > 1) {
-        var up = new THREE.Vector3(0, 1, 0).applyQuaternion(state.camera.quaternion);
+      if (weapon.shots === 1 && shots > 1) {
         var side = new THREE.Vector3(1, 0, 0).applyQuaternion(state.camera.quaternion);
-        d.add(side.multiplyScalar((i - 1) * 0.028)).normalize();
-        if (i === 1) d.add(up.multiplyScalar(0.012)).normalize();
+        d.add(side.multiplyScalar((i - (shots - 1) / 2) * 0.044)).normalize();
+      } else if (weapon.shots > 1) {
+        var pelletSide = new THREE.Vector3(1, 0, 0).applyQuaternion(state.camera.quaternion);
+        var pelletUp = new THREE.Vector3(0, 1, 0).applyQuaternion(state.camera.quaternion);
+        d.add(pelletSide.multiplyScalar(rand(-weapon.spread, weapon.spread)))
+          .add(pelletUp.multiplyScalar(rand(-weapon.spread, weapon.spread)))
+          .normalize();
       }
-      spawnProjectile(origin.clone().addScaledVector(d, 0.64), d);
+      spawnProjectile(origin.clone().addScaledVector(d, 0.64), d, weapon, {
+        damage: weapon.damage,
+        pierce: weapon.pierce + boonRank('pierce'),
+        chain: weapon.chain
+      });
     }
-    state.game.shots += shots;
+    game.shots += shots;
     state.recoil = 1;
     state.muzzle = 1;
     state.shake = Math.max(state.shake, rapid ? 0.025 : 0.045);
@@ -2178,32 +2906,37 @@
     playSound('shot');
   }
 
-  function spawnProjectile(pos, dir) {
+  function spawnProjectile(pos, dir, weapon, opts) {
     var group = new THREE.Group();
+    var size = weapon.size || 1;
     var core = new THREE.Mesh(
-      new THREE.SphereGeometry(0.075, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0xc9f7ff, toneMapped: false, fog: false })
+      new THREE.SphereGeometry(0.07 * size, 10, 8),
+      new THREE.MeshBasicMaterial({ color: weapon.glow, toneMapped: false, fog: false })
     );
     group.add(core);
     var glow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: state.glowTex, color: 0x59e6ff, transparent: true, opacity: 0.85,
+      map: state.glowTex, color: weapon.color, transparent: true, opacity: 0.85,
       blending: THREE.AdditiveBlending, depthWrite: false, fog: false
     }));
-    glow.scale.set(0.8, 0.8, 1);
+    glow.scale.set(0.8 * size, 0.8 * size, 1);
     group.add(glow);
     group.position.copy(pos);
     state.scene.add(group);
 
     var lineGeo = new THREE.BufferGeometry();
-    var lp = new Float32Array(6 * 3);
+    var lp = new Float32Array(7 * 3);
     lineGeo.setAttribute('position', new THREE.BufferAttribute(lp, 3));
-    var line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0x59e6ff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+    var line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({
+      color: weapon.color, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
     line.frustumCulled = false;
     state.scene.add(line);
 
     state.projectiles.push({
-      group: group, glow: glow, line: line, dir: dir.clone(), life: 2.1,
-      speed: 48, trail: []
+      group: group, glow: glow, line: line, dir: dir.clone(), life: weapon.life,
+      speed: weapon.speed, trail: [], damage: opts.damage, pierce: opts.pierce,
+      chain: opts.chain, color: weapon.color, hitGhosts: [], hitDone: false
     });
   }
 
@@ -2227,16 +2960,16 @@
       var segLen2 = segX * segX + segY * segY + segZ * segZ;
       var arr = p.line.geometry.attributes.position;
       p.trail.unshift([pos.x, pos.y, pos.z]);
-      if (p.trail.length > 6) p.trail.pop();
-      for (var k = 0; k < 6; k++) {
+      if (p.trail.length > 7) p.trail.pop();
+      for (var k = 0; k < 7; k++) {
         var tp = p.trail[Math.min(k, p.trail.length - 1)] || [pos.x, pos.y, pos.z];
         arr.setXYZ(k, tp[0], tp[1], tp[2]);
       }
       arr.needsUpdate = true;
-      var hit = null, hitT = 2;
+      var hits = [];
       for (var j = 0; j < state.ghosts.length; j++) {
         var g = state.ghosts[j];
-        if (!g.alive) continue;
+        if (!g.alive || p.hitGhosts.indexOf(g) >= 0) continue;
         var cy = g.group.position.y + 0.95 * g.size;
         var rr = (g.isBoss ? 1.25 : 0.55) * (g.size / g.type.size) + 0.18;
         var t = 0;
@@ -2247,26 +2980,212 @@
         var dx = prevX + segX * t - g.x;
         var dy = prevY + segY * t - cy;
         var dz = prevZ + segZ * t - g.z;
-        if (dx * dx + dy * dy + dz * dz < rr * rr && t < hitT) { hit = g; hitT = t; }
+        if (dx * dx + dy * dy + dz * dz < rr * rr) hits.push({ ghost: g, t: t, at: new THREE.Vector3(prevX + segX * t, prevY + segY * t, prevZ + segZ * t) });
       }
-      if (hit) {
-        if (state.game) state.game.hits++;
-        damageGhost(hit, 1, pos.clone());
+      hits.sort(function (a, b) { return a.t - b.t; });
+      var consumed = false;
+      for (var h = 0; h < hits.length; h++) {
+        var target = hits[h].ghost;
+        if (!target.alive || p.hitGhosts.indexOf(target) >= 0) continue;
+        if (state.game && !p.hitDone) { state.game.hits++; p.hitDone = true; }
+        p.hitGhosts.push(target);
+        var crit = Math.random() < boonCrit();
+        var dmg = p.damage * boonDamage() * (crit ? 2.2 : 1);
+        damageGhost(target, dmg, hits[h].at, { crit: crit, chain: p.chain });
+        if (p.pierce > 0) p.pierce--;
+        else { consumed = true; break; }
+      }
+      if (consumed) {
         removeProjectile(p);
         state.projectiles.splice(i, 1);
         continue;
       }
       if (p.life <= 0 || pos.y < 0.05 || pos.y > 34 || Math.abs(pos.x) > 46 || Math.abs(pos.z) > 46) {
-        if (p.life <= 0) spawnBurst(pos, 0x59e6ff, 5, 1.2, 0.1);
+        if (p.life <= 0) spawnBurst(pos, p.color, 5, 1.2, 0.1);
         removeProjectile(p);
         state.projectiles.splice(i, 1);
       }
     }
   }
 
+  /* ------------------------------------------------------- enemy soulfire */
+  function spawnEnemyShot(g, speed, damage, spread, homing) {
+    if (!state.scene || !g || !g.alive) return;
+    var from = new THREE.Vector3(g.x, g.group.position.y + g.size * 0.95, g.z);
+    var target = new THREE.Vector3(state.player.x, 1.18, state.player.z);
+    var dir = target.sub(from).normalize();
+    var side = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+    dir.add(side.multiplyScalar(spread || 0)).normalize();
+    var group = new THREE.Group();
+    var core = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 8, 6),
+      new THREE.MeshBasicMaterial({ color: g.type.glow, toneMapped: false, fog: false })
+    );
+    group.add(core);
+    var glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: state.glowTex, color: g.type.color, transparent: true, opacity: 0.82,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+    }));
+    glow.scale.set(1.4, 1.4, 1);
+    group.add(glow);
+    group.position.copy(from);
+    state.scene.add(group);
+    state.enemyShots.push({
+      group: group, core: core, glow: glow, dir: dir, speed: speed,
+      damage: damage, life: 5.2, homing: !!homing, phase: rand(0, TAU)
+    });
+  }
+
+  function removeEnemyShot(shot) {
+    if (!shot) return;
+    state.scene.remove(shot.group);
+    shot.group.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  }
+
+  function updateEnemyShots(dt) {
+    for (var i = state.enemyShots.length - 1; i >= 0; i--) {
+      var shot = state.enemyShots[i];
+      shot.life -= dt;
+      if (shot.homing) {
+        var want = new THREE.Vector3(state.player.x, 1.18, state.player.z).sub(shot.group.position).normalize();
+        shot.dir.lerp(want, clamp(dt * 1.8, 0, 1)).normalize();
+      }
+      shot.group.position.addScaledVector(shot.dir, shot.speed * dt);
+      shot.core.rotation.y += dt * 6;
+      shot.core.rotation.x += dt * 4;
+      shot.glow.material.opacity = 0.7 + Math.sin(state.time * 9 + shot.phase) * 0.2;
+      var p = shot.group.position;
+      var px = p.x - state.player.x, pz = p.z - state.player.z;
+      if (p.y > 0.25 && p.y < 2.55 && px * px + pz * pz < 0.42) {
+        damagePlayer(shot.damage);
+        spawnBurst(p.clone(), 0xff3355, 18, 3.2, 0.14);
+        removeEnemyShot(shot);
+        state.enemyShots.splice(i, 1);
+        continue;
+      }
+      if (shot.life <= 0 || p.y < 0.05 || p.y > 28 || Math.abs(p.x) > 42 || Math.abs(p.z) > 42) {
+        spawnBurst(p.clone(), shot.glow.material.color.getHex(), 5, 1.4, 0.09);
+        removeEnemyShot(shot);
+        state.enemyShots.splice(i, 1);
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------- soul beams */
+  function spawnBeam(from, to, color) {
+    if (!state.scene) return;
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      from.x, from.y, from.z, to.x, to.y, to.z
+    ]), 3));
+    var line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+      color: color || 0xb388ff, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    line.frustumCulled = false;
+    state.scene.add(line);
+    state.beams.push({ line: line, life: 0.18, max: 0.18 });
+  }
+
+  function updateBeams(dt) {
+    for (var i = state.beams.length - 1; i >= 0; i--) {
+      var beam = state.beams[i];
+      beam.life -= dt;
+      if (beam.life <= 0) {
+        state.scene.remove(beam.line);
+        beam.line.geometry.dispose();
+        beam.line.material.dispose();
+        state.beams.splice(i, 1);
+      } else {
+        beam.line.material.opacity = clamp(beam.life / beam.max, 0, 1) * 0.9;
+      }
+    }
+  }
+
+  function clearBeams() {
+    for (var i = 0; i < state.beams.length; i++) {
+      var beam = state.beams[i];
+      if (!beam) continue;
+      state.scene.remove(beam.line);
+      beam.line.geometry.dispose();
+      beam.line.material.dispose();
+    }
+    state.beams.length = 0;
+  }
+
+  function dashAbility() {
+    var game = state.game;
+    if (state.mode !== 'play' || !game || !game.active || game.dashCd > 0) return;
+    var fw = (state.keys.w || state.keys.arrowup ? 1 : 0) - (state.keys.s || state.keys.arrowdown ? 1 : 0);
+    var st = (state.keys.d ? 1 : 0) - (state.keys.a ? 1 : 0);
+    if (state.stick) { fw += state.stick.y; st += state.stick.x; }
+    var mx, mz;
+    if (fw || st) {
+      var sy = Math.sin(state.player.yaw), cy = Math.cos(state.player.yaw);
+      mx = sy * fw + cy * st;
+      mz = -cy * fw + sy * st;
+    } else {
+      mx = -Math.sin(state.player.yaw);
+      mz = -Math.cos(state.player.yaw);
+    }
+    var len = Math.hypot(mx, mz) || 1;
+    game.dashDir = { x: mx / len, z: mz / len };
+    game.dashTime = 0.2;
+    game.dashCd = 6 * boonDashScale();
+    game.invuln = Math.max(game.invuln, 0.38);
+    state.shake = 0.22;
+    spawnBurst(new THREE.Vector3(state.player.x, 1.1, state.player.z), 0x6ee7ff, 26, 4.2, 0.16);
+    playSound('dash');
+    updateHUD(true);
+  }
+
+  function novaAbility() {
+    var game = state.game;
+    if (state.mode !== 'play' || !game || !game.active || game.novaCd > 0) return;
+    game.novaCd = 18 * boonNovaScale();
+    var radius = 8;
+    var damage = (2.8 + 0.45 * boonRank('nova')) * boonDamage();
+    var targets = state.ghosts.slice();
+    for (var i = 0; i < targets.length; i++) {
+      var g = targets[i];
+      if (!g.alive) continue;
+      if (Math.hypot(g.x - state.player.x, g.z - state.player.z) > radius) continue;
+      var at = new THREE.Vector3(g.x, g.group.position.y + g.size * 0.95, g.z);
+      spawnBeam(new THREE.Vector3(state.player.x, 1.2, state.player.z), at, 0xd45bff);
+      damageGhost(g, damage, at, { crit: true });
+    }
+    for (var s = state.enemyShots.length - 1; s >= 0; s--) {
+      var shot = state.enemyShots[s];
+      if (Math.hypot(shot.group.position.x - state.player.x, shot.group.position.z - state.player.z) < radius) {
+        spawnBurst(shot.group.position.clone(), 0xd45bff, 8, 2, 0.1);
+        removeEnemyShot(shot);
+        state.enemyShots.splice(s, 1);
+      }
+    }
+    state.shake = 0.48;
+    spawnBurst(new THREE.Vector3(state.player.x, 1.1, state.player.z), 0xd45bff, 70, 7, 0.22);
+    spawnBurst(new THREE.Vector3(state.player.x, 0.4, state.player.z), 0xff8c1a, 34, 5, 0.2);
+    showToast('SOUL NOVA', 1100);
+    playSound('nova');
+    updateHUD(true);
+  }
+
+  function updateAbilities(dt) {
+    var game = state.game;
+    if (!game) return;
+    game.dashCd = Math.max(0, game.dashCd - dt);
+    game.novaCd = Math.max(0, game.novaCd - dt);
+    game.invuln = Math.max(0, game.invuln - dt);
+  }
+
   function damagePlayer(amount) {
     var game = state.game;
     if (!game || !game.active) return;
+    if (game.invuln > 0) {
+      spawnBurst(new THREE.Vector3(state.player.x, 1.3, state.player.z), 0x6ee7ff, 8, 2, 0.1);
+      return;
+    }
+    game.invuln = Math.max(game.invuln, 0.34);
     game.health -= amount;
     state.shake = Math.min(0.55, state.shake + 0.22);
     playSound('damage');
@@ -2289,7 +3208,7 @@
     var fw = (state.keys.w || state.keys.arrowup ? 1 : 0) - (state.keys.s || state.keys.arrowdown ? 1 : 0);
     var st = (state.keys.d ? 1 : 0) - (state.keys.a ? 1 : 0);
     if (state.stick) { fw += state.stick.y; st += state.stick.x; }
-    var speed = (state.keys.shift ? 7.2 : 4.7);
+    var speed = (state.keys.shift ? 7.2 : 4.7) * boonMoveScale();
     var mx = 0, mz = 0;
     if (fw || st) {
       var sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
@@ -2302,6 +3221,13 @@
       p.bob += dt * (state.keys.shift ? 14 : 10);
     } else {
       p.bob += dt * 2.2;
+    }
+    var game = state.game;
+    if (game && game.dashTime > 0) {
+      p.x += game.dashDir.x * 25 * dt;
+      p.z += game.dashDir.z * 25 * dt;
+      game.dashTime = Math.max(0, game.dashTime - dt);
+      p.bob += dt * 24;
     }
     var r = Math.hypot(p.x, p.z);
     if (r > 25.8) { p.x *= 25.8 / r; p.z *= 25.8 / r; }
@@ -2397,10 +3323,11 @@
       return;
     }
     var p = state.player;
-    var shakeX = (Math.random() - 0.5) * state.shake;
-    var shakeY = (Math.random() - 0.5) * state.shake;
+    var shakeAmt = setting('shake') ? state.shake : 0;
+    var shakeX = (Math.random() - 0.5) * shakeAmt;
+    var shakeY = (Math.random() - 0.5) * shakeAmt;
     camera.position.set(p.x + shakeX, p.y + shakeY, p.z);
-    camera.rotation.set(p.pitch, p.yaw, Math.sin(p.bob * 0.5) * 0.003 + (Math.random() - 0.5) * state.shake * 0.08, 'YXZ');
+    camera.rotation.set(p.pitch, p.yaw, Math.sin(p.bob * 0.5) * 0.003 + (Math.random() - 0.5) * shakeAmt * 0.08, 'YXZ');
     state.shake = Math.max(0, state.shake - dt * 1.6);
   }
 
@@ -2418,6 +3345,24 @@
       h.combo = game.combo;
     }
     if (force || h.kills !== game.kills) { state.ui.breed.textContent = game.kills; h.kills = game.kills; }
+    var weapon = activeWeapon();
+    if (force || h.weapon !== weapon.key) {
+      if (state.ui.weaponName) state.ui.weaponName.textContent = weapon.short;
+      state.ui.weapon.title = weapon.name + ' — ' + weapon.desc;
+      h.weapon = weapon.key;
+    }
+    var dashLabel = game.dashCd > 0 ? Math.ceil(game.dashCd) + 's' : 'READY';
+    if (force || h.dash !== dashLabel) {
+      if (state.ui.dashCd) state.ui.dashCd.textContent = dashLabel;
+      if (state.ui.dash) state.ui.dash.classList.toggle('cooling', game.dashCd > 0);
+      h.dash = dashLabel;
+    }
+    var novaLabel = game.novaCd > 0 ? Math.ceil(game.novaCd) + 's' : 'READY';
+    if (force || h.nova !== novaLabel) {
+      if (state.ui.novaCd) state.ui.novaCd.textContent = novaLabel;
+      if (state.ui.nova) state.ui.nova.classList.toggle('cooling', game.novaCd > 0);
+      h.nova = novaLabel;
+    }
     if (force || h.health !== game.health) {
       var pct = clamp(game.health / game.maxHealth * 100, 0, 100);
       state.ui.shieldFill.style.width = pct + '%';
@@ -2437,6 +3382,104 @@
     if (game.boss) {
       state.ui.bossFill.style.width = clamp(game.boss.hp / game.boss.maxHp * 100, 0, 100) + '%';
     }
+  }
+
+  function drawRadar() {
+    var ctx = state.radarCtx;
+    if (!ctx || !state.game) return;
+    var size = 200, c = size / 2, scale = 3.35;
+    var px = state.player.x, pz = state.player.z;
+    ctx.clearRect(0, 0, size, size);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(c, c, c - 4, 0, TAU);
+    ctx.clip();
+    var bg = ctx.createRadialGradient(c, c, 4, c, c, c);
+    bg.addColorStop(0, 'rgba(28,15,52,.82)');
+    bg.addColorStop(1, 'rgba(5,2,12,.9)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = 'rgba(168,130,255,.16)';
+    ctx.lineWidth = 1;
+    for (var ring = 1; ring <= 3; ring++) {
+      ctx.beginPath();
+      ctx.arc(c, c, (c - 8) * ring / 3, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(168,130,255,.10)';
+    ctx.beginPath(); ctx.moveTo(c, 8); ctx.lineTo(c, size - 8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, c); ctx.lineTo(size - 8, c); ctx.stroke();
+    var sweep = (state.time * 0.7) % TAU;
+    ctx.strokeStyle = 'rgba(89,230,255,.18)';
+    ctx.beginPath(); ctx.moveTo(c, c); ctx.lineTo(c + Math.cos(sweep) * 94, c + Math.sin(sweep) * 94); ctx.stroke();
+
+    for (var i = 0; i < state.ghosts.length; i++) {
+      var g = state.ghosts[i];
+      if (!g.alive) continue;
+      var dx = (g.x - px) * scale, dz = (g.z - pz) * scale;
+      if (dx * dx + dz * dz > 92 * 92) continue;
+      var gx = c + dx, gy = c + dz;
+      if (g.isBoss) {
+        ctx.save();
+        ctx.translate(gx, gy);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = '#d6a4ff';
+        ctx.shadowColor = '#b45cff';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(-5, -5, 10, 10);
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.fillStyle = hexColor(g.golden ? 0xffd166 : g.type.color);
+        ctx.globalAlpha = g.golden ? 1 : 0.8;
+        ctx.arc(gx, gy, g.golden ? 3.1 : 2.2, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+    for (var p = 0; p < state.pickups.length; p++) {
+      var pick = state.pickups[p];
+      var pdx = (pick.group.position.x - px) * scale, pdz = (pick.group.position.z - pz) * scale;
+      if (pdx * pdx + pdz * pdz < 92 * 92) {
+        ctx.fillStyle = '#ffd166';
+        ctx.fillRect(c + pdx - 1.5, c + pdz - 1.5, 3, 3);
+      }
+    }
+    ctx.fillStyle = '#ff3355';
+    for (var s = 0; s < state.enemyShots.length; s++) {
+      var shot = state.enemyShots[s];
+      var sdx = (shot.group.position.x - px) * scale, sdz = (shot.group.position.z - pz) * scale;
+      if (sdx * sdx + sdz * sdz < 92 * 92) {
+        ctx.beginPath();
+        ctx.arc(c + sdx, c + sdz, 1.6, 0, TAU);
+        ctx.fill();
+      }
+    }
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate(-state.player.yaw);
+    ctx.beginPath();
+    ctx.moveTo(0, -7);
+    ctx.lineTo(5, 5);
+    ctx.lineTo(0, 2.5);
+    ctx.lineTo(-5, 5);
+    ctx.closePath();
+    ctx.fillStyle = '#f4eeff';
+    ctx.shadowColor = '#9b5cff';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(192,156,255,.42)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(c, c, c - 4, 0, TAU);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(216,200,245,.55)';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', c, 15);
   }
 
   function projectToScreen(pos) {
@@ -2469,22 +3512,27 @@
     var t = state.time;
     updateEnvironment(dt, t);
     if (state.mode === 'play' && state.game && state.game.active) {
+      updateAbilities(dt);
       updatePlayer(dt);
       updateWaves(dt);
-      for (var i = 0; i < state.ghosts.length; i++) updateGhost(state.ghosts[i], dt, t);
-      updateProjectiles(dt);
-      updatePickups(dt, t);
-      updateBursts(dt);
-      var game = state.game;
-      if (game.comboTimer > 0) {
-        game.comboTimer -= dt;
-        if (game.comboTimer <= 0) { game.combo = 0; updateHUD(true); }
+      if (state.mode === 'play') {
+        for (var i = 0; i < state.ghosts.length; i++) updateGhost(state.ghosts[i], dt, t);
+        updateProjectiles(dt);
+        updateEnemyShots(dt);
+        updatePickups(dt, t);
+        updateBursts(dt);
+        var game = state.game;
+        if (game.comboTimer > 0) {
+          game.comboTimer -= dt;
+          if (game.comboTimer <= 0) { game.combo = 0; updateHUD(true); }
+        }
+        game.power.rapid = Math.max(0, game.power.rapid - dt);
+        game.power.triple = Math.max(0, game.power.triple - dt);
+        game.power.shield = Math.max(0, game.power.shield - dt);
+        if ((game.power.rapid + game.power.triple) > 0 && Math.floor(t * 2) % 2 === 0) updateHUD();
+        updateHUD();
+        if (t - state.radarAccum > 0.1) { state.radarAccum = t; drawRadar(); }
       }
-      game.power.rapid = Math.max(0, game.power.rapid - dt);
-      game.power.triple = Math.max(0, game.power.triple - dt);
-      game.power.shield = Math.max(0, game.power.shield - dt);
-      if ((game.power.rapid + game.power.triple) > 0 && Math.floor(t * 2) % 2 === 0) updateHUD();
-      updateHUD();
     } else if (state.mode === 'idle') {
       for (var j = 0; j < state.ghosts.length; j++) updateGhost(state.ghosts[j], dt, t);
       updateBursts(dt);
@@ -2492,6 +3540,7 @@
     } else {
       updateBursts(dt);
     }
+    updateBeams(dt);
     updateWeapon(dt);
     updateCamera(dt, t);
     state.renderer.render(state.scene, state.camera);

@@ -1,5 +1,5 @@
 /* SpookyTabs — the 7 iOS tabs, shared by the 2D + 3D web games.
- * Maze | Candy | Mine | World | Explore | Games | Achieve
+ * Maze | Candy | Mine | Ghosts | Town | Arcade | Trophies
  * Usage: SpookyTabs.init({ tabsId, panelsId, snapshot, onSelect, actions })
  *  snapshot() -> {score,layer,left,gold,level,pick,seed,relics,ach,collected}
  *  onSelect(i)   -> host pauses/resumes gameplay (0 = Maze)
@@ -9,13 +9,13 @@
   'use strict';
   var tabsSrc = (document.currentScript && document.currentScript.src) || '';
   var tabsDir = tabsSrc ? tabsSrc.slice(0, tabsSrc.lastIndexOf('/') + 1) : '';
-  var GHOST_SCRIPT_URL = tabsDir + 'ghost-shooter.js?v=10';
+  var GHOST_SCRIPT_URL = tabsDir + 'ghost-shooter.js?v=11';
   var TABS = [
     { icon: '⛏️', name: 'Maze' },
     { icon: '🍬', name: 'Candy' },
     { icon: '💎', name: 'Mine' },
     { icon: '👻', name: 'Ghosts' },
-    { icon: '🗺️', name: 'Explore' },
+    { icon: '🏮', name: 'Town' },
     { icon: '🎮', name: 'Arcade' },
     { icon: '🏆', name: 'Trophies' }
   ];
@@ -231,6 +231,7 @@
         window.SpookyArcade.close(true);
       }
       if (current === 3 && window.SpookyGhostShooter) window.SpookyGhostShooter.stop();
+      if (current === 4 && window.JadeTown) window.JadeTown.close();
       current = i;
       if (window.SpookyGames) window.SpookyGames.stopAll();
       var btns = bar.children;
@@ -263,10 +264,17 @@
         return;
       }
 
-      panels.appendChild(build(i));
+      var panelEl = build(i);
+      panels.appendChild(panelEl);
+      if (i === 4 && window.JadeTown) {
+        try { window.JadeTown.open(panelEl); } catch (e) {}
+      }
       panels.style.display = 'flex';
       document.body.classList.add('tab-open');
-      requestAnimationFrame(function () { panels.classList.add('show'); });
+      requestAnimationFrame(function () {
+        panels.classList.add('show');
+        if (i === 4 && window.JadeTown) window.JadeTown.resize();
+      });
       if (opts.onSelect) opts.onSelect(i);
     }
 
@@ -310,7 +318,7 @@
 
   function build(i) {
       var snap = opts.snapshot();
-      var box = el('div', 'panel');
+      var box = el('div', 'panel' + (i === 4 ? ' panel-town' : ''));
       var closeBtn = el('button', 'panel-close', '✕');
       closeBtn.type = 'button';
       closeBtn.setAttribute('aria-label', 'Close ' + TABS[i].name);
@@ -373,18 +381,22 @@
           });
         }
       } else if (i === 4) {
-        box.appendChild(head('🗺️ Explore', snap));
-        box.appendChild(el('div', 'psub', 'Regions:'));
-        box.appendChild(list(S.REGIONS));
-        box.appendChild(el('div', 'psub', 'Worlds:'));
-        var row2 = el('div', 'prow');
-        row2.appendChild(btn('Maze 3D', function () { window.location.href = 'mine3d.html'; }));
-        row2.appendChild(btn('Maze 2D', function () { window.location.href = 'index.html'; }));
-        row2.appendChild(btn('Voxel Forest', function () { window.location.href = 'voxel.html#forest'; }));
-        row2.appendChild(btn('Voxel Mine', function () { window.location.href = 'voxel.html#mine'; }));
-        row2.appendChild(btn('❄️ Frost', function () { window.location.href = 'voxel.html#frost'; }));
-        row2.appendChild(btn('🔮 Crystal', function () { window.location.href = 'voxel.html#crystal'; }));
-        box.appendChild(row2);
+        // Jade Moon Town is mounted by select() once this panel is in the DOM,
+        // so its canvas can measure the real viewport immediately.
+        if (!window.JadeTown) {
+          var fbCard = el('div', 'town-fallback-card',
+            '<div class="tf-kicker">Jade Moon Town</div>' +
+            '<h2>月玉镇</h2>' +
+            '<p>The town engine could not load. Check the connection, then try again.</p>');
+          var fbBtn = el('button', '', 'Reload town');
+          fbBtn.type = 'button';
+          fbBtn.onclick = function () { window.location.reload(); };
+          fbCard.appendChild(fbBtn);
+          var fb = el('div', 'town-fallback');
+          fb.appendChild(fbCard);
+          box.appendChild(fb);
+        }
+        return box;
       } else if (i === 5) {
         box.appendChild(head('🎮 Games', snap));
         box.appendChild(el('div', 'psub', '11 from the vault — Memory Match plus 10 more, all playable:'));

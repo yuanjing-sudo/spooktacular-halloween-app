@@ -901,3 +901,277 @@ footer { opacity: .6; font-size: .8rem; margin: 10px 0 4px; }
   .gs3d-stick i { width: 36px; height: 36px; }
   .gs3d-fire { width: 72px; height: 72px; right: 12px; bottom: 18px; font-size: .48rem; }
 }
+
+/* Spectral Hunt 2.0 — relic builds, abilities, omens and field radar */
+.gs3d-weapon {
+  position: absolute; top: 66px; left: 16px; z-index: 6;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 7px 11px 6px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(172,136,255,.28);
+  background: linear-gradient(165deg, rgba(28,15,52,.82), rgba(10,5,21,.76));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 5px 18px rgba(0,0,0,.32);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  color: #e9ddff; font-family: inherit; text-align: left; pointer-events: auto;
+  transition: border-color .18s, background .18s, transform .15s;
+}
+.gs3d-weapon:hover { border-color: rgba(200,170,255,.6); background: rgba(80,40,140,.42); }
+.gs3d-weapon:active { transform: scale(.97); }
+.gs3d-weapon small { font-size: .38rem; letter-spacing: .24em; color: #9d8dbf; font-weight: 900; line-height: 1; }
+.gs3d-weapon b { font-size: .55rem; letter-spacing: .13em; color: #ffd166; line-height: 1.1; white-space: nowrap; }
+
+.gs3d-chip.omen-chip { display: none; border-color: color-mix(in srgb, var(--omen, #b388ff) 55%, transparent); }
+.gs3d-chip.omen-chip.show { display: block; }
+.gs3d-chip.omen-chip b { color: var(--omen, #b388ff); font-size: .56rem; letter-spacing: .08em; white-space: nowrap; text-shadow: 0 0 10px var(--omen, #b388ff); }
+
+.gs3d-radar-wrap {
+  position: absolute; top: 76px; right: 16px; z-index: 5;
+  width: 96px; height: 96px; border-radius: 50%;
+  border: 1px solid rgba(172,136,255,.32);
+  background: rgba(8,4,18,.62);
+  box-shadow: 0 0 24px rgba(110,60,220,.22), inset 0 0 18px rgba(0,0,0,.4);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.gs3d-radar { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.gs3d-radar-wrap small {
+  position: absolute; left: 0; right: 0; bottom: -17px; text-align: center;
+  font-size: .34rem; letter-spacing: .22em; color: #9484b5; font-weight: 900;
+}
+
+.gs3d-abilities {
+  position: absolute; right: 16px; bottom: 56px; z-index: 9;
+  display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+}
+.gs3d-ability {
+  position: relative; width: 54px; height: 54px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px; border-radius: 50%;
+  border: 1px solid rgba(110,231,255,.48);
+  background: radial-gradient(circle at 35% 28%, rgba(110,231,255,.25), rgba(12,30,42,.9) 70%);
+  color: #bff7ff; font-family: inherit; cursor: pointer; pointer-events: auto;
+  box-shadow: 0 0 18px rgba(89,230,255,.16), inset 0 1px 0 rgba(255,255,255,.14);
+  transition: transform .14s, filter .18s, opacity .18s;
+}
+.gs3d-ability.nova { border-color: rgba(212,91,255,.52); background: radial-gradient(circle at 35% 28%, rgba(212,91,255,.3), rgba(30,10,42,.92) 70%); color: #efd6ff; box-shadow: 0 0 18px rgba(180,80,255,.2), inset 0 1px 0 rgba(255,255,255,.14); }
+.gs3d-ability:hover { filter: brightness(1.2); }
+.gs3d-ability:active { transform: scale(.92); }
+.gs3d-ability span { font-size: .38rem; letter-spacing: .1em; font-weight: 900; color: #8fb8c3; line-height: 1; }
+.gs3d-ability small { font-size: .36rem; letter-spacing: .12em; font-weight: 900; line-height: 1; }
+.gs3d-ability b { font-size: .42rem; letter-spacing: .04em; color: #fff; line-height: 1.1; }
+.gs3d-ability.cooling { opacity: .58; filter: grayscale(.45); }
+.gs3d-ability.cooling b { color: #ffd166; }
+
+.gs3d-float.dmg { font-size: .58rem; color: #e4d5ff; font-weight: 800; }
+.gs3d-float.heal { color: #7dff9a; font-size: .64rem; }
+
+.gs3d-armory { max-width: 620px; margin: 18px auto 0; }
+.gs3d-armory-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 2px 7px; }
+.gs3d-armory-head span { font-size: .44rem; letter-spacing: .26em; color: #9d8dbf; font-weight: 900; }
+.gs3d-armory-head b { font-size: .46rem; letter-spacing: .16em; color: #ffd166; }
+.gs3d-armory-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; }
+.gs3d-armory-card {
+  display: flex; align-items: flex-start; gap: 9px; text-align: left;
+  padding: 9px 10px; border-radius: 11px; border: 1px solid rgba(160,125,240,.16);
+  background: rgba(255,255,255,.022); color: #e9ddff; font-family: inherit; cursor: pointer;
+  transition: background .18s, border-color .18s, transform .15s;
+}
+.gs3d-armory-card:hover { background: rgba(124,58,237,.16); border-color: rgba(180,140,255,.36); }
+.gs3d-armory-card:active { transform: scale(.985); }
+.gs3d-armory-card.selected { border-color: rgba(255,209,102,.6); background: rgba(255,168,60,.08); box-shadow: inset 0 0 18px rgba(255,150,40,.05); }
+.gs3d-armory-card i {
+  flex: 0 0 33px; width: 33px; height: 33px; display: grid; place-items: center;
+  border-radius: 9px; font-style: normal; font-size: 1rem; font-weight: 900;
+  color: var(--arm, #59e6ff); border: 1px solid color-mix(in srgb, var(--arm, #59e6ff) 45%, transparent);
+  background: color-mix(in srgb, var(--arm, #59e6ff) 12%, transparent);
+  text-shadow: 0 0 12px var(--arm, #59e6ff);
+}
+.gs3d-armory-card span { min-width: 0; }
+.gs3d-armory-card b { display: block; font-size: .55rem; letter-spacing: .08em; color: #f4eeff; line-height: 1.2; }
+.gs3d-armory-card small { display: block; margin-top: 3px; font-size: .46rem; line-height: 1.35; color: #9584b8; }
+
+.gs3d-runline { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin: 14px 0 0; }
+.gs3d-runline > span {
+  padding: 5px 8px; border-radius: 7px; border: 1px solid rgba(160,125,240,.16);
+  background: rgba(255,255,255,.025); font-size: .44rem; letter-spacing: .1em;
+  color: #b9abd6; font-weight: 900; text-transform: uppercase;
+}
+.gs3d-relics { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
+.gs3d-relics > span {
+  padding: 4px 7px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--relic, #b388ff) 40%, transparent);
+  background: color-mix(in srgb, var(--relic, #b388ff) 8%, transparent);
+  font-size: .42rem; letter-spacing: .04em; color: #dcd0f7; font-weight: 800;
+}
+.gs3d-relics > span b { color: var(--relic, #b388ff); font-size: .48rem; }
+.gs3d-relics > span.empty { border-color: rgba(160,125,240,.12); color: #7e6f9c; background: transparent; }
+
+.gs3d-draft { z-index: 32; background: rgba(3,1,8,.86); }
+.gs3d-draft-panel { width: min(900px, 100%); text-align: left; }
+.gs3d-draft-sub { margin: 11px 0 0; font-size: .66rem; line-height: 1.55; color: #a99bc4; max-width: 640px; }
+.gs3d-draft-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; margin: 18px 0 0; }
+.gs3d-draft-card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  min-height: 176px; padding: 16px 14px 13px; border-radius: 14px; text-align: left;
+  border: 1px solid color-mix(in srgb, var(--relic, #b388ff) 32%, transparent);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--relic, #b388ff) 10%, rgba(24,12,42,.92)), rgba(9,4,18,.94));
+  color: #e9ddff; font-family: inherit; cursor: pointer;
+  transition: transform .16s, border-color .18s, box-shadow .18s;
+}
+.gs3d-draft-card:hover { transform: translateY(-3px); border-color: var(--relic, #b388ff); box-shadow: 0 14px 34px rgba(0,0,0,.36), 0 0 26px color-mix(in srgb, var(--relic, #b388ff) 16%, transparent); }
+.gs3d-draft-card:active { transform: translateY(-1px) scale(.99); }
+.gs3d-draft-key {
+  position: absolute; right: 10px; top: 9px; width: 18px; height: 18px; display: grid; place-items: center;
+  border-radius: 5px; border: 1px solid rgba(200,180,255,.24); background: rgba(0,0,0,.28);
+  font-size: .44rem; color: #b9abd6; font-weight: 900;
+}
+.gs3d-draft-card i { font-style: normal; font-size: 1.35rem; line-height: 1; color: var(--relic, #b388ff); text-shadow: 0 0 16px var(--relic, #b388ff); }
+.gs3d-draft-card b { font-size: .76rem; letter-spacing: .06em; color: #fff; line-height: 1.2; }
+.gs3d-draft-card small { font-size: .58rem; line-height: 1.45; color: #aa9bc6; }
+.gs3d-draft-card em { margin-top: auto; font-style: normal; font-size: .42rem; letter-spacing: .18em; color: var(--relic, #b388ff); font-weight: 900; }
+.gs3d-draft-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.gs3d-draft-foot > span { font-size: .46rem; letter-spacing: .1em; color: #7e6f9c; font-weight: 800; }
+.gs3d-draft-foot kbd { display: inline-grid; place-items: center; min-width: 18px; padding: 2px 4px; margin: 0 1px; border-radius: 4px; border: 1px solid rgba(160,125,240,.26); background: rgba(255,255,255,.045); color: #dcd0f7; font: inherit; font-size: .42rem; }
+
+.gs3d-settings-card { width: min(680px, 100%); text-align: left; }
+.gs3d-settings-grid { display: grid; grid-template-columns: 1fr; gap: 7px; margin: 18px 0 0; }
+.gs3d-setting {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 11px 13px; border-radius: 10px; border: 1px solid rgba(160,125,240,.14);
+  background: rgba(255,255,255,.022);
+}
+.gs3d-setting > span { min-width: 0; }
+.gs3d-setting b { display: block; font-size: .58rem; letter-spacing: .08em; color: #e9ddff; }
+.gs3d-setting small { display: block; margin-top: 3px; font-size: .48rem; line-height: 1.35; color: #8d7eac; }
+.gs3d-setting.range-row { display: grid; grid-template-columns: 1fr auto; align-items: center; }
+.gs3d-setting.range-row input { grid-column: 1 / -1; width: 100%; margin: 9px 0 0; accent-color: #b388ff; }
+.gs3d-setting.range-row em { font-style: normal; font-size: .6rem; color: #ffd166; font-weight: 900; }
+.gs3d-select {
+  border: 1px solid rgba(160,125,240,.28); border-radius: 7px; background: rgba(12,6,24,.82);
+  color: #dcd0f7; font-family: inherit; font-size: .52rem; letter-spacing: .08em; padding: 7px 9px;
+  cursor: pointer;
+}
+.gs3d-toggle {
+  appearance: none; -webkit-appearance: none; width: 42px; height: 23px; flex: 0 0 42px;
+  border-radius: 999px; border: 1px solid rgba(160,125,240,.3); background: rgba(8,4,16,.82);
+  position: relative; cursor: pointer; transition: background .18s, border-color .18s;
+}
+.gs3d-toggle::after {
+  content: ""; position: absolute; left: 3px; top: 3px; width: 15px; height: 15px; border-radius: 50%;
+  background: #8d7eac; box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: transform .18s, background .18s;
+}
+.gs3d-toggle:checked { background: rgba(124,58,237,.56); border-color: rgba(190,150,255,.7); }
+.gs3d-toggle:checked::after { transform: translateX(18px); background: #f4eeff; }
+
+@media (max-width: 720px) {
+  .gs3d-weapon { top: 54px; left: 10px; }
+  .gs3d-radar-wrap { display: none; }
+  .gs3d-abilities { right: 12px; bottom: 112px; }
+  .gs3d-ability { width: 50px; height: 50px; }
+  .gs3d-armory-grid { grid-template-columns: 1fr; }
+  .gs3d-draft-grid { grid-template-columns: 1fr; }
+  .gs3d-draft-card { min-height: 0; padding: 12px; display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 5px 9px; }
+  .gs3d-draft-card i { grid-row: 1 / 3; font-size: 1.2rem; }
+  .gs3d-draft-card b { font-size: .68rem; }
+  .gs3d-draft-card small { font-size: .54rem; }
+  .gs3d-draft-card em { grid-column: 2; margin-top: 2px; }
+  .gs3d-draft-key { top: 7px; right: 7px; }
+  .gs3d-draft-foot { justify-content: center; }
+  .gs3d-runline > span { font-size: .4rem; }
+}
+@media (max-width: 560px) {
+  .gs3d-top { padding-left: 104px; }
+  .gs3d-weapon { top: 8px; left: 10px; padding: 5px 8px 4px; }
+  .gs3d-weapon small { display: none; }
+  .gs3d-weapon b { font-size: .48rem; }
+}
+@media (max-width: 430px) {
+  .gs3d-chip:nth-child(5) { display: none; }
+  .gs3d-ability { width: 46px; height: 46px; }
+  .gs3d-abilities { right: 10px; bottom: 108px; gap: 6px; }
+  .gs3d-ability span { display: none; }
+  .gs3d-ability b { font-size: .4rem; }
+  .gs3d-ability small { font-size: .32rem; }
+}
+.gs3d-stage.touch .gs3d-abilities { bottom: 112px; right: 12px; }
+@media (max-width: 560px) {
+  .gs3d-stage.touch .gs3d-weapon { top: 8px; left: 10px; }
+  .gs3d-stage.touch .gs3d-weapon small { display: none; }
+  .gs3d-stage.touch .gs3d-weapon b { font-size: .48rem; }
+}
+@media (max-width: 430px) {
+  .gs3d-stage.touch .gs3d-abilities { bottom: 106px; right: 10px; }
+}
+.gs3d-stage.reduce-motion .gs3d-grain { opacity: .18; }
+.gs3d-stage.reduce-motion .gs3d-sigil svg,
+.gs3d-stage.reduce-motion .gs3d-sigil-ring::before,
+.gs3d-stage.reduce-motion .gs3d-sigil-ring::after,
+.gs3d-stage.reduce-motion .gs3d-wave-banner.show,
+.gs3d-stage.reduce-motion .gs3d-damage.hit { animation: none !important; }
+.gs3d-stage.reduce-motion .gs3d-start-inner,
+.gs3d-stage.reduce-motion .gs3d-over-card,
+.gs3d-stage.reduce-motion .gs3d-module-card { animation: none; }
+
+/* Desktop breathing room: the armory adds height, so give the stage a little more
+   vertical presence and keep the whole start card visible on a laptop screen. */
+@media (min-width: 721px) {
+  .gs3d-stage { height: min(80vh, 780px); }
+  .gs3d-start-inner { width: min(760px, 100%); padding: 2px 4px 8px; }
+  .gs3d-start h2 { font-size: clamp(2.2rem, 6.6vw, 3.4rem); line-height: .9; }
+  .gs3d-sigil { width: 104px; height: 128px; margin-bottom: 0; }
+  .gs3d-sigil-ring { width: 116px; height: 116px; }
+  .gs3d-lede { margin-top: 10px; font-size: clamp(.7rem, 1.5vw, .8rem); line-height: 1.55; }
+  .gs3d-feature-row { margin-top: 12px; }
+  .gs3d-armory { margin-top: 12px; }
+  .gs3d-armory-card { padding: 7px 9px; }
+  .gs3d-armory-card i { flex-basis: 30px; width: 30px; height: 30px; }
+  .gs3d-start-actions { margin-top: 14px; }
+  .gs3d-keyrow { margin-top: 10px; font-size: .42rem; gap: 10px; }
+  .gs3d-best { margin-top: 8px; }
+}
+
+/* Compact mobile top rail: one row of core readouts, clear toast and boss bar. */
+.gs3d-hint { white-space: nowrap; }
+@media (max-width: 720px) {
+  .gs3d-chip.omen-chip { display: none !important; }
+  .gs3d-toast { top: 56px; }
+  .gs3d-boss { top: 106px; }
+}
+@media (max-width: 560px) {
+  .gs3d-top { padding: 10px 50px 10px 88px; }
+  .gs3d-chip:nth-child(5) { display: none; }
+}
+@media (max-width: 430px) {
+  .gs3d-chip { min-width: 40px; padding: 5px 5px 4px; }
+  .gs3d-chip small { font-size: .36rem; letter-spacing: .11em; }
+  .gs3d-chip b { font-size: .68rem; }
+}
+@media (max-width: 430px) {
+  .gs3d-top { padding-left: 80px; padding-right: 44px; }
+  .gs3d-chips { gap: 3px; }
+  .gs3d-chip { min-width: 36px; padding: 5px 4px 4px; }
+  .gs3d-chip b { font-size: .62rem; }
+  .gs3d-icon-btn { width: 30px; height: 30px; flex-basis: 30px; border-radius: 8px; }
+  .gs3d-icon-btn svg { width: 16px; height: 16px; }
+}
+@media (max-width: 720px) {
+  .gs3d-armory-grid {
+    display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
+    padding: 2px 2px 6px; scroll-snap-type: x mandatory;
+    scrollbar-width: thin; scrollbar-color: rgba(168,130,255,.4) transparent;
+  }
+  .gs3d-armory-grid::-webkit-scrollbar { height: 5px; }
+  .gs3d-armory-grid::-webkit-scrollbar-thumb { border-radius: 99px; background: rgba(168,130,255,.38); }
+  .gs3d-armory-card { flex: 0 0 210px; scroll-snap-align: start; align-items: center; padding: 8px 9px; }
+  .gs3d-armory-card small { display: none; }
+  .gs3d-armory-card i { flex-basis: 28px; width: 28px; height: 28px; font-size: .9rem; }
+  .gs3d-armory-card b { font-size: .52rem; }
+  .gs3d-start-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .gs3d-start-actions .gs3d-primary { grid-column: 1 / -1; width: 100%; }
+  .gs3d-start-actions .gs3d-secondary { width: 100%; padding: 10px 8px; }
+  .gs3d-best { display: none; }
+}
+@media (max-width: 430px) {
+  .gs3d-feature-row { gap: 5px; }
+  .gs3d-feature-row span { padding: 4px 7px; font-size: .4rem; letter-spacing: .12em; }
+}
+@media (max-width: 720px) {
+  .gs3d-armory-head b::after { content: " · SWIPE"; color: #9d8dbf; letter-spacing: .12em; font-size: .4rem; }
+}

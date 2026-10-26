@@ -28,16 +28,32 @@ pages are ordinary static files and need no server-side code.
 The **Ghost tab** is now a genuine WebGL first-person shooter, not a 2D DOM
 minigame. It runs in a Three.js `r128` scene with procedural graveyard terrain,
 moonlight, shadows, ground mist, ritual light, glowing pumpkins, floating embers
-and a first-person spectral blaster. 18 ghost breeds (plus **The Hollow King**
-boss) use animated shaders, different silhouettes and chase, strafe, orbit,
-teleport, dive and ambush behaviours. The loop includes:
+and a first-person spectral relic arm. **22 ghost breeds** use animated shaders,
+different silhouettes and chase, strafe, orbit, teleport, dive, ambush, ranged,
+summoning, healing and self-destruct behaviours. Three **Veil Sovereigns** rotate
+every fifth wave, and each boss gains new attacks and reinforcements as its
+health drops. The loop includes:
 
-- endless waves and a boss every fifth wave;
-- soul combos, forgiving aim assist, triple/rapid pickups and health;
-- boss health bar, damage numbers, hit markers, camera recoil and screen shake;
-- a persistent best score and a bestiary that fills in as you dispel breeds;
+- **four relic arms** — Soulfire Blaster, Grave Scatter, Storm Arc and Moon Rail —
+  with distinct cadence, spread, piercing and chain-lightning patterns;
+- **14 stacking relics** drafted after every wave: damage, fire rate, extra bolts,
+  pierce, criticals, vitality, movement, dash/nova cooldowns, frost, witchfire,
+  lifesteal, soul greed and pickup magnetism;
+- **two active abilities** — a phase dash with brief invulnerability and a radial
+  Soul Nova that clears projectiles;
+- **omens** every third wave (Blood Moon, Eclipse, Soul Rain, The Haunting) that
+  alter fog, speed, criticals, drops and score;
+- endless waves, three rotating bosses, boss phases, summoned adds and a boss
+  every fifth wave;
+- soul combos, golden breeds, forgiving aim assist, triple/rapid pickups and health;
+- a **veil radar**, boss health bar, damage numbers, hit markers, camera recoil
+  and screen shake;
+- a persistent best score, armory choice and a bestiary that fills in as you
+  dispel breeds;
+- a settings panel for sensitivity, inverted look, aim assist, damage numbers,
+  screen shake, reduced motion and render quality;
 - synthesized graveyard ambience and sound effects, plus a mute toggle;
-- desktop keyboard/mouse and mobile joystick/fire controls.
+- desktop keyboard/mouse and mobile joystick, fire, dash and nova controls.
 
 `docs/vendor/three.min.js` is vendored locally, so GitHub Pages and the Google
 Sites embed do not need a CDN. The original standalone 3D maze remains at
@@ -121,6 +137,9 @@ See [`docs/forest/GOOGLE-SITES.md`](docs/forest/GOOGLE-SITES.md) for a longer gu
 
 In the 3D worlds, use **WASD** or the arrow keys to move, **Shift** to run,
 **Space** to jump, **E** to interact, and **Esc** to pause. In **Spectral Hunt**,
-move with **WASD**, drag to look, click or press **Space** to fire, and use
-**Esc** to pause. Touch devices get a movement stick and a fire button. Each
-page lists its own extras in the in-game help and footer.
+move with **WASD**, drag to look, click or press **Space** to fire, **Q** to
+phase dash, **E** to unleash Soul Nova, and **1–4** to switch relic arms.
+**Esc** pauses; the Settings button opens the options panel from the start or
+pause screen. Touch devices get a movement stick, a fire button, dash/nova
+buttons, a weapon pill and a relic-draft screen. Each page lists its own extras
+in the in-game help and footer.
