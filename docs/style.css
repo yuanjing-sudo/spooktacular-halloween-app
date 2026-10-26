@@ -1175,3 +1175,8 @@ footer { opacity: .6; font-size: .8rem; margin: 10px 0 4px; }
 @media (max-width: 720px) {
   .gs3d-armory-head b::after { content: " · SWIPE"; color: #9d8dbf; letter-spacing: .12em; font-size: .4rem; }
 }
+@media (max-width: 720px) {
+  /* The armory is a horizontal scroller; let it pan inside the vertical start sheet. */
+  .gs3d-start, .gs3d-start-inner { touch-action: pan-x pan-y; }
+  .gs3d-armory-grid { touch-action: pan-x; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+}
