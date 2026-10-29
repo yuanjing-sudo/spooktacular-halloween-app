@@ -1,8 +1,9 @@
 # Halloween Spooktacular Ultimate 🎃
 
 A collection of spooky little games and 3D experiments: the original 2D maze, a
-voxel world, spectral ghost hunts, and a new streaming 3D forest. Most of the web
-demos are dependency-free and run straight from the `docs/` folder.
+voxel world, spectral ghost hunts, a streaming 3D forest, and **Jade Moon Town**,
+a first-person cinematic Chinese night town. Most of the web demos are
+dependency-free and run straight from the `docs/` folder.
 
 ## Play online
 
@@ -17,6 +18,7 @@ demos are dependency-free and run straight from the `docs/` folder.
 | 🧱 3D mine — first-person voxel mine | `mine3d.html` |
 | 👻 3D maze — standalone spectral maze | `ghost3d.html` |
 | 🔫 **Spectral Hunt** — first-person 3D ghost shooter (Ghost tab) | `index.html` → 👻 |
+| 🏮 **Jade Moon Town** — first-person cinematic night town (Town tab) | `index.html` → 🏮 |
 | 🌲 Voxel forest & deep-mine | `voxel.html` |
 | 🌌 **Endless Spooky Forest 3D** — streaming X/Y/Z forest | `forest/endless-forest.html` |
 
@@ -58,6 +60,44 @@ health drops. The loop includes:
 `docs/vendor/three.min.js` is vendored locally, so GitHub Pages and the Google
 Sites embed do not need a CDN. The original standalone 3D maze remains at
 `ghost3d.html`.
+
+## 🏮 Jade Moon Town — the Town tab
+
+The redundant Explore tab is now **Jade Moon Town**, a full-screen,
+first-person cinematic town beneath a jade moon. It is rendered by a
+dependency-free Canvas2D software-3D engine in `docs/chinatown.js` and
+`docs/chinatown.css`, so it works on phones and in browsers without WebGL. The
+seven-tab shell is unchanged; the old world links live in the Town’s **Realms**
+drawer.
+
+- **First-person by default:** drag to look, **WASD** or arrow keys to walk,
+  **Shift** to run and the wheel to step forward. Touch devices get a glass
+  D-pad. Press **V**, or use **Orbit view**, to switch to the cinematic orbit
+  camera; the **Aerial** chip returns to the overview and the last walking
+  position is restored.
+- **A real town, not a backdrop:** a palace terrace and Hall of the Azure Sky,
+  Moonview Pagoda, Bell Tower, stone Moon Bridge over the canal, lantern street,
+  Dragon Gate, city walls, shops, tea stalls, stone lanterns, boats, koi,
+  cherry petals, fireflies, moving townsfolk and a drifting jade dragon.
+- **Six landmarks + aerial:** the chip row and map markers fly the first-person
+  camera to a composed viewpoint at each landmark, with an info card and
+  coordinates. The **Guided tour** visits every stop in order.
+- **Living light and weather:** dusk/night toggle, lantern and window glow,
+  fireworks, shooting stars, and clear → rain → snow cycles. Rain adds lightning
+  and thunder; snow adds warm-lit flakes.
+- **Procedural sound:** a user-gesture-started WebAudio soundscape with guqin
+  notes, water, wind, temple bell and thunder. Sound is off by default.
+- **Photo mode** hides the HUD, tab bar and close control, adds a letterboxed
+  frame and lets you save the current canvas as a PNG.
+- **Realms** opens the older worlds (Endless Forest, Voxel, Mine, Ghost maze)
+  without leaving the Town.
+- The renderer adapts its internal scale to the frame rate and uses a wider
+  portrait FOV; there is no WebGL requirement. Performance varies by device, so
+  the live FPS counter is shown in the HUD.
+
+Town controls: **drag** look · **WASD / arrows** walk · **Shift** run ·
+**wheel** step · **V** orbit/walk · **N** dusk/night · **R** weather ·
+**M** sound · **P** photo · **Esc** exit photo/Realms/tour.
 
 ## 🕹️ Midnight Arcade
 
@@ -141,5 +181,8 @@ move with **WASD**, drag to look, click or press **Space** to fire, **Q** to
 phase dash, **E** to unleash Soul Nova, and **1–4** to switch relic arms.
 **Esc** pauses; the Settings button opens the options panel from the start or
 pause screen. Touch devices get a movement stick, a fire button, dash/nova
-buttons, a weapon pill and a relic-draft screen. Each page lists its own extras
-in the in-game help and footer.
+buttons, a weapon pill and a relic-draft screen. In **Jade Moon Town**, drag to
+look, **WASD / arrows** to walk, **Shift** to run, **V** to toggle orbit view,
+**N** for dusk/night, **R** for weather, **M** for sound and **P** for photo
+mode; on touch, use the on-screen D-pad. Each page lists its own extras in the
+in-game help and footer.
