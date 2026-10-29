@@ -68,7 +68,9 @@ first-person cinematic town beneath a jade moon. It is rendered by a
 dependency-free Canvas2D software-3D engine in `docs/chinatown.js` and
 `docs/chinatown.css`, so it works on phones and in browsers without WebGL. The
 seven-tab shell is unchanged; the old world links live in the Town’s **Realms**
-drawer.
+drawer. The tab bar also boots independently of WebGL, so the Town, Arcade and
+the other tabs stay reachable even when a standalone 3D page cannot create a
+graphics context.
 
 - **First-person by default:** drag to look, **WASD** or arrow keys to walk,
   **Shift** to run and the wheel to step forward. Touch devices get a glass

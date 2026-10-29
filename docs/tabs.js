@@ -208,6 +208,15 @@
     var panels = document.getElementById(opts.panelsId);
     var current = 0, built = {};
 
+    if (!bar || !panels) return { select: function () {}, hasMatch: hasMatch };
+    // A page may have booted the fallback tab bar before a game script
+    // finished loading (or recovered from a WebGL error). Rebuild instead of
+    // appending a second row of buttons.
+    while (bar.firstChild) bar.removeChild(bar.firstChild);
+    panels.innerHTML = '';
+    panels.classList.remove('show');
+    document.body.classList.remove('tab-open');
+
     bar.setAttribute('role', 'tablist');
     bar.setAttribute('aria-label', 'Spooktacular sections');
     panels.setAttribute('role', 'dialog');
@@ -468,6 +477,60 @@
   }
 
   window.SpookyTabs = { init: init, hasMatch: hasMatch, setMatch: setMatch };
+
+  // Safety net for the standalone 3D pages. Their game scripts normally call
+  // SpookyTabs.init(), but a failed WebGL boot must never remove the rest of
+  // the app: the Town, Arcade, Candy Vault and Trophy Room stay reachable.
+  function bootFallback() {
+    var bar = document.getElementById('tabs');
+    var panels = document.getElementById('tabpanels');
+    if (!bar || !panels || bar.querySelector('.tabbtn')) return;
+
+    var S = window.Spooky || {};
+    var local = { gold: 0, coal: 0, level: 1, pickIdx: 0, ach: {} };
+    var profile = {
+      gold: function () { return local.gold; },
+      addGold: function (n) { local.gold += n || 0; },
+      spendGold: function (n) { if (local.gold < n) return false; local.gold -= n; return true; },
+      coal: function () { return local.coal; },
+      addCoal: function (n) { local.coal += n || 0; },
+      spendCoal: function (n) { if (local.coal < n) return false; local.coal -= n; return true; },
+      level: function () { return local.level; },
+      pickIdx: function () { return local.pickIdx; },
+      setPick: function (i) { local.pickIdx = i; },
+      pickDamage: function () {
+        var pick = S.PICKS && S.PICKS[local.pickIdx];
+        return (pick && pick.speed) || 1;
+      },
+      goldMult: function () { return 1; },
+      gainXP: function () {},
+      addScore: function () {},
+      unlock: function (id, name) { local.ach[id] = name; },
+      flash: function () {},
+      hud: function () {}
+    };
+    function snapshot() {
+      var pick = S.PICKS && S.PICKS[local.pickIdx];
+      return {
+        score: 0, layer: 'Mine 3D', left: 0, gold: local.gold,
+        level: local.level, pick: (pick && pick.name) || 'Wooden Pick',
+        seed: 0, relics: 0, ach: local.ach, collected: 0
+      };
+    }
+    init({
+      tabsId: 'tabs', panelsId: 'tabpanels',
+      snapshot: snapshot,
+      onSelect: function () {},
+      actions: { openShop: function () {}, newMaze: function () {} },
+      host: { onUnlock: function (id, name) { local.ach[id] = name; } },
+      profile: profile
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootFallback);
+  } else {
+    setTimeout(bootFallback, 0);
+  }
 
   var audioCtx = null, musicNodes = [], musicPlaying = false, musicMuted = false;
   function ensureAudio() {
